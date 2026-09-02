@@ -1,7 +1,7 @@
-﻿// DX12Rebuild.cpp : 애플리케이션에 대한 진입점을 정의합니다.
+// DX12Rebuild.cpp : 애플리케이션에 대한 진입점을 정의합니다.
 //
 
-#include "framework.h"
+#include "pch.h"
 #include "DX12Rebuild.h"
 
 #define MAX_LOADSTRING 100
