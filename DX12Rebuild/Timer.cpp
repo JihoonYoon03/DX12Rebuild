@@ -74,7 +74,7 @@ void CTimer::Tick(float FPS)
 
 unsigned long CTimer::GetFrameRate(std::wstring& wstr)
 {
-	wstr = m_nCurrentFrameRate + L" FPS";
+	wstr = L"DX12 Base Framework (" + std::to_wstring(m_nCurrentFrameRate) + L" FPS)";
 
 	return m_nCurrentFrameRate;
 }

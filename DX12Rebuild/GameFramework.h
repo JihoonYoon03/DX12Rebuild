@@ -76,14 +76,14 @@ private:
 
 	//Fence
 	ComPtr<ID3D12Fence>					m_cpFence;
-	UINT64								m_nFenceValue[m_nSwapChainBuffers];
+	UINT64								m_nFenceValues[m_nSwapChainBuffers];
 	HANDLE								m_hdFenceEvent;
 
 	//Timer
 	CTimer m_timer;
 
 	//Title Text
-	std::wstring title;
+	std::wstring m_wsTitle;
 
 	//Scene
 

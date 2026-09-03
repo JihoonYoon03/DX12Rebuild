@@ -3,6 +3,16 @@
 
 CGameFramework::CGameFramework()
 {
+	m_nRTVDescIncrementSize = 0;
+	m_nDSVDescIncrementSize = 0;
+
+	m_hdFenceEvent = NULL;
+	for (int i = 0; i < m_nSwapChainBuffers; ++i) m_nFenceValues[i] = 0;
+
+	m_nClientW = config::FRAME_BUFFER_W;
+	m_nClientH = config::FRAME_BUFFER_H;
+
+	m_wsTitle = L"DX12 Base Framework (";
 }
 
 CGameFramework::~CGameFramework()
@@ -203,10 +213,58 @@ void CGameFramework::CreateCommandQueueList()
 
 void CGameFramework::CreateRTV()
 {
+	D3D12_CPU_DESCRIPTOR_HANDLE RTVDescHandle = m_cpRTVDescHeap->GetCPUDescriptorHandleForHeapStart();
+	HRESULT hr;
+	for (UINT i = 0; i < m_nSwapChainBuffers; ++i) {
+		hr = m_cpdxgiSwapChain->GetBuffer(i, IID_PPV_ARGS(m_cpSwapChainBackBuffers[i].ReleaseAndGetAddressOf()));
+		if (FAILED(hr))
+		{
+			OutputDebugString(L"SwapChainGetBufferFailed\n");
+			continue;
+		}
+		m_cpDevice->CreateRenderTargetView(m_cpSwapChainBackBuffers[i].Get(), nullptr, RTVDescHandle);
+		RTVDescHandle.ptr += m_nRTVDescIncrementSize;
+	}
 }
 
 void CGameFramework::CreateDSV()
 {
+	D3D12_RESOURCE_DESC ResourceDesc;
+	ResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+	ResourceDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	ResourceDesc.Alignment = 0;
+	ResourceDesc.Width = m_nClientW;
+	ResourceDesc.Height = m_nClientH;
+	ResourceDesc.DepthOrArraySize = 1;
+	ResourceDesc.MipLevels = 1;
+	ResourceDesc.SampleDesc.Count = 1;
+	ResourceDesc.SampleDesc.Quality = 0;
+	ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+	ResourceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+	D3D12_HEAP_PROPERTIES HeapProperties;
+	::ZeroMemory(&HeapProperties, sizeof(D3D12_HEAP_PROPERTIES));
+	HeapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
+	HeapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	HeapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	HeapProperties.CreationNodeMask = 1;
+	HeapProperties.VisibleNodeMask = 1;
+
+	D3D12_CLEAR_VALUE ClearValue;
+	ClearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	ClearValue.DepthStencil.Depth = 1.0f;
+	ClearValue.DepthStencil.Stencil = 0;
+
+	HRESULT hr = m_cpDevice->CreateCommittedResource(
+		&HeapProperties, D3D12_HEAP_FLAG_NONE,
+		&ResourceDesc, D3D12_RESOURCE_STATE_DEPTH_WRITE,
+		&ClearValue, IID_PPV_ARGS(m_cpDepthStencilBuffer.ReleaseAndGetAddressOf()));
+	if (FAILED(hr)) {
+		OutputDebugString(L"CreateDepthStencilBufferFailed\n");
+	}
+
+	D3D12_CPU_DESCRIPTOR_HANDLE DSVDescHandle = m_cpDSVDescHeap->GetCPUDescriptorHandleForHeapStart();
+	m_cpDevice->CreateDepthStencilView(m_cpDepthStencilBuffer.Get(), nullptr, DSVDescHandle);
 }
 
 void CGameFramework::BuildObjects()
@@ -227,10 +285,82 @@ void CGameFramework::AnimateObjects()
 
 void CGameFramework::FrameAdvance()
 {
+	m_timer.Tick(0.0f);
+
+	ProcessInput();
+
+	AnimateObjects();
+
+	HRESULT hr = m_cpCommandAllocator->Reset();
+	if (FAILED(hr)) {
+		OutputDebugString(L"CommandAllocatorResetFailed\n");
+	}
+	hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), NULL);
+	if (FAILED(hr)) {
+		OutputDebugString(L"CommandListResetFailed\n");
+	}
+
+	D3D12_RESOURCE_BARRIER ResourceBarrier;
+	ResourceBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	ResourceBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+	ResourceBarrier.Transition.pResource = m_cpSwapChainBackBuffers[m_nSwapChainBufferIndex].Get();
+	ResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+	ResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	ResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	m_cpCommandList->ResourceBarrier(1, &ResourceBarrier);
+
+	D3D12_CPU_DESCRIPTOR_HANDLE RTVDescHandle = m_cpRTVDescHeap->GetCPUDescriptorHandleForHeapStart();
+	RTVDescHandle.ptr += (m_nSwapChainBufferIndex * m_nRTVDescIncrementSize);
+	D3D12_CPU_DESCRIPTOR_HANDLE DSVDescHandle = m_cpDSVDescHeap->GetCPUDescriptorHandleForHeapStart();
+	m_cpCommandList->OMSetRenderTargets(1, &RTVDescHandle, TRUE, &DSVDescHandle);
+	m_cpCommandList->ClearRenderTargetView(RTVDescHandle, Colors::Azure, 0, NULL);
+	m_cpCommandList->ClearDepthStencilView(DSVDescHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
+
+	//Scene Render Here
+	//
+
+	//Player Render Here
+	//
+
+	ResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	ResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+	ResourceBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	m_cpCommandList->ResourceBarrier(1, &ResourceBarrier);
+
+	hr = m_cpCommandList->Close();
+	if (FAILED(hr)) {
+		OutputDebugString(L"CommandListClosingFailed\n");
+	}
+
+	ComPtr<ID3D12CommandList> cpCommandList[] = { m_cpCommandList.Get() };
+	m_cpCommandQueue->ExecuteCommandLists(1, cpCommandList->GetAddressOf());
+	WaitForGPUComplete();
+
+	m_cpdxgiSwapChain->Present(0, 0);
+
+	MoveToNextFrame();
+
+	m_timer.GetFrameRate(m_wsTitle);
+	::SetWindowText(m_hWnd, m_wsTitle.c_str());
 }
 
 void CGameFramework::WaitForGPUComplete()
 {
+	UINT64 FenceValue = ++m_nFenceValues[m_nSwapChainBufferIndex];
+
+	HRESULT hr = m_cpCommandQueue->Signal(m_cpFence.Get(), FenceValue);
+	if (FAILED(hr)) {
+		OutputDebugString(L"FenceValueSettingFailed\n");
+	}
+	else {
+		if (m_cpFence->GetCompletedValue() < FenceValue) {
+			hr = m_cpFence->SetEventOnCompletion(FenceValue, m_hdFenceEvent);
+			if (FAILED(hr)) {
+				OutputDebugString(L"FenceEventSetFailed\n");
+			}
+			::WaitForSingleObject(m_hdFenceEvent, INFINITE);
+		}
+	}
 }
 
 void CGameFramework::ChangeSwapChainState()
@@ -239,6 +369,17 @@ void CGameFramework::ChangeSwapChainState()
 
 void CGameFramework::MoveToNextFrame()
 {
+	m_nSwapChainBufferIndex = m_cpdxgiSwapChain->GetCurrentBackBufferIndex();
+
+	UINT64 FenceValue = ++m_nFenceValues[m_nSwapChainBufferIndex];
+	HRESULT hr = m_cpCommandQueue->Signal(m_cpFence.Get(), FenceValue);
+	if (m_cpFence->GetCompletedValue() < FenceValue) {
+		hr = m_cpFence->SetEventOnCompletion(FenceValue, m_hdFenceEvent);
+		if (FAILED(hr)) {
+			OutputDebugString(L"FenceEventSetFailed\n");
+		}
+		::WaitForSingleObject(m_hdFenceEvent, INFINITE);
+	}
 }
 
 void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
