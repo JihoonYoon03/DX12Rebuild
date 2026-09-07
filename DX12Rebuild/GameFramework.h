@@ -13,7 +13,7 @@ public:
 
 	void CreateSwapChain();
 	void CreateRTVDSVDescHeaps();
-	void CreateDevice();
+	bool CreateDevice();
 	void CreateCommandQueueList();
 
 	void CreateRTV();
@@ -39,8 +39,8 @@ public:
 	POINT m_ptOldCursorPos;
 
 private:
-	HINSTANCE	m_hInstance;
-	HWND		m_hWnd;
+	HINSTANCE	m_hInstance = NULL;
+	HWND		m_hWnd		= NULL;
 
 	int			m_nClientW;
 	int			m_nClientH;
@@ -87,6 +87,7 @@ private:
 
 	//Scene
 
-	
+	//Debug
+
 };
 

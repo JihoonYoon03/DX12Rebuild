@@ -24,7 +24,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 	m_hInstance = hInstance;
 	m_hWnd = hWnd;
 
-	CreateDevice();
+	if (!CreateDevice()) { return false; }
 	CreateCommandQueueList();
 	CreateRTVDSVDescHeaps();
 	CreateSwapChain();
@@ -48,8 +48,11 @@ void CGameFramework::OnDestroy()
 
 #ifdef _DEBUG
 	ComPtr<IDXGIDebug1> pdxgiDebug;
-	DXGIGetDebugInterface1(0, IID_PPV_ARGS(pdxgiDebug.GetAddressOf()));
-	HRESULT hr = pdxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
+	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pdxgiDebug.GetAddressOf())))) {
+		HRESULT hr = pdxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
+		if (FAILED(hr)) { OutputDebugString(L"ReportLiveObjectsFailed\n"); }
+	}
+	else { OutputDebugString(L"DXGIDebugInterfaceFailedToGet\n"); }
 #endif
 }
 
@@ -80,21 +83,15 @@ void CGameFramework::CreateSwapChain()
 
 	ComPtr<IDXGISwapChain> SwapChain;
 	HRESULT hr = m_cpdxgiFactory->CreateSwapChain(m_cpDevice.Get(), &swapChainDesc, SwapChain.GetAddressOf());
-	if (FAILED(hr)) {
-		OutputDebugString(L"SwapChainCreationFailed\n");
-	}
+	if (FAILED(hr)) { OutputDebugString(L"SwapChainCreationFailed\n"); }
 
 	hr = SwapChain.As(&m_cpdxgiSwapChain);
-	if (FAILED(hr)) {
-		OutputDebugString(L"SwapChainCastingFailed\n");
-	}
+	if (FAILED(hr)) { OutputDebugString(L"SwapChainCastingFailed\n"); }
 
 	m_nSwapChainBufferIndex = m_cpdxgiSwapChain->GetCurrentBackBufferIndex();
 
 	hr = m_cpdxgiFactory->MakeWindowAssociation(m_hWnd, DXGI_MWA_NO_ALT_ENTER);
-	if (FAILED(hr)) {
-		OutputDebugString(L"FullscreenShortcutDisablingFailed\n");
-	}
+	if (FAILED(hr)) { OutputDebugString(L"FullscreenShortcutDisablingFailed\n"); }
 
 #ifndef _WITH_SWAPCHAIN_FULLSCREEN_STATE
 	CreateRTV();
@@ -110,9 +107,7 @@ void CGameFramework::CreateRTVDSVDescHeaps()
 	descHeapDesc.NumDescriptors = m_nSwapChainBuffers;
 
 	HRESULT hr = m_cpDevice->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(m_cpRTVDescHeap.GetAddressOf()));
-	if (FAILED(hr)) {
-		OutputDebugString(L"RTVDescHeapCreationFailed\n");
-	}
+	if (FAILED(hr)) { OutputDebugString(L"RTVDescHeapCreationFailed\n"); }
 	m_nRTVDescIncrementSize = m_cpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
 
@@ -120,69 +115,77 @@ void CGameFramework::CreateRTVDSVDescHeaps()
 	descHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
 
 	hr = m_cpDevice->CreateDescriptorHeap(&descHeapDesc, IID_PPV_ARGS(m_cpDSVDescHeap.GetAddressOf()));
-	if (FAILED(hr)) {
-		OutputDebugString(L"DSVDescHeapCreationFailed\n");
-	}
+	if (FAILED(hr)) { OutputDebugString(L"DSVDescHeapCreationFailed\n"); }
 	m_nDSVDescIncrementSize = m_cpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
 }
 
-void CGameFramework::CreateDevice()
+bool CGameFramework::CreateDevice()
 {
 	HRESULT hr;
 	UINT nDXGIFactoryFlags = 0;
 
 #ifdef _DEBUG
 	ComPtr<ID3D12Debug1> pDebug;
-	DXGIGetDebugInterface1(0, IID_PPV_ARGS(pDebug.GetAddressOf()));
-	if (pDebug) {
+	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebug.GetAddressOf())))) {
 		pDebug->EnableDebugLayer();
 	}
+	else { OutputDebugString(L"ID3D12DebugLayerEnableFailed\n"); }
 	nDXGIFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 #endif
 
 	hr = ::CreateDXGIFactory2(nDXGIFactoryFlags, IID_PPV_ARGS(m_cpdxgiFactory.GetAddressOf()));
-
 	if (FAILED(hr)) {
 		OutputDebugString(L"FactoryCreationFailed\n");
+		return false;
 	}
+	else {
+		ComPtr<IDXGIAdapter1> pd3dAdapter;
 
-	ComPtr<IDXGIAdapter1> pd3dAdapter;
-	for (UINT i = 0; DXGI_ERROR_NOT_FOUND != m_cpdxgiFactory->EnumAdapters1(i, pd3dAdapter.GetAddressOf()); ++i) {
-		DXGI_ADAPTER_DESC1 adapterDesc;
-		pd3dAdapter->GetDesc1(&adapterDesc);
-		if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) continue;
-		if (SUCCEEDED(D3D12CreateDevice(pd3dAdapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(m_cpDevice.GetAddressOf())))) {
-			break;
+		for (UINT i = 0; DXGI_ERROR_NOT_FOUND != m_cpdxgiFactory->EnumAdapters1(i, pd3dAdapter.ReleaseAndGetAddressOf()); ++i) {
+			DXGI_ADAPTER_DESC1 adapterDesc;
+			pd3dAdapter->GetDesc1(&adapterDesc);
+			//소프트웨어 어댑터인 경우 스킵
+			if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) continue;
+			else if (SUCCEEDED(D3D12CreateDevice(pd3dAdapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(m_cpDevice.GetAddressOf())))) {
+				break;
+			}
 		}
-		else {
-			OutputDebugString(L"DeviceCreationFailed\n");
+
+		if (!m_cpDevice) {
+			hr = m_cpdxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(pd3dAdapter.ReleaseAndGetAddressOf()));
+			if (FAILED(hr)) {
+				OutputDebugString(L"WARPAdapterEnumerationFailed\n");
+				return false;
+			}
+			hr = D3D12CreateDevice(pd3dAdapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(m_cpDevice.GetAddressOf()));
+			if (FAILED(hr)) {
+				OutputDebugString(L"DeviceCreation(WARPAdapter)Failed\n");
+				return false;
+			}
 		}
+
+		D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS d3dMsaaQualityLevels;
+		d3dMsaaQualityLevels.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		d3dMsaaQualityLevels.SampleCount = 4;
+		d3dMsaaQualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
+		d3dMsaaQualityLevels.NumQualityLevels = 0;
+		m_cpDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &d3dMsaaQualityLevels, sizeof(D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS));
+		m_nMsaa4xQualityLevels = d3dMsaaQualityLevels.NumQualityLevels;
+		m_bMsaaEnable = m_nMsaa4xQualityLevels ? true : false;
+
+		hr = m_cpDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_cpFence.GetAddressOf()));
+		if (FAILED(hr)) {
+			OutputDebugString(L"FenceCreationFailed\n");
+			return false;
+		}
+
+		m_hdFenceEvent = ::CreateEvent(NULL, false, NULL, NULL);
+
+		gnCbvSrvDescriptorIncrementSize = m_cpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	}
 
-	if (!pd3dAdapter)
-	{
-		m_cpdxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(pd3dAdapter.GetAddressOf()));
-		D3D12CreateDevice(pd3dAdapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(m_cpDevice.GetAddressOf()));
-	}
-
-	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS d3dMsaaQualityLevels;
-	d3dMsaaQualityLevels.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	d3dMsaaQualityLevels.SampleCount = 4;
-	d3dMsaaQualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
-	d3dMsaaQualityLevels.NumQualityLevels = 0;
-	m_cpDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &d3dMsaaQualityLevels, sizeof(D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS));
-	m_nMsaa4xQualityLevels = d3dMsaaQualityLevels.NumQualityLevels;
-	m_bMsaaEnable = m_nMsaa4xQualityLevels ? true : false;
-
-	hr = m_cpDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_cpFence.GetAddressOf()));
-	if (FAILED(hr)) {
-		OutputDebugString(L"FenceCreationFailed\n");
-	}
-
-	m_hdFenceEvent = ::CreateEvent(NULL, false, NULL, NULL);
-
-	gnCbvSrvDescriptorIncrementSize = m_cpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	return true;
 }
 
 void CGameFramework::CreateCommandQueueList()
@@ -193,22 +196,14 @@ void CGameFramework::CreateCommandQueueList()
 	cmdQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
 	HRESULT hr = m_cpDevice->CreateCommandQueue(&cmdQueueDesc, IID_PPV_ARGS(m_cpCommandQueue.GetAddressOf()));
-	if (FAILED(hr)) {
-		OutputDebugString(L"CommandQueueCreationFailed\n");
-	}
+	if (FAILED(hr)) { OutputDebugString(L"CommandQueueCreationFailed\n"); }
 	hr = m_cpDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(m_cpCommandAllocator.GetAddressOf()));
-	if (FAILED(hr)) {
-		OutputDebugString(L"CommandAllocatorCreationFailed\n");
-	}
+	if (FAILED(hr)) { OutputDebugString(L"CommandAllocatorCreationFailed\n"); }
 	hr = m_cpDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cpCommandAllocator.Get(), NULL, IID_PPV_ARGS(m_cpCommandList.GetAddressOf()));
-	if (FAILED(hr)) {
-		OutputDebugString(L"CommandListCreationFailed\n");
-	}
+	if (FAILED(hr)) { OutputDebugString(L"CommandListCreationFailed\n"); }
 
 	hr = m_cpCommandList->Close();
-	if (FAILED(hr)) {
-		OutputDebugString(L"CommandListCloseFailed\n");
-	}
+	if (FAILED(hr)) { OutputDebugString(L"CommandListCloseFailed\n"); }
 }
 
 void CGameFramework::CreateRTV()
@@ -217,8 +212,7 @@ void CGameFramework::CreateRTV()
 	HRESULT hr;
 	for (UINT i = 0; i < m_nSwapChainBuffers; ++i) {
 		hr = m_cpdxgiSwapChain->GetBuffer(i, IID_PPV_ARGS(m_cpSwapChainBackBuffers[i].ReleaseAndGetAddressOf()));
-		if (FAILED(hr))
-		{
+		if (FAILED(hr))	{
 			OutputDebugString(L"SwapChainGetBufferFailed\n");
 			continue;
 		}
@@ -259,9 +253,7 @@ void CGameFramework::CreateDSV()
 		&HeapProperties, D3D12_HEAP_FLAG_NONE,
 		&ResourceDesc, D3D12_RESOURCE_STATE_DEPTH_WRITE,
 		&ClearValue, IID_PPV_ARGS(m_cpDepthStencilBuffer.ReleaseAndGetAddressOf()));
-	if (FAILED(hr)) {
-		OutputDebugString(L"CreateDepthStencilBufferFailed\n");
-	}
+	if (FAILED(hr)) { OutputDebugString(L"CreateDepthStencilBufferFailed\n"); }
 
 	D3D12_CPU_DESCRIPTOR_HANDLE DSVDescHandle = m_cpDSVDescHeap->GetCPUDescriptorHandleForHeapStart();
 	m_cpDevice->CreateDepthStencilView(m_cpDepthStencilBuffer.Get(), nullptr, DSVDescHandle);
