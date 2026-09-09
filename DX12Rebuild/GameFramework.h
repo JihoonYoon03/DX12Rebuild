@@ -13,8 +13,8 @@ public:
 
 	void CreateSwapChain();
 	void CreateRTVDSVDescHeaps();
-	bool CreateDevice();
-	void CreateCommandQueueList();
+	HRESULT CreateDevice();
+	HRESULT CreateCommandQueueList();
 
 	void CreateRTV();
 	void CreateDSV();

@@ -24,8 +24,8 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 	m_hInstance = hInstance;
 	m_hWnd = hWnd;
 
-	if (!CreateDevice()) { return false; }
-	CreateCommandQueueList();
+	if (FAILED(CreateDevice())) return false;
+	if (FAILED(CreateCommandQueueList())) return false;
 	CreateRTVDSVDescHeaps();
 	CreateSwapChain();
 	//CreateRTV();
@@ -120,7 +120,7 @@ void CGameFramework::CreateRTVDSVDescHeaps()
 
 }
 
-bool CGameFramework::CreateDevice()
+HRESULT CGameFramework::CreateDevice()
 {
 	HRESULT hr;
 	UINT nDXGIFactoryFlags = 0;
@@ -135,10 +135,7 @@ bool CGameFramework::CreateDevice()
 #endif
 
 	hr = ::CreateDXGIFactory2(nDXGIFactoryFlags, IID_PPV_ARGS(m_cpdxgiFactory.GetAddressOf()));
-	if (FAILED(hr)) {
-		OutputDebugString(L"FactoryCreationFailed\n");
-		return false;
-	}
+	if (FAILED(hr)) { OutputDebugString(L"FactoryCreationFailed\n"); return hr; }
 	else {
 		ComPtr<IDXGIAdapter1> pd3dAdapter;
 
@@ -154,15 +151,9 @@ bool CGameFramework::CreateDevice()
 
 		if (!m_cpDevice) {
 			hr = m_cpdxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(pd3dAdapter.ReleaseAndGetAddressOf()));
-			if (FAILED(hr)) {
-				OutputDebugString(L"WARPAdapterEnumerationFailed\n");
-				return false;
-			}
+			if (FAILED(hr)) { OutputDebugString(L"WARPAdapterEnumerationFailed\n");	return hr; }
 			hr = D3D12CreateDevice(pd3dAdapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(m_cpDevice.GetAddressOf()));
-			if (FAILED(hr)) {
-				OutputDebugString(L"DeviceCreation(WARPAdapter)Failed\n");
-				return false;
-			}
+			if (FAILED(hr)) { OutputDebugString(L"DeviceCreation(WARPAdapter)Failed\n"); return hr; }
 		}
 
 		D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS d3dMsaaQualityLevels;
@@ -175,20 +166,17 @@ bool CGameFramework::CreateDevice()
 		m_bMsaaEnable = m_nMsaa4xQualityLevels ? true : false;
 
 		hr = m_cpDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(m_cpFence.GetAddressOf()));
-		if (FAILED(hr)) {
-			OutputDebugString(L"FenceCreationFailed\n");
-			return false;
-		}
+		if (FAILED(hr)) { OutputDebugString(L"FenceCreationFailed\n"); return hr; }
 
 		m_hdFenceEvent = ::CreateEvent(NULL, false, NULL, NULL);
 
 		gnCbvSrvDescriptorIncrementSize = m_cpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	}
 
-	return true;
+	return S_OK;
 }
 
-void CGameFramework::CreateCommandQueueList()
+HRESULT CGameFramework::CreateCommandQueueList()
 {
 	D3D12_COMMAND_QUEUE_DESC cmdQueueDesc;
 	::ZeroMemory(&cmdQueueDesc, sizeof(D3D12_COMMAND_QUEUE_DESC));
@@ -196,14 +184,16 @@ void CGameFramework::CreateCommandQueueList()
 	cmdQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 
 	HRESULT hr = m_cpDevice->CreateCommandQueue(&cmdQueueDesc, IID_PPV_ARGS(m_cpCommandQueue.GetAddressOf()));
-	if (FAILED(hr)) { OutputDebugString(L"CommandQueueCreationFailed\n"); }
+	if (FAILED(hr)) { OutputDebugString(L"CommandQueueCreationFailed\n"); return hr; }
 	hr = m_cpDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(m_cpCommandAllocator.GetAddressOf()));
-	if (FAILED(hr)) { OutputDebugString(L"CommandAllocatorCreationFailed\n"); }
+	if (FAILED(hr)) { OutputDebugString(L"CommandAllocatorCreationFailed\n"); return hr;	}
 	hr = m_cpDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_cpCommandAllocator.Get(), NULL, IID_PPV_ARGS(m_cpCommandList.GetAddressOf()));
-	if (FAILED(hr)) { OutputDebugString(L"CommandListCreationFailed\n"); }
+	if (FAILED(hr)) { OutputDebugString(L"CommandListCreationFailed\n"); return hr; }
 
 	hr = m_cpCommandList->Close();
-	if (FAILED(hr)) { OutputDebugString(L"CommandListCloseFailed\n"); }
+	if (FAILED(hr)) { OutputDebugString(L"CommandListCloseFailed\n"); return hr; }
+
+	return S_OK;
 }
 
 void CGameFramework::CreateRTV()
