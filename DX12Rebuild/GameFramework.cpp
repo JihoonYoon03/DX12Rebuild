@@ -27,7 +27,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 	if (FAILED(CreateDevice())) return false;
 	if (FAILED(CreateCommandQueueList())) return false;
 	CreateRTVDSVDescHeaps();
-	CreateSwapChain();
+	if (FAILED(CreateSwapChain())) return false;
 	//CreateRTV();
 	CreateDSV();
 
@@ -48,7 +48,8 @@ void CGameFramework::OnDestroy()
 
 #ifdef _DEBUG
 	ComPtr<IDXGIDebug1> pdxgiDebug;
-	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pdxgiDebug.GetAddressOf())))) {
+	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pdxgiDebug.GetAddressOf())))) 
+	{
 		HRESULT hr = pdxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
 		if (FAILED(hr)) { OutputDebugString(L"ReportLiveObjectsFailed\n"); }
 	}
@@ -56,10 +57,10 @@ void CGameFramework::OnDestroy()
 #endif
 }
 
-void CGameFramework::CreateSwapChain()
+HRESULT CGameFramework::CreateSwapChain()
 {
 	RECT rc;
-	::GetClientRect(m_hWnd, &rc);
+	if (!::GetClientRect(m_hWnd, &rc)) { return E_FAIL; }
 
 	m_nClientW = rc.right - rc.left;
 	m_nClientH = rc.bottom - rc.top;
@@ -71,8 +72,8 @@ void CGameFramework::CreateSwapChain()
 	swapChainDesc.BufferDesc.Width = m_nClientW;
 	swapChainDesc.BufferDesc.Height = m_nClientH;
 	swapChainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	swapChainDesc.BufferDesc.RefreshRate.Denominator = 60;
-	swapChainDesc.BufferDesc.RefreshRate.Numerator = 1;
+	swapChainDesc.BufferDesc.RefreshRate.Numerator = 60;
+	swapChainDesc.BufferDesc.RefreshRate.Denominator = 1;
 	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	swapChainDesc.OutputWindow = m_hWnd;
@@ -82,20 +83,22 @@ void CGameFramework::CreateSwapChain()
 	swapChainDesc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
 	ComPtr<IDXGISwapChain> SwapChain;
-	HRESULT hr = m_cpdxgiFactory->CreateSwapChain(m_cpDevice.Get(), &swapChainDesc, SwapChain.GetAddressOf());
-	if (FAILED(hr)) { OutputDebugString(L"SwapChainCreationFailed\n"); }
+	HRESULT hr = m_cpdxgiFactory->CreateSwapChain(m_cpCommandQueue.Get(), &swapChainDesc, SwapChain.GetAddressOf());
+	if (FAILED(hr)) { OutputDebugString(L"SwapChainCreationFailed\n"); return hr; }
 
 	hr = SwapChain.As(&m_cpdxgiSwapChain);
-	if (FAILED(hr)) { OutputDebugString(L"SwapChainCastingFailed\n"); }
+	if (FAILED(hr)) { OutputDebugString(L"SwapChainCastingFailed\n"); return hr; }
 
 	m_nSwapChainBufferIndex = m_cpdxgiSwapChain->GetCurrentBackBufferIndex();
 
 	hr = m_cpdxgiFactory->MakeWindowAssociation(m_hWnd, DXGI_MWA_NO_ALT_ENTER);
-	if (FAILED(hr)) { OutputDebugString(L"FullscreenShortcutDisablingFailed\n"); }
+	if (FAILED(hr)) { OutputDebugString(L"FullscreenShortcutDisablingFailed\n"); return hr; }
 
 #ifndef _WITH_SWAPCHAIN_FULLSCREEN_STATE
 	CreateRTV();
 #endif
+
+	return S_OK;
 }
 
 void CGameFramework::CreateRTVDSVDescHeaps()
@@ -127,7 +130,8 @@ HRESULT CGameFramework::CreateDevice()
 
 #ifdef _DEBUG
 	ComPtr<ID3D12Debug1> pDebug;
-	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebug.GetAddressOf())))) {
+	if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(pDebug.GetAddressOf()))))
+	{
 		pDebug->EnableDebugLayer();
 	}
 	else { OutputDebugString(L"ID3D12DebugLayerEnableFailed\n"); }
@@ -149,7 +153,8 @@ HRESULT CGameFramework::CreateDevice()
 			}
 		}
 
-		if (!m_cpDevice) {
+		if (!m_cpDevice)
+		{
 			hr = m_cpdxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(pd3dAdapter.ReleaseAndGetAddressOf()));
 			if (FAILED(hr)) { OutputDebugString(L"WARPAdapterEnumerationFailed\n");	return hr; }
 			hr = D3D12CreateDevice(pd3dAdapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(m_cpDevice.GetAddressOf()));
@@ -200,9 +205,11 @@ void CGameFramework::CreateRTV()
 {
 	D3D12_CPU_DESCRIPTOR_HANDLE RTVDescHandle = m_cpRTVDescHeap->GetCPUDescriptorHandleForHeapStart();
 	HRESULT hr;
-	for (UINT i = 0; i < m_nSwapChainBuffers; ++i) {
+	for (UINT i = 0; i < m_nSwapChainBuffers; ++i) 
+	{
 		hr = m_cpdxgiSwapChain->GetBuffer(i, IID_PPV_ARGS(m_cpSwapChainBackBuffers[i].ReleaseAndGetAddressOf()));
-		if (FAILED(hr))	{
+		if (FAILED(hr))	
+		{
 			OutputDebugString(L"SwapChainGetBufferFailed\n");
 			continue;
 		}
@@ -295,7 +302,7 @@ void CGameFramework::FrameAdvance()
 	RTVDescHandle.ptr += (m_nSwapChainBufferIndex * m_nRTVDescIncrementSize);
 	D3D12_CPU_DESCRIPTOR_HANDLE DSVDescHandle = m_cpDSVDescHeap->GetCPUDescriptorHandleForHeapStart();
 	m_cpCommandList->OMSetRenderTargets(1, &RTVDescHandle, TRUE, &DSVDescHandle);
-	m_cpCommandList->ClearRenderTargetView(RTVDescHandle, Colors::Azure, 0, NULL);
+	m_cpCommandList->ClearRenderTargetView(RTVDescHandle, Colors::CadetBlue, 0, NULL);
 	m_cpCommandList->ClearDepthStencilView(DSVDescHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
 	//Scene Render Here
@@ -357,7 +364,8 @@ void CGameFramework::MoveToNextFrame()
 	HRESULT hr = m_cpCommandQueue->Signal(m_cpFence.Get(), FenceValue);
 	if (m_cpFence->GetCompletedValue() < FenceValue) {
 		hr = m_cpFence->SetEventOnCompletion(FenceValue, m_hdFenceEvent);
-		if (FAILED(hr)) {
+		if (FAILED(hr))
+		{
 			OutputDebugString(L"FenceEventSetFailed\n");
 		}
 		::WaitForSingleObject(m_hdFenceEvent, INFINITE);

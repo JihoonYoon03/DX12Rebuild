@@ -54,7 +54,7 @@ void CTimer::Tick(float FPS)
 	m_nLastTime = m_nCurrentTime;
 
 	if (fabsf(fTimeElapsed - m_fTimeElapsed) < 1.0f) {
-		::memmove(&m_fFrameTime[1], m_fFrameTime, config::MAX_SAMPLE_COUNT * sizeof(float));
+		::memmove(&m_fFrameTime[1], m_fFrameTime, (config::MAX_SAMPLE_COUNT - 1) * sizeof(float));
 		m_fFrameTime[0] = fTimeElapsed;
 		if (m_nSampleCount < config::MAX_SAMPLE_COUNT) ++m_nSampleCount;
 	}

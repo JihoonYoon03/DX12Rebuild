@@ -11,7 +11,7 @@ public:
 	bool OnCreate(HINSTANCE hInstance, HWND hWnd);
 	void OnDestroy();
 
-	void CreateSwapChain();
+	HRESULT CreateSwapChain();
 	void CreateRTVDSVDescHeaps();
 	HRESULT CreateDevice();
 	HRESULT CreateCommandQueueList();
