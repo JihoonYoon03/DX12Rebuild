@@ -26,7 +26,7 @@ public:
 	void AnimateObjects();
 	void FrameAdvance();
 
-	void WaitForGPUComplete();
+	HRESULT WaitForGPUComplete();
 
 	void ChangeSwapChainState();
 
@@ -76,7 +76,7 @@ private:
 
 	//Fence
 	ComPtr<ID3D12Fence>					m_cpFence;
-	UINT64								m_nFenceValues[m_nSwapChainBuffers];
+	UINT64								m_nFenceValues;
 	HANDLE								m_hdFenceEvent;
 
 	//Timer

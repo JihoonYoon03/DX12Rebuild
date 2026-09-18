@@ -7,10 +7,13 @@ CGameFramework::CGameFramework()
 	m_nDSVDescIncrementSize = 0;
 
 	m_hdFenceEvent = NULL;
-	for (int i = 0; i < m_nSwapChainBuffers; ++i) m_nFenceValues[i] = 0;
+	//for (int i = 0; i < m_nSwapChainBuffers; ++i) m_nFenceValues[i] = 0;
+	m_nFenceValues = 0;
 
 	m_nClientW = config::FRAME_BUFFER_W;
 	m_nClientH = config::FRAME_BUFFER_H;
+
+	m_ptOldCursorPos = { 0, 0 };
 
 	m_wsTitle = L"DX12 Base Framework (";
 }
@@ -39,7 +42,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 
 void CGameFramework::OnDestroy()
 {
-	WaitForGPUComplete();
+	if (FAILED(WaitForGPUComplete())) { OutputDebugString(L"OnDestroy():WaitForGPUComplete() Failed\n"); }
 
 	ReleaseObjects();
 
@@ -175,6 +178,7 @@ HRESULT CGameFramework::CreateDevice()
 		if (FAILED(hr)) { OutputDebugString(L"FenceCreationFailed\n"); return hr; }
 
 		m_hdFenceEvent = ::CreateEvent(NULL, false, NULL, NULL);
+		if (m_hdFenceEvent == NULL) { OutputDebugString(L"FenceEventCreationFailed\n"); return E_FAIL; }
 
 		gnCbvSrvDescriptorIncrementSize = m_cpDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	}
@@ -319,12 +323,19 @@ void CGameFramework::FrameAdvance()
 
 	hr = m_cpCommandList->Close();
 	if (FAILED(hr)) {
-		OutputDebugString(L"CommandListClosingFailed\n");
+		OutputDebugString(L"FrameAdvance(): Close() Failed\n");
+		PostQuitMessage(0);
+		return;
 	}
 
 	ComPtr<ID3D12CommandList> cpCommandList[] = { m_cpCommandList.Get() };
 	m_cpCommandQueue->ExecuteCommandLists(1, cpCommandList->GetAddressOf());
-	WaitForGPUComplete();
+	//Wait
+	if (FAILED(WaitForGPUComplete())) {
+		OutputDebugString(L"FrameAdvance(): WaitForGPUComplete() Failed\n");
+		PostQuitMessage(0);
+		return;
+	}
 
 	m_cpdxgiSwapChain->Present(0, 0);
 
@@ -334,23 +345,23 @@ void CGameFramework::FrameAdvance()
 	::SetWindowText(m_hWnd, m_wsTitle.c_str());
 }
 
-void CGameFramework::WaitForGPUComplete()
+HRESULT CGameFramework::WaitForGPUComplete()
 {
-	UINT64 FenceValue = ++m_nFenceValues[m_nSwapChainBufferIndex];
+	UINT64 FenceValue = ++m_nFenceValues;
 
 	HRESULT hr = m_cpCommandQueue->Signal(m_cpFence.Get(), FenceValue);
-	if (FAILED(hr)) {
-		OutputDebugString(L"FenceValueSettingFailed\n");
-	}
+	if (FAILED(hr)) { OutputDebugString(L"FenceValueSettingFailed\n"); return hr; }
 	else {
 		if (m_cpFence->GetCompletedValue() < FenceValue) {
 			hr = m_cpFence->SetEventOnCompletion(FenceValue, m_hdFenceEvent);
-			if (FAILED(hr)) {
-				OutputDebugString(L"FenceEventSetFailed\n");
+			if (FAILED(hr)) { OutputDebugString(L"FenceEventSetFailed\n"); return hr; }
+
+			if (::WaitForSingleObject(m_hdFenceEvent, INFINITE) != WAIT_OBJECT_0) {
+				OutputDebugString(L"WaitForSingleObjectFailed\n"); return E_FAIL;
 			}
-			::WaitForSingleObject(m_hdFenceEvent, INFINITE);
 		}
 	}
+	return S_OK;
 }
 
 void CGameFramework::ChangeSwapChainState()
@@ -361,16 +372,16 @@ void CGameFramework::MoveToNextFrame()
 {
 	m_nSwapChainBufferIndex = m_cpdxgiSwapChain->GetCurrentBackBufferIndex();
 
-	UINT64 FenceValue = ++m_nFenceValues[m_nSwapChainBufferIndex];
-	HRESULT hr = m_cpCommandQueue->Signal(m_cpFence.Get(), FenceValue);
-	if (m_cpFence->GetCompletedValue() < FenceValue) {
-		hr = m_cpFence->SetEventOnCompletion(FenceValue, m_hdFenceEvent);
-		if (FAILED(hr))
-		{
-			OutputDebugString(L"FenceEventSetFailed\n");
-		}
-		::WaitForSingleObject(m_hdFenceEvent, INFINITE);
-	}
+	//UINT64 FenceValue = ++m_nFenceValues[m_nSwapChainBufferIndex];
+	//HRESULT hr = m_cpCommandQueue->Signal(m_cpFence.Get(), FenceValue);
+	//if (m_cpFence->GetCompletedValue() < FenceValue) {
+	//	hr = m_cpFence->SetEventOnCompletion(FenceValue, m_hdFenceEvent);
+	//	if (FAILED(hr))
+	//	{
+	//		OutputDebugString(L"FenceEventSetFailed\n");
+	//	}
+	//	::WaitForSingleObject(m_hdFenceEvent, INFINITE);
+	//}
 }
 
 void CGameFramework::OnProcessingMouseMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
