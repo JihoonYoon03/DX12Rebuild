@@ -12,12 +12,12 @@ public:
 	void OnDestroy();
 
 	HRESULT CreateSwapChain();
-	void CreateRTVDSVDescHeaps();
+	HRESULT CreateRTVDSVDescHeaps();
 	HRESULT CreateDevice();
 	HRESULT CreateCommandQueueList();
 
-	void CreateRTV();
-	void CreateDSV();
+	HRESULT CreateRTV();
+	HRESULT CreateDSV();
 
 	void BuildObjects();
 	void ReleaseObjects();
@@ -29,6 +29,8 @@ public:
 	HRESULT WaitForGPUComplete();
 
 	void ChangeSwapChainState();
+	HRESULT ResizeBackBuffers(WPARAM wParam);
+	void StopRendering(bool stop = true) { m_bStopRender = stop; }
 
 	void MoveToNextFrame();
 
@@ -60,6 +62,7 @@ private:
 	ComPtr<ID3D12Resource>				m_cpSwapChainBackBuffers[m_nSwapChainBuffers];
 	ComPtr<ID3D12DescriptorHeap>		m_cpRTVDescHeap;
 	UINT								m_nRTVDescIncrementSize;
+	bool								m_bStopRender = false;
 
 	//DepthStencil
 	ComPtr<ID3D12Resource>				m_cpDepthStencilBuffer;

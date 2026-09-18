@@ -13,6 +13,7 @@ HWND hWnd;
 WCHAR szTitle[MAX_LOADSTRING];                  // 제목 표시줄 텍스트입니다.
 WCHAR szWindowClass[MAX_LOADSTRING];            // 기본 창 클래스 이름입니다.
 CGameFramework GameFramework;
+bool bFrameworkSet;
 
 // 이 코드 모듈에 포함된 함수의 선언을 전달합니다:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
@@ -117,7 +118,9 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
       return FALSE;
    }
 
-   if (!GameFramework.OnCreate(hInstance, hWnd))
+   bFrameworkSet = GameFramework.OnCreate(hInstance, hWnd);
+
+   if (!bFrameworkSet)
    {
        return FALSE;
    }
@@ -150,6 +153,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_RBUTTONDOWN:
     case WM_RBUTTONUP:
         GameFramework.OnProcessingWindowMessage(hWnd, message, wParam, lParam);
+        break;
+    case WM_SIZE:
+        if (bFrameworkSet)
+        {
+            HRESULT hr = GameFramework.ResizeBackBuffers(wParam);
+            if (FAILED(hr)) { GameFramework.StopRendering(); }
+        }
         break;
     case WM_COMMAND:
         {
