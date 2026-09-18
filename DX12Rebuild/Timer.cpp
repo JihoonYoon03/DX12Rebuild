@@ -21,6 +21,10 @@ CTimer::CTimer()
 	m_nCurrentFrameRate = 0;
 	m_nFramesPerSecond = 0;
 	m_fFPSTimeElapsed = 0.0f;
+	m_bStopped = false;
+	::ZeroMemory(m_fFrameTime, config::MAX_SAMPLE_COUNT * sizeof(float));
+	m_fTimeElapsed = 0.0f;
+	m_nCurrentTime = 0;
 }
 
 CTimer::~CTimer()
@@ -62,7 +66,7 @@ void CTimer::Tick(float FPS)
 	++m_nFramesPerSecond;
 	m_fFPSTimeElapsed += fTimeElapsed;
 	if (m_fFPSTimeElapsed > 1.0f) {
-		m_nCurrentFrameRate = m_nFramesPerSecond;
+		m_nCurrentFrameRate = (float)m_nFramesPerSecond / m_fFPSTimeElapsed;
 		m_nFramesPerSecond = 0;
 		m_fFPSTimeElapsed = 0.0f;
 	}
@@ -86,11 +90,25 @@ float CTimer::GetTimeElapsed()
 
 void CTimer::Reset()
 {
-	__int64 nPerformanceCounter;
-	::QueryPerformanceCounter((LARGE_INTEGER*)&nPerformanceCounter);
+	if (m_bHasPerformanceCounter)
+	{
+		__int64 nPerformanceCounter;
+		::QueryPerformanceCounter((LARGE_INTEGER*)&nPerformanceCounter);
+		m_nLastTime = nPerformanceCounter;
+		m_nCurrentTime = nPerformanceCounter;
+	}
+	else
+	{
+		m_nLastTime = ::timeGetTime();
+		m_nCurrentTime = m_nLastTime;
+	}
 
-	m_nLastTime = nPerformanceCounter;
-	m_nCurrentTime = nPerformanceCounter;
+	m_nCurrentFrameRate = 0;
+	m_nFramesPerSecond = 0;
+	m_nSampleCount = 0;
+	m_fTimeElapsed = 0.0f;
+	m_fFPSTimeElapsed = 0.0f;
+	::ZeroMemory(m_fFrameTime, config::MAX_SAMPLE_COUNT * sizeof(float));
 
 	m_bStopped = false;
 }

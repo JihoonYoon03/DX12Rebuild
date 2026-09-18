@@ -32,6 +32,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 	CreateDSV();
 
 	BuildObjects();
+	m_timer.Reset();
 
 	return true;
 }
