@@ -33,6 +33,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 	if (FAILED(CreateSwapChain()))			return false;
 	//CreateRTV();
 	if (FAILED(CreateDSV()))				return false;
+	if (FAILED(CreateRootSignature()))		return false;
 
 	BuildObjects();
 	m_timer.Reset();
@@ -68,6 +69,8 @@ HRESULT CGameFramework::CreateSwapChain()
 
 	m_nClientW = rc.right - rc.left;
 	m_nClientH = rc.bottom - rc.top;
+
+	SetViewportScissorRect(rc);
 
 	//swapchain
 	DXGI_SWAP_CHAIN_DESC swapChainDesc;
@@ -154,7 +157,7 @@ HRESULT CGameFramework::CreateDevice()
 		for (UINT i = 0; DXGI_ERROR_NOT_FOUND != m_cpdxgiFactory->EnumAdapters1(i, pd3dAdapter.ReleaseAndGetAddressOf()); ++i) {
 			DXGI_ADAPTER_DESC1 adapterDesc;
 			pd3dAdapter->GetDesc1(&adapterDesc);
-			//ÏÜåÌîÑÌä∏Ïõ®Ïñ¥ Ïñ¥ÎåëÌÑ∞Ïù∏ Í≤ΩÏö∞ Ïä§ÌÇµ
+			//º“«¡∆Æø˛æÓ æÓ¥≈Õ¿Œ ∞ÊøÏ Ω∫≈µ
 			if (adapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) continue;
 			else if (SUCCEEDED(D3D12CreateDevice(pd3dAdapter.Get(), D3D_FEATURE_LEVEL_12_0, IID_PPV_ARGS(m_cpDevice.GetAddressOf())))) {
 				break;
@@ -208,6 +211,18 @@ HRESULT CGameFramework::CreateCommandQueueList()
 	if (FAILED(hr)) { OutputDebugString(L"CommandListCloseFailed\n"); return hr; }
 
 	return S_OK;
+}
+
+void CGameFramework::SetViewportScissorRect(const RECT& rc)
+{
+	m_viewport.TopLeftX = 0;
+	m_viewport.TopLeftY = 0;
+	m_viewport.Width = (float)m_nClientW;
+	m_viewport.Height = (float)m_nClientH;
+	m_viewport.MinDepth = 0;
+	m_viewport.MaxDepth = 1;
+
+	m_scissorRect = rc;
 }
 
 HRESULT CGameFramework::CreateRTV()
@@ -266,6 +281,39 @@ HRESULT CGameFramework::CreateDSV()
 	return S_OK;
 }
 
+HRESULT CGameFramework::CreateRootSignature()
+{
+	D3D12_ROOT_SIGNATURE_DESC rootSigDesc;
+	::ZeroMemory(&rootSigDesc, sizeof(D3D12_ROOT_SIGNATURE_DESC));
+	rootSigDesc.NumParameters = 0;
+	rootSigDesc.NumStaticSamplers = 0;
+	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+	ComPtr<ID3DBlob> cpd3dBlob, cpd3dErrBlob;
+	HRESULT hr = D3D12SerializeRootSignature(
+		&rootSigDesc,
+		D3D_ROOT_SIGNATURE_VERSION_1_0,
+		cpd3dBlob.GetAddressOf(),
+		cpd3dErrBlob.GetAddressOf()
+	);
+	if (FAILED(hr))
+	{
+		if (cpd3dErrBlob)
+			OutputDebugStringA((char*)cpd3dErrBlob->GetBufferPointer());
+		return hr;
+	}
+
+	hr = m_cpDevice->CreateRootSignature(
+		0,
+		cpd3dBlob->GetBufferPointer(),
+		cpd3dBlob->GetBufferSize(),
+		IID_PPV_ARGS(m_cpRootSignature.GetAddressOf())
+		);
+	if (FAILED(hr)) { OutputDebugString(L"CreateRootSignature(): CreateRootSignature() Failed\n"); return hr; }
+
+	return S_OK;
+}
+
 void CGameFramework::BuildObjects()
 {
 }
@@ -293,9 +341,13 @@ void CGameFramework::FrameAdvance()
 	AnimateObjects();
 
 	HRESULT hr = m_cpCommandAllocator->Reset();
-	if (FAILED(hr)) { OutputDebugString(L"CommandAllocatorResetFailed\n"); }
+	if (FAILED(hr)) { OutputDebugString(L"CommandAllocatorResetFailed\n"); return; }
 	hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), NULL);
-	if (FAILED(hr)) { OutputDebugString(L"CommandListResetFailed\n"); }
+	if (FAILED(hr)) { OutputDebugString(L"CommandListResetFailed\n"); return; }
+
+	m_cpCommandList->SetGraphicsRootSignature(m_cpRootSignature.Get());
+	m_cpCommandList->RSSetViewports(1, &m_viewport);
+	m_cpCommandList->RSSetScissorRects(1, &m_scissorRect);
 
 	D3D12_RESOURCE_BARRIER ResourceBarrier;
 	ResourceBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -376,6 +428,8 @@ HRESULT CGameFramework::ResizeBackBuffers(WPARAM wParam)
 
 	m_nClientW = rect.right - rect.left;
 	m_nClientH = rect.bottom - rect.top;
+
+	SetViewportScissorRect(rect);
 
 	if (wParam == SIZE_MINIMIZED || m_nClientW == 0 || m_nClientH == 0)
 	{

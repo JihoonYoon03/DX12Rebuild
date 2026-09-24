@@ -24,6 +24,7 @@
     <ProjectGuid>{e1315cf7-5f27-4d86-a3c9-812481fe744c}</ProjectGuid>
     <RootNamespace>DX12Rebuild</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>DX12Framework</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -136,7 +137,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Config.h" />
-    <ClInclude Include="DX12Rebuild.h" />
+    <ClInclude Include="WinMain.h" />
     <ClInclude Include="GameFramework.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Resource.h" />
@@ -144,7 +145,7 @@
     <ClInclude Include="Timer.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="DX12Rebuild.cpp" />
+    <ClCompile Include="WinMain.cpp" />
     <ClCompile Include="GameFramework.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

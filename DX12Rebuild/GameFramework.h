@@ -15,9 +15,12 @@ public:
 	HRESULT CreateRTVDSVDescHeaps();
 	HRESULT CreateDevice();
 	HRESULT CreateCommandQueueList();
+	void	SetViewportScissorRect(const RECT& rc);
 
 	HRESULT CreateRTV();
 	HRESULT CreateDSV();
+
+	HRESULT CreateRootSignature();
 
 	void BuildObjects();
 	void ReleaseObjects();
@@ -46,6 +49,9 @@ private:
 
 	int			m_nClientW;
 	int			m_nClientH;
+
+	D3D12_VIEWPORT						m_viewport;
+	D3D12_RECT							m_scissorRect;
 
 	//Factory/SwapChain/Device
 	ComPtr<IDXGIFactory4>				m_cpdxgiFactory;
@@ -89,6 +95,7 @@ private:
 	std::wstring m_wsTitle;
 
 	//Scene
+	ComPtr<ID3D12RootSignature>			m_cpRootSignature;
 
 	//Debug
 
