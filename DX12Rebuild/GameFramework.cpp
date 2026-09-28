@@ -34,6 +34,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 	//CreateRTV();
 	if (FAILED(CreateDSV()))				return false;
 	if (FAILED(CreateRootSignature()))		return false;
+	if (FAILED(CompileShaderFromFile()))	return false;
 
 	BuildObjects();
 	m_timer.Reset();
@@ -223,6 +224,34 @@ void CGameFramework::SetViewportScissorRect(const RECT& rc)
 	m_viewport.MaxDepth = 1;
 
 	m_scissorRect = rc;
+}
+
+HRESULT CGameFramework::CompileShaderFromFile()
+{
+	UINT nCompileFlags = 0;
+
+#if defined _DEBUG
+	nCompileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#endif
+
+	ComPtr<ID3DBlob> errBlob;
+	HRESULT hr;
+	hr = D3DCompileFromFile(L"Shaders.hlsl", NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, "VSMain", "vs_5_0", nCompileFlags, NULL, m_cpVS.ReleaseAndGetAddressOf(), errBlob.GetAddressOf());
+	if (FAILED(hr))
+	{ 
+		if (errBlob)
+			OutputDebugStringA((char*)errBlob->GetBufferPointer());
+		return hr;
+	}
+	hr = D3DCompileFromFile(L"Shaders.hlsl", NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, "PSMain", "ps_5_0", nCompileFlags, NULL, m_cpPS.ReleaseAndGetAddressOf(), errBlob.ReleaseAndGetAddressOf());
+	if (FAILED(hr))
+	{ 
+		if (errBlob)
+			OutputDebugStringA((char*)errBlob->GetBufferPointer());
+		return hr; 
+	}
+
+	return S_OK;
 }
 
 HRESULT CGameFramework::CreateRTV()

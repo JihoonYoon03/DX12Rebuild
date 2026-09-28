@@ -16,6 +16,7 @@ public:
 	HRESULT CreateDevice();
 	HRESULT CreateCommandQueueList();
 	void	SetViewportScissorRect(const RECT& rc);
+	HRESULT CompileShaderFromFile();
 
 	HRESULT CreateRTV();
 	HRESULT CreateDSV();
@@ -96,6 +97,10 @@ private:
 
 	//Scene
 	ComPtr<ID3D12RootSignature>			m_cpRootSignature;
+
+	//Shaders
+	ComPtr<ID3DBlob>					m_cpVS;
+	ComPtr<ID3DBlob>					m_cpPS;
 
 	//Debug
 

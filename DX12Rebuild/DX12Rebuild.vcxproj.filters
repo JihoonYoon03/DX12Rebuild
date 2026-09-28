@@ -64,4 +64,9 @@
       <Filter>리소스 파일</Filter>
     </Image>
   </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="Shaders.hlsl">
+      <Filter>소스 파일</Filter>
+    </FxCompile>
+  </ItemGroup>
 </Project>
