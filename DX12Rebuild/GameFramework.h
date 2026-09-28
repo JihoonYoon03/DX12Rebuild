@@ -17,6 +17,7 @@ public:
 	HRESULT CreateCommandQueueList();
 	void	SetViewportScissorRect(const RECT& rc);
 	HRESULT CompileShaderFromFile();
+	HRESULT CreatePSO();
 
 	HRESULT CreateRTV();
 	HRESULT CreateDSV();

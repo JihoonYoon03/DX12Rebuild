@@ -98,7 +98,7 @@
 
 ## 7. 나중에 점검할 사항
 
-- 프로젝트의 Shaders.hlsl이 여전히 FxCompile로 등록되어 있다. Debug/x64 VSMain 빌드 설정이 있으며 런타임 컴파일과 중복된다. None 항목으로 전환을 권했으나 아직 반영되지 않았다. 모든 구성의 상태를 확인할 것.
+- 프로젝트의 Shaders.hlsl은 여전히 FxCompile로 등록되어 있지만 Debug/x64에는 ExcludedFromBuild=true가 설정되어 있어 해당 구성에서는 빌드 시 셰이더 컴파일이 제외된다. VSMain/Vertex/5.0 설정은 남아 있다. 다른 세 구성에는 명시적인 빌드 제외 설정이 없다. None 항목 전환은 아직 반영되지 않았으며, 런타임 컴파일과의 중복 여부는 구성별로 구분한다.
 - CommandAllocator/CommandList Reset 실패는 로그 후 해당 프레임에서 return한다. 프로그램 종료는 아니므로 다음 프레임에 재시도한다. 최종 오류 처리 단계에서 지속 실패 정책을 정리한다.
 - Present 반환값 처리와 Device removed 경로 등은 최종 오류 경로 점검에서 다룬다.
 - 종료 시 ReportLiveObjects가 Framework의 ComPtr 멤버 해제보다 먼저 실행된다. 이때의 Live 경고만으로 누수라고 단정하지 않는다. 리소스 수명 단계에서 GPU 완료, 자원 해제, 최종 보고 순서를 정리한다.
@@ -119,3 +119,24 @@
 ## 9. 새 대화 시작용 문구
 
 > LEARNING_PROGRESS.md를 먼저 읽고 현재 코드를 확인해줘. DX12를 학습 중이며 코드는 내가 작성하고 너는 가이드와 리뷰만 담당해. 완성 코드 제공이나 임의 수정을 하지 말고, 빌드와 실행은 내가 하도록 요청해. 현재 입력 레이아웃과 PSO 생성 단계부터 한 단계씩 이어가자.
+
+## 10. 현재 파일 재점검 (2026-09-28)
+
+- 대상: `C:\Users\user\Documents\GitHub\DX12Rebuild`의 `DX12Framework.sln`. 다른 게임 프로젝트의 진행 상태는 이 기록에 적용하지 않는다.
+- 확인 기준: Git HEAD `4bef5ec`와 현재 작업 파일. 갱신 전 작업 트리는 깨끗했다.
+- 확인 방법: `GameFramework.h/.cpp`, `Shaders.hlsl`, `WinMain.cpp`, 프로젝트 설정 및 관련 심볼을 읽고 비교했다. 빌드·실행은 수행하지 않았으며 과거 사용자 실행 확인과 이번 정적 확인을 구분한다.
+
+| 학습 항목 | 현재 파일 기준 상태 |
+|---|---|
+| DX12 초기화·스왑 체인·RTV/DSV·Fence | 구현 존재. 단일 Allocator와 매 프레임 GPU 대기 구조 유지 |
+| Resize·Viewport·Scissor | 구현 존재. 초기화 전 WM_SIZE 차단 및 Resize 실패 시 렌더링 중단 연결 확인 |
+| 빈 루트 시그니처 | 생성 및 매 프레임 바인딩 구현 존재 |
+| VS/PS 및 런타임 컴파일 | POSITION/COLOR 셰이더와 VSMain/PSMain 컴파일 구현 존재. 이번 실행 검증 없음 |
+| 입력 레이아웃·PSO | 미구현. PSO 멤버만 있고 생성 함수·호출은 없음. CommandList Reset의 두 번째 인자는 여전히 NULL |
+| 정점 버퍼·첫 삼각형 | 미구현. 현재 프레임은 Clear/Present까지이며 정점 버퍼 바인딩과 Draw 호출 없음 |
+| Mesh/Shader 분리·상수 버퍼·변환 행렬 | 후속 학습 단계 |
+| 텍스처용 루트 시그니처·SRV·샘플러·DDS 출력 | 후속 학습 단계. DDS 로더 파일은 있으나 vcxproj 등록 및 Framework 호출 연결은 없음 |
+
+현재 과제는 계속 **입력 레이아웃과 PSO 생성**이다. 5절의 구현 범위와 이해 확인 질문을 유지하며, 완료 처리하거나 정점 버퍼 단계로 넘어가지 않는다. 이해 확인 답변 여부는 파일만으로 판단하지 않는다.
+
+프로젝트 설정 재확인: 네 구성 모두 PlatformToolset=v145이며 공통 IntDir 분리 설정이 유지되어 있다. HLSL의 Debug/x64 빌드 제외 상태는 7절에 정정했다. 이번 갱신은 학습 기록만 수정하며 소스·프로젝트 설정은 변경하지 않는다.
