@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "GameFramework.h"
+#include "Mesh.h"
 
 CGameFramework::CGameFramework()
 {
@@ -36,6 +37,8 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 	if (FAILED(CreateRootSignature()))		return false;
 	if (FAILED(CompileShaderFromFile()))	return false;
 	if (FAILED(CreatePSO()))				return false;
+
+	if (FAILED(CreateVertexBuffer()))			return false;
 
 	BuildObjects();
 	m_timer.Reset();
@@ -227,127 +230,6 @@ void CGameFramework::SetViewportScissorRect(const RECT& rc)
 	m_scissorRect = rc;
 }
 
-HRESULT CGameFramework::CompileShaderFromFile()
-{
-	UINT nCompileFlags = 0;
-
-#if defined _DEBUG
-	nCompileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#endif
-
-	ComPtr<ID3DBlob> errBlob;
-	HRESULT hr;
-	hr = D3DCompileFromFile(L"Shaders.hlsl", NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, "VSMain", "vs_5_0", nCompileFlags, NULL, m_cpVS.ReleaseAndGetAddressOf(), errBlob.GetAddressOf());
-	if (FAILED(hr))
-	{ 
-		if (errBlob)
-			OutputDebugStringA((char*)errBlob->GetBufferPointer());
-		return hr;
-	}
-	hr = D3DCompileFromFile(L"Shaders.hlsl", NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, "PSMain", "ps_5_0", nCompileFlags, NULL, m_cpPS.ReleaseAndGetAddressOf(), errBlob.ReleaseAndGetAddressOf());
-	if (FAILED(hr))
-	{ 
-		if (errBlob)
-			OutputDebugStringA((char*)errBlob->GetBufferPointer());
-		return hr; 
-	}
-
-	return S_OK;
-}
-
-HRESULT CGameFramework::CreatePSO()
-{
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc;
-	::ZeroMemory(&psoDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
-	psoDesc.pRootSignature = m_cpRootSignature.Get();
-	
-	//Shaders
-	psoDesc.VS.BytecodeLength = m_cpVS->GetBufferSize();
-	psoDesc.VS.pShaderBytecode = m_cpVS->GetBufferPointer();
-	psoDesc.PS.BytecodeLength = m_cpPS->GetBufferSize();
-	psoDesc.PS.pShaderBytecode = m_cpPS->GetBufferPointer();
-
-	//BlendDesc
-	psoDesc.BlendState.AlphaToCoverageEnable = FALSE;
-	psoDesc.BlendState.IndependentBlendEnable = FALSE;
-	psoDesc.BlendState.RenderTarget[0].BlendEnable = FALSE;
-	psoDesc.BlendState.RenderTarget[0].LogicOpEnable = FALSE;
-	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
-	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	psoDesc.BlendState.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
-	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
-	psoDesc.SampleMask = 0xffffffff;
-
-	//RS
-	psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-	psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
-	psoDesc.RasterizerState.FrontCounterClockwise = FALSE;
-	psoDesc.RasterizerState.DepthBias = 0;
-	psoDesc.RasterizerState.DepthBiasClamp = 0.0f;
-	psoDesc.RasterizerState.SlopeScaledDepthBias = 0.0f;
-	psoDesc.RasterizerState.DepthClipEnable = TRUE;
-	psoDesc.RasterizerState.MultisampleEnable = FALSE;
-	psoDesc.RasterizerState.AntialiasedLineEnable = TRUE;
-	psoDesc.RasterizerState.ForcedSampleCount = 0;
-	psoDesc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-
-	//Depth Stencil
-	psoDesc.DepthStencilState.DepthEnable = TRUE;
-	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-	psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
-	psoDesc.DepthStencilState.StencilEnable = FALSE;
-	psoDesc.DepthStencilState.StencilReadMask = 0x00;
-	psoDesc.DepthStencilState.StencilWriteMask = 0x00;
-	psoDesc.DepthStencilState.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-	psoDesc.DepthStencilState.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-	psoDesc.DepthStencilState.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
-	psoDesc.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
-	psoDesc.DepthStencilState.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-	psoDesc.DepthStencilState.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-	psoDesc.DepthStencilState.BackFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
-	psoDesc.DepthStencilState.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
-
-	//Input Layout
-	D3D12_INPUT_ELEMENT_DESC inputElemDesc[2];
-	inputElemDesc[0] = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
-	inputElemDesc[1] = { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
-
-	D3D12_INPUT_LAYOUT_DESC inputDesc;
-	::ZeroMemory(&inputDesc, sizeof(D3D12_INPUT_LAYOUT_DESC));
-	inputDesc.NumElements = 2;
-	inputDesc.pInputElementDescs = inputElemDesc;
-
-	psoDesc.InputLayout = inputDesc;
-
-	//Triangle Strip Cut
-	psoDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
-
-	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-
-	psoDesc.NumRenderTargets = 1;
-
-	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
-
-	psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-
-	//Multisample
-	psoDesc.SampleDesc.Count = 1;
-
-	psoDesc.NodeMask = 0;
-
-	psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-
-	HRESULT hr = m_cpDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(m_cpPipelineState.ReleaseAndGetAddressOf()));
-	if (FAILED(hr)) { OutputDebugString(L"PSO Creation Failed\n"); return hr; }
-
-	return S_OK;
-}
-
 HRESULT CGameFramework::CreateRTV()
 {
 	D3D12_CPU_DESCRIPTOR_HANDLE RTVDescHandle = m_cpRTVDescHeap->GetCPUDescriptorHandleForHeapStart();
@@ -437,6 +319,180 @@ HRESULT CGameFramework::CreateRootSignature()
 	return S_OK;
 }
 
+HRESULT CGameFramework::CompileShaderFromFile()
+{
+	UINT nCompileFlags = 0;
+
+#if defined _DEBUG
+	nCompileFlags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#endif
+
+	ComPtr<ID3DBlob> errBlob;
+	HRESULT hr;
+	hr = D3DCompileFromFile(L"Shaders.hlsl", NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, "VSMain", "vs_5_0", nCompileFlags, NULL, m_cpVS.ReleaseAndGetAddressOf(), errBlob.GetAddressOf());
+	if (FAILED(hr))
+	{
+		if (errBlob)
+			OutputDebugStringA((char*)errBlob->GetBufferPointer());
+		return hr;
+	}
+	hr = D3DCompileFromFile(L"Shaders.hlsl", NULL, D3D_COMPILE_STANDARD_FILE_INCLUDE, "PSMain", "ps_5_0", nCompileFlags, NULL, m_cpPS.ReleaseAndGetAddressOf(), errBlob.ReleaseAndGetAddressOf());
+	if (FAILED(hr))
+	{
+		if (errBlob)
+			OutputDebugStringA((char*)errBlob->GetBufferPointer());
+		return hr;
+	}
+
+	return S_OK;
+}
+
+HRESULT CGameFramework::CreatePSO()
+{
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc;
+	::ZeroMemory(&psoDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
+	psoDesc.pRootSignature = m_cpRootSignature.Get();
+
+	//Shaders
+	psoDesc.VS.BytecodeLength = m_cpVS->GetBufferSize();
+	psoDesc.VS.pShaderBytecode = m_cpVS->GetBufferPointer();
+	psoDesc.PS.BytecodeLength = m_cpPS->GetBufferSize();
+	psoDesc.PS.pShaderBytecode = m_cpPS->GetBufferPointer();
+
+	//BlendDesc
+	psoDesc.BlendState.AlphaToCoverageEnable = FALSE;
+	psoDesc.BlendState.IndependentBlendEnable = FALSE;
+	psoDesc.BlendState.RenderTarget[0].BlendEnable = FALSE;
+	psoDesc.BlendState.RenderTarget[0].LogicOpEnable = FALSE;
+	psoDesc.BlendState.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	psoDesc.BlendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	psoDesc.BlendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	psoDesc.BlendState.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
+	psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	psoDesc.SampleMask = 0xffffffff;
+
+	//RS
+	psoDesc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+	psoDesc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+	psoDesc.RasterizerState.FrontCounterClockwise = FALSE;
+	psoDesc.RasterizerState.DepthBias = 0;
+	psoDesc.RasterizerState.DepthBiasClamp = 0.0f;
+	psoDesc.RasterizerState.SlopeScaledDepthBias = 0.0f;
+	psoDesc.RasterizerState.DepthClipEnable = TRUE;
+	psoDesc.RasterizerState.MultisampleEnable = FALSE;
+	psoDesc.RasterizerState.AntialiasedLineEnable = TRUE;
+	psoDesc.RasterizerState.ForcedSampleCount = 0;
+	psoDesc.RasterizerState.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+
+	//Depth Stencil
+	psoDesc.DepthStencilState.DepthEnable = TRUE;
+	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	psoDesc.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+	psoDesc.DepthStencilState.StencilEnable = FALSE;
+	psoDesc.DepthStencilState.StencilReadMask = 0x00;
+	psoDesc.DepthStencilState.StencilWriteMask = 0x00;
+	psoDesc.DepthStencilState.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	psoDesc.DepthStencilState.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	psoDesc.DepthStencilState.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+	psoDesc.DepthStencilState.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
+	psoDesc.DepthStencilState.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	psoDesc.DepthStencilState.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	psoDesc.DepthStencilState.BackFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+	psoDesc.DepthStencilState.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
+
+	//Input Layout
+	D3D12_INPUT_ELEMENT_DESC inputElemDesc[2];
+	inputElemDesc[0] = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
+	inputElemDesc[1] = { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
+
+	D3D12_INPUT_LAYOUT_DESC inputDesc;
+	::ZeroMemory(&inputDesc, sizeof(D3D12_INPUT_LAYOUT_DESC));
+	inputDesc.NumElements = 2;
+	inputDesc.pInputElementDescs = inputElemDesc;
+
+	psoDesc.InputLayout = inputDesc;
+
+	//Triangle Strip Cut
+	psoDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
+
+	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+
+	psoDesc.NumRenderTargets = 1;
+
+	psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+	psoDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+
+	//Multisample
+	psoDesc.SampleDesc.Count = 1;
+
+	psoDesc.NodeMask = 0;
+
+	psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+
+	HRESULT hr = m_cpDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(m_cpPipelineState.ReleaseAndGetAddressOf()));
+	if (FAILED(hr)) { OutputDebugString(L"PSO Creation Failed\n"); return hr; }
+
+	return S_OK;
+}
+
+HRESULT CGameFramework::CreateVertexBuffer()
+{
+	VertexDiffused triangle[3] = {
+		{ XMFLOAT3( 0.0f, 0.5f, 0.0f ), XMFLOAT4( 1.0f, 0.0f, 0.0f, 1.0f ) },
+		{ XMFLOAT3( 0.5f, -0.5f, 0.0f ), XMFLOAT4( 0.0f, 1.0f, 0.0f, 1.0f ) },
+		{ XMFLOAT3( -0.5f, -0.5f, 0.0f ), XMFLOAT4( 0.0f, 0.0f, 1.0f, 1.0f ) }
+	};
+
+	D3D12_HEAP_PROPERTIES heapProperties;
+	::ZeroMemory(&heapProperties, sizeof(D3D12_HEAP_PROPERTIES));
+	heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
+	heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
+	heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
+	heapProperties.CreationNodeMask = 1;
+	heapProperties.VisibleNodeMask = 1;
+
+	D3D12_RESOURCE_DESC resDesc;
+	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	resDesc.Alignment = 0;
+	resDesc.Width = sizeof(VertexDiffused) * 3;
+	resDesc.Height = 1;
+	resDesc.DepthOrArraySize = 1;
+	resDesc.MipLevels = 1;
+	resDesc.Format = DXGI_FORMAT_UNKNOWN;
+	resDesc.SampleDesc.Count = 1;
+	resDesc.SampleDesc.Quality = 0;
+	resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+	HRESULT hr = m_cpDevice->CreateCommittedResource(
+		&heapProperties,
+		D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
+		&resDesc,
+		D3D12_RESOURCE_STATE_GENERIC_READ,
+		NULL,
+		IID_PPV_ARGS(m_cpVertexBufferTest.ReleaseAndGetAddressOf())
+	);
+	if (FAILED(hr)) { OutputDebugString(L"CreateVertexBuffer(): CreateCommittedResource() Failed\n"); return hr; }
+
+	D3D12_RANGE readRange = { 0, 0 };
+	UINT8* bufBegin;
+	hr = m_cpVertexBufferTest->Map(0, &readRange, (void**)&bufBegin);
+	if (FAILED(hr)) { OutputDebugString(L"CreateVertexBuffer(): Map() Failed\n"); return hr; }
+	::memcpy(bufBegin, triangle, sizeof(VertexDiffused) * 3);
+	m_cpVertexBufferTest->Unmap(0, NULL);
+
+	m_VertexBufferViewTest.BufferLocation = m_cpVertexBufferTest->GetGPUVirtualAddress();
+	m_VertexBufferViewTest.SizeInBytes = sizeof(VertexDiffused) * 3;
+	m_VertexBufferViewTest.StrideInBytes = sizeof(VertexDiffused);
+
+	return S_OK;
+}
+
 void CGameFramework::BuildObjects()
 {
 }
@@ -489,7 +545,9 @@ void CGameFramework::FrameAdvance()
 	m_cpCommandList->ClearDepthStencilView(DSVDescHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
 	//Scene Render Here
-	//
+	m_cpCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	m_cpCommandList->IASetVertexBuffers(0, 1, &m_VertexBufferViewTest);
+	m_cpCommandList->DrawInstanced(3, 1, 0, 0);
 
 	//Player Render Here
 	//

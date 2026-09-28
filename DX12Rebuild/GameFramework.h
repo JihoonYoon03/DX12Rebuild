@@ -16,13 +16,16 @@ public:
 	HRESULT CreateDevice();
 	HRESULT CreateCommandQueueList();
 	void	SetViewportScissorRect(const RECT& rc);
-	HRESULT CompileShaderFromFile();
-	HRESULT CreatePSO();
 
 	HRESULT CreateRTV();
 	HRESULT CreateDSV();
 
 	HRESULT CreateRootSignature();
+
+	HRESULT CompileShaderFromFile();
+	HRESULT CreatePSO();
+
+	HRESULT CreateVertexBuffer();
 
 	void BuildObjects();
 	void ReleaseObjects();
@@ -105,5 +108,8 @@ private:
 
 	//Debug
 
+	//TEST
+	ComPtr<ID3D12Resource>				m_cpVertexBufferTest;
+	D3D12_VERTEX_BUFFER_VIEW			m_VertexBufferViewTest;
 };
 
