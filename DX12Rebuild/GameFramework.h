@@ -2,6 +2,8 @@
 
 #include "Timer.h"
 
+class CMesh;
+
 class CGameFramework
 {
 public:
@@ -25,9 +27,7 @@ public:
 	HRESULT CompileShaderFromFile();
 	HRESULT CreatePSO();
 
-	HRESULT CreateVertexBuffer();
-
-	void BuildObjects();
+	HRESULT BuildObjects();
 	void ReleaseObjects();
 
 	void ProcessInput();
@@ -108,8 +108,7 @@ private:
 
 	//Debug
 
-	//TEST
-	ComPtr<ID3D12Resource>				m_cpVertexBufferTest;
-	D3D12_VERTEX_BUFFER_VIEW			m_VertexBufferViewTest;
+	//Test
+	std::unique_ptr<CMesh>				m_upMesh;
 };
 

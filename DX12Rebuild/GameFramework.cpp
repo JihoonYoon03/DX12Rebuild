@@ -38,9 +38,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 	if (FAILED(CompileShaderFromFile()))	return false;
 	if (FAILED(CreatePSO()))				return false;
 
-	if (FAILED(CreateVertexBuffer()))			return false;
-
-	BuildObjects();
+	if (FAILED(BuildObjects()))				return false;
 	m_timer.Reset();
 
 	return true;
@@ -440,65 +438,37 @@ HRESULT CGameFramework::CreatePSO()
 	return S_OK;
 }
 
-HRESULT CGameFramework::CreateVertexBuffer()
+HRESULT CGameFramework::BuildObjects()
 {
+	HRESULT hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), NULL);
+	if (FAILED(hr)) return hr;
+
 	VertexDiffused triangle[3] = {
-		{ XMFLOAT3( 0.0f, 0.5f, 0.0f ), XMFLOAT4( 1.0f, 0.0f, 0.0f, 1.0f ) },
-		{ XMFLOAT3( 0.5f, -0.5f, 0.0f ), XMFLOAT4( 0.0f, 1.0f, 0.0f, 1.0f ) },
-		{ XMFLOAT3( -0.5f, -0.5f, 0.0f ), XMFLOAT4( 0.0f, 0.0f, 1.0f, 1.0f ) }
+		{ XMFLOAT3(0.0f, 0.5f, 0.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f) },
+		{ XMFLOAT3(0.5f, -0.5f, 0.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f) },
+		{ XMFLOAT3(-0.5f, -0.5f, 0.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f) }
 	};
 
-	D3D12_HEAP_PROPERTIES heapProperties;
-	::ZeroMemory(&heapProperties, sizeof(D3D12_HEAP_PROPERTIES));
-	heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
-	heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-	heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-	heapProperties.CreationNodeMask = 1;
-	heapProperties.VisibleNodeMask = 1;
+	m_upMesh = std::make_unique<CMesh>();
+	hr = m_upMesh->CreateVertexBuffer<VertexDiffused>(m_cpDevice, m_cpCommandList, triangle, 3);
+	if (FAILED(hr)) return hr;
 
-	D3D12_RESOURCE_DESC resDesc;
-	resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	resDesc.Alignment = 0;
-	resDesc.Width = sizeof(VertexDiffused) * 3;
-	resDesc.Height = 1;
-	resDesc.DepthOrArraySize = 1;
-	resDesc.MipLevels = 1;
-	resDesc.Format = DXGI_FORMAT_UNKNOWN;
-	resDesc.SampleDesc.Count = 1;
-	resDesc.SampleDesc.Quality = 0;
-	resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-	resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	hr = m_cpCommandList->Close();
+	if (FAILED(hr)) return hr;
+	ComPtr<ID3D12CommandList> cpCommandList[] = { m_cpCommandList.Get() };
+	m_cpCommandQueue->ExecuteCommandLists(1, cpCommandList->GetAddressOf());
 
-	HRESULT hr = m_cpDevice->CreateCommittedResource(
-		&heapProperties,
-		D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
-		&resDesc,
-		D3D12_RESOURCE_STATE_GENERIC_READ,
-		NULL,
-		IID_PPV_ARGS(m_cpVertexBufferTest.ReleaseAndGetAddressOf())
-	);
-	if (FAILED(hr)) { OutputDebugString(L"CreateVertexBuffer(): CreateCommittedResource() Failed\n"); return hr; }
+	hr = WaitForGPUComplete();
+	if (FAILED(hr)) return hr;
 
-	D3D12_RANGE readRange = { 0, 0 };
-	UINT8* bufBegin;
-	hr = m_cpVertexBufferTest->Map(0, &readRange, (void**)&bufBegin);
-	if (FAILED(hr)) { OutputDebugString(L"CreateVertexBuffer(): Map() Failed\n"); return hr; }
-	::memcpy(bufBegin, triangle, sizeof(VertexDiffused) * 3);
-	m_cpVertexBufferTest->Unmap(0, NULL);
-
-	m_VertexBufferViewTest.BufferLocation = m_cpVertexBufferTest->GetGPUVirtualAddress();
-	m_VertexBufferViewTest.SizeInBytes = sizeof(VertexDiffused) * 3;
-	m_VertexBufferViewTest.StrideInBytes = sizeof(VertexDiffused);
+	m_upMesh->ReleaseUploadBuffer();
 
 	return S_OK;
 }
 
-void CGameFramework::BuildObjects()
-{
-}
-
 void CGameFramework::ReleaseObjects()
 {
+	m_upMesh.reset();
 }
 
 void CGameFramework::ProcessInput()
@@ -545,9 +515,7 @@ void CGameFramework::FrameAdvance()
 	m_cpCommandList->ClearDepthStencilView(DSVDescHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
 	//Scene Render Here
-	m_cpCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	m_cpCommandList->IASetVertexBuffers(0, 1, &m_VertexBufferViewTest);
-	m_cpCommandList->DrawInstanced(3, 1, 0, 0);
+	m_upMesh->DrawMesh(m_cpCommandList);
 
 	//Player Render Here
 	//
@@ -566,6 +534,7 @@ void CGameFramework::FrameAdvance()
 
 	ComPtr<ID3D12CommandList> cpCommandList[] = { m_cpCommandList.Get() };
 	m_cpCommandQueue->ExecuteCommandLists(1, cpCommandList->GetAddressOf());
+	//Fence
 	hr = WaitForGPUComplete();
 	if (FAILED(hr)) {
 		OutputDebugString(L"FrameAdvance(): WaitForGPUComplete() Failed\n");
