@@ -3,6 +3,7 @@
 #include "Timer.h"
 
 class CMesh;
+class CShader;
 
 class CGameFramework
 {
@@ -23,9 +24,6 @@ public:
 	HRESULT CreateDSV();
 
 	HRESULT CreateRootSignature();
-
-	HRESULT CompileShaderFromFile();
-	HRESULT CreatePSO();
 
 	HRESULT BuildObjects();
 	void ReleaseObjects();
@@ -85,9 +83,6 @@ private:
 	ComPtr<ID3D12CommandAllocator>		m_cpCommandAllocator;
 	ComPtr<ID3D12GraphicsCommandList>	m_cpCommandList;
 
-	//PSO
-	ComPtr<ID3D12PipelineState>			m_cpPipelineState;                                               
-
 	//Fence
 	ComPtr<ID3D12Fence>					m_cpFence;
 	UINT64								m_nFenceValues;
@@ -102,13 +97,10 @@ private:
 	//Scene
 	ComPtr<ID3D12RootSignature>			m_cpRootSignature;
 
-	//Shaders
-	ComPtr<ID3DBlob>					m_cpVS;
-	ComPtr<ID3DBlob>					m_cpPS;
-
 	//Debug
 
 	//Test
+	std::unique_ptr<CShader>			m_upShader;
 	std::unique_ptr<CMesh>				m_upMesh;
 };
 

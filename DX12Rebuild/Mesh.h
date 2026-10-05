@@ -5,8 +5,7 @@ struct VertexDiffused
 	XMFLOAT4 color;
 };
 
-class CMesh
-{
+class CMesh {
 private:
 	ComPtr<ID3D12Resource>				m_cpVertexUploadBuffer;
 	ComPtr<ID3D12Resource>				m_cpVertexBuffer;
