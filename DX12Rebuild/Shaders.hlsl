@@ -1,3 +1,8 @@
+cbuffer cbGameObjInfo : register(b0)
+{
+    matrix gmtxWorld : packoffset(c0);
+};
+
 struct VS_INPUT
 {
     float3 pos : POSITION;
@@ -13,7 +18,7 @@ struct VS_OUTPUT
 VS_OUTPUT VSMain(VS_INPUT input)
 {
     VS_OUTPUT output;
-    output.pos = float4(input.pos, 1);
+    output.pos = mul(float4(input.pos, 1), gmtxWorld);
     output.color = input.color;
     
     return output;

@@ -20,6 +20,8 @@ CGameFramework::CGameFramework()
 	m_upShader = std::make_unique<CShader>();
 	m_upMesh = std::make_unique<CMesh>();
 
+	XMStoreFloat4x4(&mtxTest, XMMatrixInverse(nullptr, XMMatrixIdentity()));
+
 	m_wsTitle = L"DX12 Base Framework (";
 }
 
@@ -290,9 +292,16 @@ HRESULT CGameFramework::CreateDSV()
 
 HRESULT CGameFramework::CreateRootSignature()
 {
+	D3D12_ROOT_PARAMETER rootParamCBV;
+	rootParamCBV.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParamCBV.Descriptor.ShaderRegister = 0;
+	rootParamCBV.Descriptor.RegisterSpace = 0;
+	rootParamCBV.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc;
 	::ZeroMemory(&rootSigDesc, sizeof(D3D12_ROOT_SIGNATURE_DESC));
-	rootSigDesc.NumParameters = 0;
+	rootSigDesc.NumParameters = 1;
+	rootSigDesc.pParameters = &rootParamCBV;
 	rootSigDesc.NumStaticSamplers = 0;
 	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
@@ -326,6 +335,20 @@ HRESULT CGameFramework::BuildObjects()
 	HRESULT hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), NULL);
 	if (FAILED(hr)) return hr;
 
+	//행렬 버퍼 생성
+	hr = CreateBufferResource(
+		m_cpDevice,
+		m_cpCommandList,
+		m_cpMtxBuffer,
+		nullptr,
+		256
+	);
+	if (FAILED(hr)) return hr;
+
+	D3D12_RANGE range = { 0, 0 };
+	hr = m_cpMtxBuffer->Map(0, &range, (void**)&m_mappedMtxBuffer);
+	if (FAILED(hr)) return hr;
+
 	VertexDiffused triangle[3] = {
 		{ XMFLOAT3(0.0f, 0.5f, 0.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f) },
 		{ XMFLOAT3(0.5f, -0.5f, 0.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f) },
@@ -350,6 +373,7 @@ HRESULT CGameFramework::BuildObjects()
 
 void CGameFramework::ReleaseObjects()
 {
+	m_cpMtxBuffer->Unmap(0, nullptr);
 	m_upShader.reset();
 	m_upMesh.reset();
 }
@@ -360,6 +384,11 @@ void CGameFramework::ProcessInput()
 
 void CGameFramework::AnimateObjects()
 {
+	rotation += 0.5f * m_timer.GetTimeElapsed();
+	if (rotation >= 360) rotation = 0;
+
+	XMStoreFloat4x4(&mtxTest, XMMatrixInverse(nullptr, XMMatrixRotationRollPitchYaw(0.0f, 0.0f, rotation)));
+	::memcpy(m_mappedMtxBuffer, &mtxTest, sizeof(XMMATRIX));
 }
 
 void CGameFramework::FrameAdvance()
@@ -401,6 +430,7 @@ void CGameFramework::FrameAdvance()
 	m_cpCommandList->ClearDepthStencilView(DSVDescHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
 	//Scene Render Here
+	m_cpCommandList->SetGraphicsRootConstantBufferView(0, m_cpMtxBuffer->GetGPUVirtualAddress());
 	m_upMesh->DrawMesh(m_cpCommandList);
 
 	//Player Render Here

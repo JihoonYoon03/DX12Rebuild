@@ -106,5 +106,7 @@ private:
 	XMFLOAT4X4	mtx44World;
 	ComPtr<ID3D12Resource>				m_cpMtxBuffer;
 	UINT8*								m_mappedMtxBuffer;
+	XMFLOAT4X4 mtxTest;
+	float rotation = 0.0f;
 };
 
