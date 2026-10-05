@@ -27,36 +27,16 @@ public:
 
 		m_nVertices = nVertices;
 
-		//업로드 버퍼 생성
-		D3D12_HEAP_PROPERTIES heapProperties;
-		::ZeroMemory(&heapProperties, sizeof(D3D12_HEAP_PROPERTIES));
-		heapProperties.Type = D3D12_HEAP_TYPE_UPLOAD;
-		heapProperties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-		heapProperties.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-		heapProperties.CreationNodeMask = 1;
-		heapProperties.VisibleNodeMask = 1;
 
-		D3D12_RESOURCE_DESC resDesc;
-		resDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		resDesc.Alignment = 0;
-		resDesc.Width = sizeof(VTYPE) * nVertices;
-		resDesc.Height = 1;
-		resDesc.DepthOrArraySize = 1;
-		resDesc.MipLevels = 1;
-		resDesc.Format = DXGI_FORMAT_UNKNOWN;
-		resDesc.SampleDesc.Count = 1;
-		resDesc.SampleDesc.Quality = 0;
-		resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-		resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-
-		HRESULT hr = CreateCommittedResource(
+		HRESULT hr = CreateBufferResource(
 			cpDevice,
 			cpCommandList,
-			heapProperties,
-			resDesc,
-			m_cpVertexUploadBuffer,
-			m_cpVertexBuffer, data,
-			sizeof(VTYPE) * nVertices
+			m_cpVertexBuffer,
+			data,
+			sizeof(VTYPE) * nVertices,
+			D3D12_HEAP_TYPE_DEFAULT,
+			D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+			&m_cpVertexUploadBuffer
 		);
 		if (FAILED(hr)) return hr;
 

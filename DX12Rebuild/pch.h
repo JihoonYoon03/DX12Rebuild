@@ -45,15 +45,13 @@ using Microsoft::WRL::ComPtr;
 
 extern UINT gnCbvSrvDescriptorIncrementSize;
 
-HRESULT CreateCommittedResource(
+HRESULT CreateBufferResource(
 	const ComPtr<ID3D12Device>& cpDevice,
 	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	D3D12_HEAP_PROPERTIES& heapProperties,
-	const D3D12_RESOURCE_DESC& resDesc,
-	ComPtr<ID3D12Resource>& uploadBuffer,
 	ComPtr<ID3D12Resource>& buffer,
 	const void* pData,
 	size_t dataSize,
-	D3D12_HEAP_FLAGS d3dHeapFlags = D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
-	D3D12_RESOURCE_STATES d3dResourceStates = D3D12_RESOURCE_STATE_COPY_DEST
+	D3D12_HEAP_TYPE heapType = D3D12_HEAP_TYPE_UPLOAD,
+	D3D12_RESOURCE_STATES d3dResourceStates = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,
+	ComPtr<ID3D12Resource>* pUploadBuffer = nullptr
 );
