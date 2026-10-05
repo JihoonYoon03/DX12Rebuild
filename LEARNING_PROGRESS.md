@@ -1,8 +1,8 @@
 # DX12 Rebuild 학습 인수인계 — 메인 PC용
 
-최종 정리: 2026-10-03. 이 문서는 다른 컴퓨터/새 대화에서 학습을 이어가기 위한 기록이다. 실제 코드는 이후 변경될 수 있으므로 다음 조력자는 작업 전에 현재 파일을 확인한다.
+최종 정리: 2026-10-05. 이 문서는 다른 컴퓨터/새 대화에서 학습을 이어가기 위한 기록이다. 실제 코드는 이후 변경될 수 있으므로 다음 조력자는 작업 전에 현재 파일을 확인한다.
 
-**최신 진행 기준은 12절이다.** 3~6절, 9~11절은 이전 시점의 기록이다. PSO/정점 버퍼 미구현, UPLOAD 버퍼 직접 사용, 현재 과제 등의 설명이 최신 상태와 다르면 12절을 우선한다.
+**최신 진행 기준은 13절이다.** 12절은 Mesh 분리 완료 시점, 그 이전 절은 과거 기록이다. Shader 미구현이나 현재 과제 등의 설명이 최신 상태와 다르면 13절을 우선한다.
 
 ## 1. 가장 중요한 협업 규칙
 
@@ -217,3 +217,91 @@ Mesh 분리는 현재 학습 범위에서 마무리됐다. 다음 대화에서�
 - Reset 지속 실패, Present 반환값, Device removed 등 기존 7절의 보류 사항은 유지한다.
 - 템플릿이 여러 정점 타입을 받는다고 현재 POSITION/COLOR 입력 레이아웃과 PSO가 모든 정점 형식을 자동 지원하는 것은 아니다. 다른 타입을 도입할 때 입력 레이아웃 일치 여부를 확인한다.
 - HLSL 빌드 제외, 상대 파일 경로, 노트북 도구 집합 등의 환경 사항은 이전 절을 참고하되 실제 설정을 다시 확인한다.
+
+## 13. 최신 진행 및 리소스 생성 헬퍼 검토 (2026-10-05)
+
+### 확인 기준과 검증 수준
+
+- HEAD: `f7f04ed` (CShader가 PSO 및 셰이더 바이트코드 관리하도록 리팩토링).
+- 현재 미커밋 변경: GameFramework.h/.cpp, Mesh.h, pch.h/.cpp. 문서 저장 전부터 존재한 사용자 작업이며 보존한다.
+- AI는 현재 파일과 이전 대화를 정적으로 검토했다. 빌드·실행은 수행하지 않았으며 소스 변경·커밋·푸시도 하지 않는다.
+- 사용자는 리소스 생성 헬퍼를 “작동되게 수정했다”고 보고했다. 현재 호출 조건의 동작 확인으로 기록하고 모든 힙/상태/텍스처/실패 경로 검증으로 확대하지 않는다.
+
+### 완료 및 진행 중인 범위
+
+| 항목 | 진행도 |
+|---|---|
+| DX12 초기화·Resize·PSO·RGB 삼각형 | 기존 완료 범위 유지 |
+| Mesh 분리·DEFAULT 정점 버퍼 업로드 | 구현 및 기존 사용자 정상 출력 확인 유지 |
+| Shader 분리 | 구현·정적 리뷰 완료. 별도 실행 검증 범위는 사용자 보고에 한정 |
+| 공통 리소스 생성 헬퍼 | pch.h/.cpp로 추출, 현재 정점 업로드 호출 연결. 범용화 보완 중 |
+| 상수 버퍼·월드 행렬 | 과제 설명 완료, Framework 멤버 선언만 추가됨. 생성·갱신·루트 CBV·HLSL 변환 미구현 |
+| UV·SRV·샘플러·DDS 출력 | 후속 단계 |
+| 종료/초기화 실패 정책·최종 누수 보고 | 기존 보류 항목 유지 |
+
+### Shader 분리 결과와 학습 기록
+
+- CShader가 VS/PS Blob과 PSO를 ComPtr 멤버로 소유한다. Framework는 unique_ptr<CShader>를 소유하고 루트 시그니처는 Framework에 유지한다.
+- CreateShader에서 가상 CompileShader를 호출하고 HRESULT 실패 시 반환한 뒤 Blob 주소·크기로 PSO를 만든다. 생성자는 컴파일하지 않는다.
+- 생성자에서 가상 함수를 호출하면 파생 구현이 선택되지 않으며, 컴파일 HRESULT 무시 시 null Blob 역참조가 발생할 수 있다는 문제를 수정했다.
+- public 가상 소멸자 추가와 protected Blob 접근 경로를 확인했다. 현재 PSO도 protected이며 이를 필수 오류로 취급하지 않는다.
+- 파생 CompileShader는 성공 반환 시 현재 PSO에 필요한 VS/PS Blob을 모두 준비해야 한다. 컴파일 대상을 바꿔도 입력 레이아웃이 자동 변경되지는 않는다.
+- FrameAdvance는 Reset(nullptr) → Framework 루트 시그니처 설정 → Shader의 SetPipelineState → 기존 화면 설정/Clear → Mesh Draw 흐름이다. ReleaseObjects는 Shader/Mesh 소유권을 해제한다.
+- 사용자는 Shader/Mesh 책임, Draw 이전 PSO 설정, 루트 시그니처 설정 필요성, 상태 기록과 GPU 실행의 차이에 답했다. Shader는 파이프라인 전체가 아닌 셰이더/PSO 상태를 담당하며, 기록 함수의 반환은 큐 제출이나 GPU 완료를 의미하지 않는다고 보완했다.
+- D3D12_SHADER_BYTECODE는 포인터·크기만 가지며 Blob을 소유하지 않는다. Blob은 CreateGraphicsPipelineState 호출 완료까지 살아 있어야 한다. 이후 원본 Blob 해제는 가능하지만 여러 PSO 생성/재사용을 고려해 사용자가 Blob 멤버 보관을 선택했다.
+
+### 현재 헬퍼가 실제로 하는 일
+
+pch.h/.cpp의 전역 CreateCommittedResource는 단순 생성 래퍼가 아니라 다음 과정을 수행한다.
+
+1. 전달받은 heapProperties로 GENERIC_READ 리소스 생성.
+2. Map/memcpy/Unmap으로 원본 데이터를 기록.
+3. 호출자 heapProperties.Type을 DEFAULT로 변경하여 두 번째 리소스 생성.
+4. CopyResource 기록.
+5. d3dResourceStates에서 VERTEX_AND_CONSTANT_BUFFER로 전환 기록.
+
+Mesh는 UPLOAD 힙과 BUFFER 설명을 전달하고 기본 초기 상태 COPY_DEST를 사용하므로 현재 경로와 맞는다. Mesh의 HRESULT 실패 전달은 수정 확인했다. 명령 제출·GPU 대기·업로드 해제는 계속 Framework가 담당한다.
+
+이전 링크 오류는 pch.h의 const ComPtr 참조/const void* 선언과 pch.cpp의 비const 정의가 서로 달랐기 때문이다. 현재 선언·정의 타입 일치가 확인된다. 기본 인자는 헤더에만 둔다.
+
+### 범용화 전에 보완할 사항
+
+**1. 힙 종류별로 역할과 상태를 분리한다.** 현재 첫 생성의 힙 종류를 강제/검사하지 않고 이후 항상 DEFAULT로 변경하므로 힙 종류를 선택하는 범용 생성 함수가 아니다.
+
+| 힙 종류 | 기본 사용법과 상태 규칙 |
+|---|---|
+| DEFAULT | 일반적인 GPU 전용 리소스. 표준 DEFAULT 힙은 CPU Map으로 데이터를 쓰지 않는다. 초기 업로드는 COPY_DEST로 만들거나 복사 전 해당 상태로 전환하고, 복사 후 용도별 최종 상태로 전환 |
+| UPLOAD | CPU 쓰기/GPU 읽기용 버퍼. GENERIC_READ로 생성하고 상태를 변경하지 않는다. 상시 갱신용 상수 버퍼는 DEFAULT 복사 없이 직접 사용 가능 |
+| READBACK | GPU 쓰기 결과를 CPU가 읽는 버퍼. COPY_DEST로 생성하고 상태를 변경하지 않는다. GPU 복사 완료를 Fence로 확인한 후 Map해 읽음. 초기 데이터를 memcpy해 넣는 경로가 아님 |
+
+CUSTOM/GPU_UPLOAD 힙은 이번 범위에서 지원한다고 가정하지 않는다. 표준 힙 규칙 출처: [Microsoft D3D12_HEAP_TYPE](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_heap_type).
+
+**2. 초기 상태와 최종 상태를 분리한다.** 현재 배리어의 StateBefore를 인자와 맞췄지만 CopyResource 이전에 목적지가 COPY_DEST인지는 여전히 보장하지 않는다. 초기 상태 인자만 바꿔 넘기는 것으로는 해결되지 않는다. 업로드 전용 경로라면 목적지 초기 상태를 COPY_DEST로 고정하고 최종 상태를 인자로 받는 방식이 단순하다. 최종 상태가 이미 COPY_DEST라면 동일 상태 배리어는 생략한다. 정점/상수 버퍼 상태를 고정하면 인덱스 버퍼·SRV·READBACK에 재사용할 수 없다.
+
+**3. 호출자 입력에 숨은 변경을 만들지 않는다.** heapProperties를 참조로 받아 Type을 DEFAULT로 변경한다. 호출자가 같은 변수를 다음 생성에 재사용하면 첫 리소스가 DEFAULT로 만들어져 Map 실패로 이어질 수 있다. const 입력이나 값 복사와 내부 지역 힙 설정을 사용해 입력을 보존하는 방향을 권한다.
+
+**4. 버퍼와 텍스처 경로를 구분한다.** 현재 uploadBuffer와 buffer에 같은 resDesc를 사용하므로 BUFFER 전용으로 제한해야 한다. 표준 UPLOAD/READBACK 힙에는 텍스처 리소스를 직접 만들 수 없다. DDS 업로드는 DEFAULT 텍스처와 별도의 UPLOAD 버퍼, GetCopyableFootprints에 따른 행/서브리소스 배치 및 CopyTextureRegion 경로가 필요하다. 현재 memcpy/CopyResource 경로를 텍스처까지 지원하는 것으로 기록하지 않는다. 출처: [Microsoft 텍스처 업로드](https://learn.microsoft.com/en-us/windows/win32/direct3d12/upload-and-readback-of-texture-data).
+
+**5. 입력·출력 계약을 검사한다.** Device 및 기록에 필요한 CommandList, 데이터 포인터와 크기 조합, BUFFER 차원, dataSize <= resDesc.Width를 검사해야 한다. 현재 dataSize가 용량을 넘으면 memcpy가 범위를 벗어난다. 데이터 없는 생성은 업로드/복사를 건너뛰는 별도 경로가 필요하다. 두 출력 ComPtr이 같은 변수를 참조하는 호출도 금지해야 한다. Mesh의 정점 수/크기 계산과 UINT 크기 뷰에 대한 범위 검사도 범용화 시 고려한다.
+
+**6. 생성 설정과 실패 시 소유권을 명확히 한다.** d3dHeapFlags는 현재 두 번째 생성에만 적용되고 첫 생성은 고정값이다. 같은 resDesc의 ResourceFlags가 UPLOAD에도 적합한지 확인해야 한다. 일반 리소스 생성까지 확장한다면 최적화 ClearValue와 초기 상태를 지원할 필요가 있다. 실패 시 부분 생성 결과를 유지할지 초기 상태로 복원할지 계약을 정한다. 지역 ComPtr에서 성공 후 결과를 넘기는 방식도 검토한다. 이미 GPU가 사용하는 기존 출력 리소스를 ReleaseAndGetAddressOf로 교체하는 사용은 호출자가 GPU 완료를 보장해야 한다.
+
+**7. 기록과 완료를 구분한다.** S_OK는 생성 및 복사/배리어 기록 성공을 뜻한다. 업로드 리소스는 GPU 복사 완료까지 유지한다. CommandList가 기록 중이어야 하며 호출자는 필요한 상태 전환과 큐 종류를 보장한다. Map/Unmap은 GPU 동기화를 수행하지 않는다. READBACK Map 전에 Fence 확인이 필요하고, UPLOAD 상수 버퍼 덮어쓰기 전에도 이전 GPU 사용 완료를 확인해야 한다.
+
+권장 책임 구분은 “단일 리소스 생성”, “CPU 쓰기”, “DEFAULT 버퍼 초기 업로드”, “GPU 결과 readback”이다. 이를 반드시 한 함수에 모두 구현해야 하는 것은 아니다. 현재 학습에서는 단순 생성과 DEFAULT 버퍼 업로드를 구분하는 작은 설계부터 진행하고, 텍스처/READBACK 구현은 실제 필요 단계에서 추가한다. pch에 공통 선언을 두겠다는 사용자 선택은 유지하며 이번에는 파일 재배치를 요구하지 않는다.
+
+### 다음 진행 순서와 상수 버퍼 과제
+
+현재는 사용자가 상수 버퍼 학습에 앞서 공통 생성 함수 보완을 요청한 상태다. 먼저 위 계약과 상태 규칙을 정리한 뒤 상수 버퍼로 돌아간다. 범용 프레임워크 전체를 한 번에 구현하도록 요구하지 않는다.
+
+- Framework에 mtx44World, m_cpMtxBuffer, m_mappedMtxBuffer 선언이 있다. 아직 행렬 초기화/버퍼 생성/Map/갱신/해제는 연결되지 않았다.
+- 루트 시그니처는 NumParameters=0이며 HLSL은 기존 POSITION/COLOR 출력이다. 행렬 상수 버퍼 단계는 완료가 아니다.
+- 상수 버퍼 과제: UPLOAD/GENERIC_READ 256바이트 공간, 한 번 Map한 주소에 64바이트 월드 행렬 기록, root CBV 하나(register b0, space0, VS 가시성), Draw 전 루트 인덱스 0에 GPU 주소 설정.
+- CPU 행렬은 전치해 저장하고 HLSL 기본 행렬 저장 방식에서 행 벡터 × 행렬로 통일한다. 단위 행렬의 기존 출력 유지 후 작은 평행이동을 확인한다. 현재 매 프레임 GPU 대기 구조를 유지한다.
+- 제시한 이해 확인 질문: 64바이트 행렬에 256바이트 공간을 할당하는 이유, b0와 루트 매개변수 인덱스의 차이, CPU 덮어쓰기/GPU 읽기 동시 사용 문제와 현재 대기 방식, 정점 수정과 행렬 이동의 차이. 아직 답변을 받지 않았다.
+- 남은 큰 순서: 공통 생성 함수 계약 보완 → 상수 버퍼/행렬 → UV·루트 시그니처·SRV·샘플러 → DDS 텍스처 업로드/동기화 → 텍스처 출력과 오류 경로.
+- 종료 GPU 대기 실패, 초기화 부분 실패, Present/device removed, 최종 Live Objects 보고 정책은 이전 보류 항목을 유지한다.
+
+### 새 대화 시작용 문구
+
+> LEARNING_PROGRESS.md의 13절부터 읽고 현재 코드를 확인해줘. Mesh/Shader 분리는 구현했고 pch의 공통 CreateCommittedResource 함수를 보완 중이야. 현재 함수는 정점 버퍼 업로드 경로에 맞으며 DEFAULT/UPLOAD/READBACK 상태, 복사 전후 상태, 입력 크기와 소유권 계약을 정리해야 해. 이를 작은 단계로 검토한 뒤 UPLOAD 상수 버퍼와 월드 행렬 과제로 돌아가자. 코드는 내가 작성하고 너는 가이드·질문·리뷰만 담당해. 임의 소스 수정이나 빌드·실행은 하지 마. ComPtr Blob 멤버와 AntialiasedLineEnable=TRUE는 유지한다.

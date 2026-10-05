@@ -1,14 +1,14 @@
-// header.h: í‘œì¤€ ì‹œìŠ¤í…œ í¬í•¨ íŒŒì¼
-// ë˜ëŠ” í”„ë¡œì íŠ¸ íŠ¹ì • í¬í•¨ íŒŒì¼ì´ ë“¤ì–´ ìˆëŠ” í¬í•¨ íŒŒì¼ì…ë‹ˆë‹¤.
+// header.h: Ç¥ÁØ ½Ã½ºÅÛ Æ÷ÇÔ ÆÄÀÏ
+// ¶Ç´Â ÇÁ·ÎÁ§Æ® Æ¯Á¤ Æ÷ÇÔ ÆÄÀÏÀÌ µé¾î ÀÖ´Â Æ÷ÇÔ ÆÄÀÏÀÔ´Ï´Ù.
 //
 
 #pragma once
 
 #include "targetver.h"
-#define WIN32_LEAN_AND_MEAN             // ê±°ì˜ ì‚¬ìš©ë˜ì§€ ì•ŠëŠ” ë‚´ìš©ì„ Windows í—¤ë”ì—ì„œ ì œì™¸í•©ë‹ˆë‹¤.
-// Windows í—¤ë” íŒŒì¼
+#define WIN32_LEAN_AND_MEAN             // °ÅÀÇ »ç¿ëµÇÁö ¾Ê´Â ³»¿ëÀ» Windows Çì´õ¿¡¼­ Á¦¿ÜÇÕ´Ï´Ù.
+// Windows Çì´õ ÆÄÀÏ
 #include <windows.h>
-// C ëŸ°íƒ€ì„ í—¤ë” íŒŒì¼ì…ë‹ˆë‹¤.
+// C ·±Å¸ÀÓ Çì´õ ÆÄÀÏÀÔ´Ï´Ù.
 #include <stdlib.h>
 #include <malloc.h>
 #include <memory.h>
@@ -44,3 +44,16 @@ using namespace DirectX::PackedVector;
 using Microsoft::WRL::ComPtr;
 
 extern UINT gnCbvSrvDescriptorIncrementSize;
+
+HRESULT CreateCommittedResource(
+	const ComPtr<ID3D12Device>& cpDevice,
+	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+	D3D12_HEAP_PROPERTIES& heapProperties,
+	const D3D12_RESOURCE_DESC& resDesc,
+	ComPtr<ID3D12Resource>& uploadBuffer,
+	ComPtr<ID3D12Resource>& buffer,
+	const void* pData,
+	size_t dataSize,
+	D3D12_HEAP_FLAGS d3dHeapFlags = D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
+	D3D12_RESOURCE_STATES d3dResourceStates = D3D12_RESOURCE_STATE_COPY_DEST
+);

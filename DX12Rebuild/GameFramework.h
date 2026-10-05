@@ -102,5 +102,9 @@ private:
 	//Test
 	std::unique_ptr<CShader>			m_upShader;
 	std::unique_ptr<CMesh>				m_upMesh;
+	
+	XMFLOAT4X4	mtx44World;
+	ComPtr<ID3D12Resource>				m_cpMtxBuffer;
+	UINT8*								m_mappedMtxBuffer;
 };
 

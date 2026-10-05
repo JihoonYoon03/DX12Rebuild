@@ -1,4 +1,6 @@
 #pragma once
+#include "pch.h"
+
 struct VertexDiffused
 {
 	XMFLOAT3 pos;
@@ -47,52 +49,21 @@ public:
 		resDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 		resDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-		HRESULT hr = cpDevice->CreateCommittedResource(
-			&heapProperties,
-			D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
-			&resDesc,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			NULL,
-			IID_PPV_ARGS(m_cpVertexUploadBuffer.ReleaseAndGetAddressOf())
+		HRESULT hr = CreateCommittedResource(
+			cpDevice,
+			cpCommandList,
+			heapProperties,
+			resDesc,
+			m_cpVertexUploadBuffer,
+			m_cpVertexBuffer, data,
+			sizeof(VTYPE) * nVertices
 		);
-		if (FAILED(hr)) { OutputDebugString(L"CreateVertexBuffer(): CreateCommittedResource() Failed\n"); return hr; }
-
-		D3D12_RANGE readRange = { 0, 0 };
-		UINT8* bufBegin;
-		hr = m_cpVertexUploadBuffer->Map(0, &readRange, (void**)&bufBegin);
-		if (FAILED(hr)) { OutputDebugString(L"CreateVertexBuffer(): Map() Failed\n"); return hr; }
-		::memcpy(bufBegin, data, sizeof(VTYPE) * nVertices);
-		m_cpVertexUploadBuffer->Unmap(0, NULL);
-
-		//디폴트 버퍼 생성
-		heapProperties.Type = D3D12_HEAP_TYPE_DEFAULT;
-		hr = cpDevice->CreateCommittedResource(
-			&heapProperties,
-			D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
-			&resDesc,
-			D3D12_RESOURCE_STATE_COPY_DEST,
-			NULL,
-			IID_PPV_ARGS(m_cpVertexBuffer.ReleaseAndGetAddressOf())
-		);
-		if (FAILED(hr)) { OutputDebugString(L"CreateVertexBuffer(): CreateCommittedResource() Failed\n"); return hr; }
-
-		cpCommandList->CopyResource(m_cpVertexBuffer.Get(), m_cpVertexUploadBuffer.Get());
+		if (FAILED(hr)) return hr;
 
 		m_VertexBufferView.BufferLocation = m_cpVertexBuffer->GetGPUVirtualAddress();
 		m_VertexBufferView.SizeInBytes = sizeof(VTYPE) * nVertices;
 		m_VertexBufferView.StrideInBytes = sizeof(VTYPE);
-
-		//리소스 배리어
-		D3D12_RESOURCE_BARRIER resBarrier;
-		::ZeroMemory(&resBarrier, sizeof(D3D12_RESOURCE_BARRIER));
-		resBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		resBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		resBarrier.Transition.pResource = m_cpVertexBuffer.Get();
-		resBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-		resBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-		resBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-		cpCommandList->ResourceBarrier(1, &resBarrier);
-
+		
 		return S_OK;
 	}
 

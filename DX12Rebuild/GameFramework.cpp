@@ -309,7 +309,7 @@ HRESULT CGameFramework::CreateRootSignature()
 			OutputDebugStringA((char*)cpd3dErrBlob->GetBufferPointer());
 		return hr;
 	}
-
+	
 	hr = m_cpDevice->CreateRootSignature(
 		0,
 		cpd3dBlob->GetBufferPointer(),
