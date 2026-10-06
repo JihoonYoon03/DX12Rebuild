@@ -349,13 +349,17 @@ HRESULT CGameFramework::BuildObjects()
 	hr = m_cpMtxBuffer->Map(0, &range, (void**)&m_mappedMtxBuffer);
 	if (FAILED(hr)) return hr;
 
-	VertexDiffused triangle[3] = {
-		{ XMFLOAT3(0.0f, 0.5f, 0.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f) },
-		{ XMFLOAT3(0.5f, -0.5f, 0.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f) },
-		{ XMFLOAT3(-0.5f, -0.5f, 0.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f) }
+	VertexTexcoord triangle[6] = {
+		{ XMFLOAT3(-0.5f, 0.5f, 0.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f) },
+		{ XMFLOAT3(0.5f, 0.5f, 0.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f) },
+		{ XMFLOAT3(0.5f, -0.5f, 0.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f) },
+
+		{ XMFLOAT3(0.5f, -0.5f, 0.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 1.0f) },
+		{ XMFLOAT3(-0.5f, -0.5f, 0.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 1.0f) },
+		{ XMFLOAT3(-0.5f, 0.5f, 0.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(0.0f, 0.0f) }
 	};
 
-	hr = m_upMesh->CreateVertexBuffer<VertexDiffused>(m_cpDevice, m_cpCommandList, triangle, 3);
+	hr = m_upMesh->CreateVertexBuffer<VertexTexcoord>(m_cpDevice, m_cpCommandList, triangle, 6);
 	if (FAILED(hr)) return hr;
 
 	hr = m_cpCommandList->Close();
@@ -384,10 +388,10 @@ void CGameFramework::ProcessInput()
 
 void CGameFramework::AnimateObjects()
 {
-	rotation += 0.5f * m_timer.GetTimeElapsed();
+	//rotation += 0.5f * m_timer.GetTimeElapsed();
 	if (rotation >= 360) rotation = 0;
 
-	XMStoreFloat4x4(&mtxTest, XMMatrixInverse(nullptr, XMMatrixRotationRollPitchYaw(0.0f, 0.0f, rotation)));
+	XMStoreFloat4x4(&mtxTest, XMMatrixTranspose(XMMatrixRotationRollPitchYaw(0.0f, 0.0f, rotation)));
 	::memcpy(m_mappedMtxBuffer, &mtxTest, sizeof(XMMATRIX));
 }
 

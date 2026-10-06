@@ -104,13 +104,14 @@ HRESULT CShader::CreateShader(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12RootS
 	psoDesc.DepthStencilState.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
 
 	//Input Layout
-	D3D12_INPUT_ELEMENT_DESC inputElemDesc[2];
+	D3D12_INPUT_ELEMENT_DESC inputElemDesc[3];
 	inputElemDesc[0] = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
 	inputElemDesc[1] = { "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
+	inputElemDesc[2] = { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 28, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 };
 
 	D3D12_INPUT_LAYOUT_DESC inputDesc;
 	::ZeroMemory(&inputDesc, sizeof(D3D12_INPUT_LAYOUT_DESC));
-	inputDesc.NumElements = 2;
+	inputDesc.NumElements = 3;
 	inputDesc.pInputElementDescs = inputElemDesc;
 
 	psoDesc.InputLayout = inputDesc;

@@ -7,6 +7,13 @@ struct VertexDiffused
 	XMFLOAT4 color;
 };
 
+struct VertexTexcoord
+{
+	XMFLOAT3 pos;
+	XMFLOAT4 color;
+	XMFLOAT2 uv;
+};
+
 class CMesh {
 private:
 	ComPtr<ID3D12Resource>				m_cpVertexUploadBuffer;
