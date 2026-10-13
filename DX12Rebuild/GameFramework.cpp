@@ -290,7 +290,7 @@ HRESULT CGameFramework::CreateDSV()
 	return S_OK;
 }
 
-HRESULT CGameFramework::CreateSRV()
+HRESULT CGameFramework::CreateTexture()
 {
 	D3D12_DESCRIPTOR_HEAP_DESC heapDesc;
 	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -300,6 +300,28 @@ HRESULT CGameFramework::CreateSRV()
 
 	HRESULT hr = m_cpDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_cpSRVDesc.GetAddressOf()));
 	if (FAILED(hr)) return hr;
+
+	std::unique_ptr<uint8_t[]> ddsData;
+	std::vector<D3D12_SUBRESOURCE_DATA> subData;
+	DDS_ALPHA_MODE ddsAlpha = DDS_ALPHA_MODE_UNKNOWN;
+	bool bIsCubeMap = false;
+
+	hr = LoadDDSTextureFromFileEx(
+		m_cpDevice.Get(),
+		L"../Resources/moon.dds",
+		0,
+		D3D12_RESOURCE_FLAG_NONE,
+		DDS_LOADER_DEFAULT,
+		m_cpTextureResource.GetAddressOf(),
+		ddsData,
+		subData,
+		&ddsAlpha,
+		&bIsCubeMap
+	);
+
+	if (FAILED(hr)) return hr;
+
+	D3D12_RESOURCE_DESC texResDesc = m_cpTextureResource->GetDesc();
 
 	//D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc;
 	//SRVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -384,7 +406,7 @@ HRESULT CGameFramework::BuildObjects()
 	HRESULT hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), NULL);
 	if (FAILED(hr)) return hr;
 
-	hr = CreateSRV();
+	hr = CreateTexture();
 	if (FAILED(hr)) return hr;
 
 	//행렬 버퍼 생성

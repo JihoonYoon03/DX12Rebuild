@@ -36,7 +36,7 @@
 #include <DirectXColors.h>
 #include <DirectXCollision.h>
 
-
+#include "DDSTextureLoader12.h"
 #include "Config.h"
 
 using namespace DirectX;
