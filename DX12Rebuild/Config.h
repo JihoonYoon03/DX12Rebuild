@@ -7,4 +7,6 @@ namespace config
 
 	//Frame Rate Sample Count
 	constexpr unsigned long MAX_SAMPLE_COUNT = 50;
+
+	constexpr unsigned long MAX_TEXTURE_SLOTS = 64;
 }

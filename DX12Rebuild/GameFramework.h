@@ -4,6 +4,8 @@
 
 class CMesh;
 class CShader;
+class CSRVDescHeapAllocator;
+class CTexture;
 
 class CGameFramework
 {
@@ -99,6 +101,11 @@ private:
 	//Scene
 	ComPtr<ID3D12RootSignature>			m_cpRootSignature;
 
+	//Texture
+	std::unique_ptr<CSRVDescHeapAllocator>	m_SRVDescHeapAllocator;
+	std::unique_ptr<CTexture>	tex1;
+	std::unique_ptr<CTexture>	tex2;
+
 	//Debug
 
 	//Test
@@ -111,8 +118,5 @@ private:
 	XMFLOAT4X4 mtxTest;
 	float rotation = 0.0f;
 
-	ComPtr<ID3D12DescriptorHeap>		m_cpSRVDesc;
-	ComPtr<ID3D12Resource>				m_cpTextureBuffer;
-	ComPtr<ID3D12Resource>				m_cpTextureUploadBuffer;
 };
 

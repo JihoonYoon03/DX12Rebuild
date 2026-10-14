@@ -2,6 +2,7 @@
 #include "GameFramework.h"
 #include "Mesh.h"
 #include "Shader.h"
+#include "Texture.h"
 
 CGameFramework::CGameFramework()
 {
@@ -16,6 +17,10 @@ CGameFramework::CGameFramework()
 	m_nClientH = config::FRAME_BUFFER_H;
 
 	m_ptOldCursorPos = { 0, 0 };
+
+	m_SRVDescHeapAllocator = std::make_unique<CSRVDescHeapAllocator>();
+	tex1 = std::make_unique<CTexture>();
+	tex2 = std::make_unique<CTexture>();
 
 	m_upShader = std::make_unique<CShader>();
 	m_upMesh = std::make_unique<CMesh>();
@@ -42,7 +47,9 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 	if (FAILED(CreateDSV()))				return false;
 	if (FAILED(CreateRootSignature()))		return false;
 
-	if (FAILED(m_upShader->CreateShader(m_cpDevice, m_cpRootSignature))) return false;
+	if (FAILED(m_upShader->CreateShader(m_cpDevice, m_cpRootSignature)))	return false;
+
+	if (FAILED(m_SRVDescHeapAllocator->CreateSRVDescHeap(m_cpDevice)))		return false;
 
 	if (FAILED(BuildObjects()))				return false;
 	m_timer.Reset();
@@ -358,95 +365,14 @@ HRESULT CGameFramework::CreateRootSignature()
 	return S_OK;
 }
 
-HRESULT CGameFramework::CreateTexture()
-{
-	D3D12_DESCRIPTOR_HEAP_DESC heapDesc;
-	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	heapDesc.NumDescriptors = 1;
-	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	heapDesc.NodeMask = 0;
-
-	HRESULT hr = m_cpDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_cpSRVDesc.GetAddressOf()));
-	if (FAILED(hr)) return hr;
-
-	std::unique_ptr<uint8_t[]> ddsData;
-	std::vector<D3D12_SUBRESOURCE_DATA> subData;
-	DDS_ALPHA_MODE ddsAlpha = DDS_ALPHA_MODE_UNKNOWN;
-	bool bIsCubeMap = false;
-
-	//m_cpTextureResource에 디폴트 텍스처 리소스 생성
-	//DDS 이미지 데이터를 GPU에 복사한 상태는 아님
-	hr = LoadDDSTextureFromFileEx(
-		m_cpDevice.Get(),
-		L"../Resources/moon.dds",
-		0,
-		D3D12_RESOURCE_FLAG_NONE,
-		DDS_LOADER_DEFAULT,
-		m_cpTextureBuffer.GetAddressOf(),
-		ddsData,
-		subData,
-		&ddsAlpha,
-		&bIsCubeMap
-	);
-
-	if (FAILED(hr)) return hr;
-
-	if (subData.empty()) return E_FAIL;
-	//GPU복사용 배치를 고려한 UPLOAD 버퍼 크기 계산
-	UINT64 reqSize = GetRequiredIntermediateSize(m_cpTextureBuffer.Get(), 0, subData.size());
-
-	//UPLOAD BUFFER
-	hr = CreateBufferResource(
-		m_cpDevice,
-		m_cpCommandList,
-		m_cpTextureUploadBuffer,
-		nullptr,
-		reqSize,
-		D3D12_HEAP_TYPE_UPLOAD,
-		D3D12_RESOURCE_STATE_GENERIC_READ
-	);
-	if (FAILED(hr)) return hr;
-
-	//텍스처 COMMON->COPY_DEST 전환
-	D3D12_RESOURCE_BARRIER resBarrier;
-	resBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-	resBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-	resBarrier.Transition.pResource = m_cpTextureBuffer.Get();
-	resBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-	resBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
-	resBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-	m_cpCommandList->ResourceBarrier(1, &resBarrier);
-
-	//CPU데이터를 UPLOAD 버퍼에 배치 -> 텍스처 복사 명령 기록
-	UINT64 result = UpdateSubresources(
-		m_cpCommandList.Get(),
-		m_cpTextureBuffer.Get(),
-		m_cpTextureUploadBuffer.Get(),
-		0,
-		0,
-		subData.size(),
-		subData.data()
-	);
-	if (result == 0) return E_FAIL;
-
-	//텍스처 COPY_DEST->PIXEL_SHADER_RESOURCE 전환
-	resBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-	resBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-	m_cpCommandList->ResourceBarrier(1, &resBarrier);
-
-	D3D12_RESOURCE_DESC texResDesc = m_cpTextureBuffer->GetDesc();
-
-	m_cpDevice->CreateShaderResourceView(m_cpTextureBuffer.Get(), nullptr, m_cpSRVDesc->GetCPUDescriptorHandleForHeapStart());
-
-	return S_OK;
-}
-
 HRESULT CGameFramework::BuildObjects()
 {
 	HRESULT hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), NULL);
 	if (FAILED(hr)) return hr;
 
-	hr = CreateTexture();
+	hr = tex1->CreateTexture(*m_SRVDescHeapAllocator, m_cpDevice, m_cpCommandList, L"../Resources/moon.dds");
+	if (FAILED(hr)) return hr;
+	hr = tex2->CreateTexture(*m_SRVDescHeapAllocator, m_cpDevice, m_cpCommandList, L"../Resources/SkydomeTex.dds");
 	if (FAILED(hr)) return hr;
 
 	//행렬 버퍼 생성
@@ -491,7 +417,8 @@ HRESULT CGameFramework::BuildObjects()
 
 void CGameFramework::ReleaseUploadBuffers()
 {
-	m_cpTextureUploadBuffer.Reset();
+	tex1->ReleaseUploadBuffer();
+	tex2->ReleaseUploadBuffer();
 	m_upMesh->ReleaseUploadBuffer();
 }
 
@@ -553,10 +480,10 @@ void CGameFramework::FrameAdvance()
 	m_cpCommandList->ClearRenderTargetView(RTVDescHandle, Colors::CadetBlue, 0, NULL);
 	m_cpCommandList->ClearDepthStencilView(DSVDescHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
-	m_cpCommandList->SetDescriptorHeaps(1, m_cpSRVDesc.GetAddressOf());
+	m_cpCommandList->SetDescriptorHeaps(1, m_SRVDescHeapAllocator->GetDescriptorHeap());
 
 	//Scene Render Here
-	m_cpCommandList->SetGraphicsRootDescriptorTable(1, m_cpSRVDesc->GetGPUDescriptorHandleForHeapStart());
+	m_cpCommandList->SetGraphicsRootDescriptorTable(1, tex2->getGPUDescHandle());
 	m_cpCommandList->SetGraphicsRootConstantBufferView(0, m_cpMtxBuffer->GetGPUVirtualAddress());
 	m_upMesh->DrawMesh(m_cpCommandList);
 
