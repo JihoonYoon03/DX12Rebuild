@@ -1,8 +1,9 @@
 # DX12 Rebuild 학습 인수인계 — 메인 PC용
 
-최종 정리: 2026-10-07. 이 문서는 다른 컴퓨터/새 대화에서 학습을 이어가기 위한 기록이다. 실제 코드는 이후 변경될 수 있으므로 다음 조력자는 작업 전에 현재 파일을 확인한다.
 
-**최신 진행 기준은 14절이다.** 13절은 2026-10-05의 이전 코드 기준이다. 상수 버퍼 미구현, UV 미구현, 헬퍼 이름/동작 및 현재 과제 설명이 최신 상태와 다르면 14절을 우선한다.
+최종 정리: 2026-10-14. 이 문서는 다른 컴퓨터/새 대화에서 학습을 이어가기 위한 기록이다. 실제 코드는 이후 변경될 수 있으므로 다음 조력자는 작업 전에 현재 파일을 확인한다.
+
+**최신 진행 기준은 14절이다.** 13절은 리소스 헬퍼/상수 버퍼 착수 시점, 12절 및 그 이전은 과거 기록이다. 미구현 여부나 현재 과제 설명이 다르면 14절을 우선한다.
 
 ## 1. 가장 중요한 협업 규칙
 
@@ -306,49 +307,93 @@ CUSTOM/GPU_UPLOAD 힙은 이번 범위에서 지원한다고 가정하지 않는
 
 > LEARNING_PROGRESS.md의 13절부터 읽고 현재 코드를 확인해줘. Mesh/Shader 분리는 구현했고 pch의 공통 CreateCommittedResource 함수를 보완 중이야. 현재 함수는 정점 버퍼 업로드 경로에 맞으며 DEFAULT/UPLOAD/READBACK 상태, 복사 전후 상태, 입력 크기와 소유권 계약을 정리해야 해. 이를 작은 단계로 검토한 뒤 UPLOAD 상수 버퍼와 월드 행렬 과제로 돌아가자. 코드는 내가 작성하고 너는 가이드·질문·리뷰만 담당해. 임의 소스 수정이나 빌드·실행은 하지 마. ComPtr Blob 멤버와 AntialiasedLineEnable=TRUE는 유지한다.
 
-## 14. 최신 진행 기준 (2026-10-07, 메인 PC 복귀)
 
-### 확인 기준
+## 14. 최신 인수인계: DDS 로딩 완료, GPU 업로드 전 (2026-10-14)
 
-- 메인 PC 저장소: `C:\Users\wlgns\Documents\Github\DX12Rebuild`.
-- HEAD `cbb2083` (UV 정보를 담는 정점 구조체 추가). 직전 작업은 `5e4d04d` (CBV로 행렬 데이터 전달, 삼각형 회전 애니메이션 구현), `420a675` (리소스 생성 범용 함수)다.
-- 갱신 전 작업 트리는 깨끗했다. 문서 13절보다 현재 코드가 더 진행되어 있어 코드 기준으로 정정한다.
-- 이번에는 문서 및 주요 소스를 정적으로 확인했다. 빌드·실행이나 전체 정밀 리뷰는 하지 않았다. 커밋/푸시는 사용자가 한다.
+### 확인 기준과 현재 위치
 
-### 현재 구현 상태
+- 현재 Git 로그의 최신 커밋: `7f8a8a9` (DDS 형식 텍스처 리소스 파일 CPU 데이터로 불러오기). 이전 커밋은 `0ea37a7` (SRV Heap Desc 만들기), `cbb2083` (UV 정보를 담는 정점 구조체 추가).
+- 실제 GameFramework, Shader, Mesh, HLSL, pch 헬퍼 및 프로젝트 설정을 읽어 확인했다. git status는 “this operation must be run in a work tree” 오류가 발생해 미커밋 여부는 확정하지 않았다. 파일 검토와 문서 저장은 가능했으며 Git 설정은 수정하지 않았다.
+- AI는 이번 기록 작업에서 빌드·실행·소스 변경·커밋·푸시를 수행하지 않는다. 사용자 실행 확인과 정적 코드 확인을 구분한다.
+- 현재 위치: **상수 버퍼/월드 행렬, UV 전달, SRV 힙/루트 테이블/정적 샘플러 준비를 거쳐 DDS CPU 로딩까지 진행했다. 다음 한 단계는 텍스처 GPU 업로드다.** DDS 화면 출력까지 완료한 것은 아니다.
 
-- Mesh/Shader 역할 분리는 유지된다. Framework가 Mesh/Shader를 unique_ptr로 소유하고 루트 시그니처를 관리한다. CShader가 VS/PS Blob과 PSO를 소유한다.
-- pch.h/.cpp의 공통 함수 이름은 현재 **CreateBufferResource**다. BUFFER 설명을 내부에서 만들고, 힙 종류에 따라 생성·초기 데이터 쓰기·DEFAULT 업로드를 나눈다. 13절의 '호출자 heapProperties를 DEFAULT로 변경' 설명은 현재 함수에는 해당하지 않는다.
-- Mesh는 DEFAULT 버퍼 생성과 UPLOAD 중간 버퍼를 이 함수에 요청한다. 제출/대기/중간 버퍼 해제는 Framework가 담당한다.
-- **상수 버퍼/행렬 적용 경로가 구현되어 있다.** BuildObjects가 256바이트 UPLOAD 버퍼를 만들고 한 번 Map한다. AnimateObjects가 전치한 Z축 회전 행렬을 mapped 메모리에 기록한다.
-- 루트 매개변수 0은 VS에서 사용할 root CBV이며 register b0, space0다. Draw 앞에서 SetGraphicsRootConstantBufferView(0, GPU 주소)를 호출한다.
-- HLSL은 b0 cbuffer의 gmtxWorld를 사용하고 VS에서 `mul(float4(input.pos, 1), gmtxWorld)`를 수행한다. 선언만 있고 미연결이라는 13절 기록은 이전 상태다.
-- 현재 회전 증가문은 주석 처리되어 있고 rotation 초기값은 0이다. 행렬 적용은 연결돼 있지만 현재 코드 그대로는 시간에 따른 회전 애니메이션이 진행되지 않는다. 이를 즉시 오류로 단정하지 않고 UV 확인을 위한 정지 상태일 가능성을 구분한다.
-- ReleaseObjects에서 행렬 버퍼 Unmap 및 Shader/Mesh 소유권 해제를 수행한다. 행렬 리소스 자체는 Framework의 ComPtr 멤버다.
-- **UV 전달 경로가 구현되어 있다.** VertexTexcoord는 위치/색상/UV를 포함한다. 입력 레이아웃의 TEXCOORD는 R32G32_FLOAT, offset 28이며 HLSL VS/PS 사이에 UV를 전달한다.
-- BuildObjects는 정점 6개로 사각형을 구성하고 VertexTexcoord로 Mesh를 생성한다. 따라서 현재 도형은 기존 정점 3개의 삼각형과 구분한다.
-- PS는 UV를 R/G로, B를 0으로 출력하는 확인용 코드다. 실제 텍스처 Sample 호출은 없다.
-- **텍스처용 SRV 디스크립터 테이블/힙, 샘플러, DDS 로딩 연결은 아직 남아 있다.** 현재 루트 시그니처는 CBV 하나이며 정적 샘플러는 없다.
-- 최신 코드의 사각형/UV 시각화 및 행렬 효과는 이번 대화에서 사용자의 별도 실행 확인을 받지 않았다. 커밋 제목이나 구현 존재를 실행 검증 완료와 동일시하지 않는다.
+| 항목 | 진행 상태 |
+|---|---|
+| Mesh/Shader 분리, DEFAULT 정점 업로드 | 이전 완료 범위 유지 |
+| UPLOAD 상수 버퍼와 월드 행렬 | 구현·리뷰 및 사용자 변환 테스트 성공 보고 |
+| 위치/색상/UV 정점과 VS→PS 전달 | 구현·리뷰 확인. 삼각형 두 개의 사각형, PS는 UV 색상 출력 |
+| SRV 힙·루트 테이블·정적 샘플러 | 수정 후 사용자 정상 실행 보고 |
+| DDS 파일 읽기·DEFAULT 텍스처 리소스 생성 | 사용자 디버깅에서 데이터 정상 확인 보고. 구체적 크기/형식/밉 값은 기록되지 않음 |
+| 텍스처 UPLOAD 준비·GPU 복사·읽기 상태 전환 | 아직 미구현 |
+| 실제 SRV 작성·테이블 GPU 핸들 연결·Sample 출력 | 아직 미구현 |
 
-### 다음 단계와 남은 계획
+### 상수 버퍼와 행렬 단계 기록
 
-현재 위치는 **상수 버퍼/월드 행렬 및 UV 전달 코드 구현까지**다. 상수 버퍼를 처음부터 다시 만들거나 Shader 분리부터 다시 안내하지 않는다. 다음 학습은 텍스처 접근을 위한 바인딩 구성부터 한 소단계씩 진행한다.
+- CreateBufferResource로 256바이트 UPLOAD/GENERIC_READ 버퍼를 데이터 없이 만들고 한 번 Map한다. AnimateObjects에서 행렬의 실제 64바이트를 기록한다.
+- 루트 매개변수 0은 VS용 루트 CBV, b0/space0이며 Draw 전에 SetGraphicsRootConstantBufferView(0, GPU 주소)를 사용한다.
+- GPU 완료를 매 프레임 기다리는 기존 구조 덕분에 단일 상수 버퍼 재사용 시 이전 GPU 읽기와 다음 CPU 쓰기가 겹치지 않는다. 프레임 병렬화에 그대로 일반화하지 않는다.
+- 사용자가 반시계 회전 및 추가 변환 테스트 성공을 보고했다. _41을 전달용 행렬 저장 후 수정해 w가 바뀌었던 문제를 설명했고 원인을 이해했다고 보고했다.
+- 현재 AnimateObjects는 XMMatrixTranspose로 전달용 행렬을 저장한다. 회전 증가 코드는 주석 처리되어 있고 360 기준 초기화는 남아 있다. 회전 활성화 시 라디안/XM_2PI 기준으로 초과분을 보존하도록 정리해야 한다. 생성자의 단위 행렬 inverse는 불필요하지만 현재 단위 행렬 결과 자체는 동일하다.
+- 이해 확인 답변 교정: 256바이트는 CBV 정렬/크기 요구와 관련되며 모든 리소스의 물리 할당 단위라는 뜻은 아니다. b0와 루트 매개변수 인덱스는 별개다. 월드 행렬은 원본 정점을 유지하며 객체 변환을 적용한다.
 
-1. 텍스처용 SRV 디스크립터 테이블과 샘플러, shader-visible SRV 힙 구성. UV는 이미 구현되어 있으므로 연결 상태를 검토하며 활용한다.
-2. DDS 텍스처 로딩 및 GPU 업로드/완료 동기화.
-3. SRV 바인딩, HLSL 텍스처 샘플링과 출력 확인, 남은 오류 경로 점검.
+### UV 단계 기록
 
-남은 본 단계는 위 3개로 정리한다. 헬퍼 보완과 리소스 수명 정리는 완료로 간주하지 않고 관련 단계에서 작은 과제로 다룬다.
+- VertexTexcoord: XMFLOAT3 위치 → XMFLOAT4 색상 → XMFLOAT2 UV. UV offset=28, stride=36바이트.
+- 입력 레이아웃 TEXCOORD0/R32G32_FLOAT/offset28 및 Mesh 생성의 새 정점 타입이 일치한다.
+- 정점 여섯 개로 사각형을 구성했고 공유 위치의 UV는 동일하다. VS가 UV를 전달하고 PS는 R=u/G=v/B=0, 기존 alpha=1을 반환한다.
+- 사용자 질문 답변: 크기 계산과 래스터라이저 보간 설명이 맞았다. 월드 행렬을 UV에 적용하지 않으며, 텍스처 스크롤 등 목적의 별도 UV 변환은 가능하다고 보완했다.
 
-### 공통 헬퍼와 보류 사항
+### 디스크립터 바인딩 구조 기록
 
-- CreateBufferResource는 BUFFER 전용이며 DDS 텍스처 업로드 함수로 그대로 재사용할 수 없다.
-- DEFAULT+pData 경로는 pUploadBuffer와 CommandList를 역참조하므로 필요한 인자 존재/출력 별칭 등의 계약 검사가 남아 있다. 헤더의 pUploadBuffer 기본값은 nullptr라 모든 조합이 안전하다고 보증하지 않는다.
-- DEFAULT 경로는 COPY_DEST에서 resourceStates로 항상 배리어를 기록한다. 동일 상태 전환 생략, 데이터 없는 DEFAULT 생성의 최종 상태 의미, 지원 힙 종류와 READBACK+pData 처리 정책 등은 추가 검토 대상이다.
-- 기존 초기화/종료 부분 실패, GPU 대기 실패 뒤 해제, Present/device removed, 최종 Live Objects 보고 정책은 유지한다.
-- 현재 코드 점검은 진행 상황 확인용이다. 모든 API 입력 조합 및 실패 경로의 안전성을 승인한 전체 리뷰가 아니다.
+- CreateTexture 안에서 CBV_SRV_UAV, NumDescriptors=1, SHADER_VISIBLE, NodeMask=0 힙을 생성한다. FrameAdvance는 SetDescriptorHeaps로 이를 연결한다.
+- 루트 매개변수 1은 PS용 DESCRIPTOR_TABLE이다. 범위는 SRV 하나, BaseShaderRegister=0(t0), space0, APPEND 오프셋이다.
+- 정적 샘플러 s0/space0/PS, 일반 MIN_MAG_MIP_LINEAR 필터, CLAMP 주소 방식이다. 정적 샘플러이므로 별도 SAMPLER 힙을 만들 필요가 없다.
+- 처음 작성한 ROOT_PARAMETER_TYPE_SRV와 COMPARISON 필터를 각각 DESCRIPTOR_TABLE과 일반 필터로 바꿨고 사용자가 “잘 됨”이라고 확인했다.
+- 개념 교정: SHADER_VISIBLE은 셰이더가 힙의 디스크립터를 참조하기 위한 조건이며 PS에만 해당하지 않는다. CLAMP는 직전 화면 픽셀이 아니라 UV 경계의 텍스처 가장자리를 사용한다. WRAP은 좌표를 반복한다.
+- 사용자가 힙/테이블/디스크립터 관계와 t0 연결을 잘 모르겠다고 했고 다음 흐름을 설명했다: 텍스처=이미지 데이터, SRV=읽는 방법, 힙=설명 저장 슬롯, 테이블=힙 구간과 레지스터 매핑, 루트 시그니처=바인딩 규칙.
+- CPU 핸들로 CreateShaderResourceView가 슬롯을 채우고, GPU 핸들로 SetGraphicsRootDescriptorTable이 테이블 시작을 지정한다. 루트 인덱스 1, 힙 슬롯 0, t0는 서로 다른 번호다. 개념 설명 후 재답변으로 숙달을 확인한 것은 아니다.
+
+### DDS 로더와 파일 경로
+
+- DDSTextureLoader12.h/.cpp가 프로젝트에 등록되어 있다. 로더 cpp는 Debug/x64에서만 PrecompiledHeader=NotUsing으로 확인된다. 다른 구성까지 빌드 성공했다고 단정하지 않는다.
+- d3dx12 및 분리된 종속 헤더들은 DX12Rebuild/directx 폴더에 준비되어 있다. 헤더는 include 경로에서 검색 가능하면 별도 프로젝트 항목 등록이 필수는 아니다. 같은 버전 묶음을 사용하고 중복 d3dx12.h 위치에 주의하도록 설명했다.
+- CreateTexture는 LoadDDSTextureFromFileEx를 호출한다. 파일은 저장소의 Resources/moon.dds이며 현재 문자열은 L"../Resources/moon.dds"다.
+- 기존 단일 백슬래시 문자열의 C++ 이스케이프 문제와 편집기 경로 인식/실행 작업 디렉터리 차이를 설명했다. 상대 경로는 실행 작업 디렉터리 기준이다.
+- DEFAULT 텍스처는 m_cpTextureResource 멤버로 유지한다. ddsData(unique_ptr), subData(vector), alphaMode, isCubeMap은 CreateTexture 지역 변수다. GetDesc 결과를 지역 texResDesc로 조회한다.
+- 현재 실제 CreateShaderResourceView는 없고 SRV 설명 코드는 주석이다. 향후 SRV 형식과 밉 개수는 로드한 리소스 설명에 맞춰야 하며 R8G8B8A8_UNORM을 무조건 지정하지 않는다.
+- HLSL의 texture/sampler2D 선언은 아직 사용되지 않고 PS는 UV 색상만 반환한다. 실제 샘플링 단계에서는 Texture2D와 SamplerState로 정리한다.
+
+### 가장 중요한 수명과 이해 확인
+
+LoadDDSTextureFromFileEx는 텍스처를 만들고 CPU 초기 데이터와 서브리소스 설명을 반환한다. GPU 업로드/상태 전환/SRV 바인딩까지 수행하는 함수가 아니다.
+
+- ddsData가 실제 CPU 데이터 메모리를 소유한다.
+- subData의 pData는 그 메모리 내부를 가리키며 RowPitch/SlicePitch는 원본 데이터의 행/슬라이스 간격이다. 목록 자체는 이미지 데이터를 소유하지 않는다.
+- 따라서 현재처럼 함수가 끝나 ddsData가 사라진 뒤 subData 포인터만 재사용하면 안 된다. CreateTexture 안에서 CPU→UPLOAD 복사를 끝내거나 두 결과를 준비 완료까지 유지한다.
+- CPU ddsData는 UPLOAD 버퍼에 복사될 때까지 필요하다. UPLOAD 리소스는 GPU 복사 완료까지 필요하다. DEFAULT 텍스처는 GPU 샘플링 사용 완료까지 필요하다.
+- 업로드는 이미지 내용을 GPU로 옮기는 작업, SRV 생성은 읽는 방법을 설명하는 작업, 바인딩은 이를 t0에 연결하는 작업이다. 어느 하나가 다른 작업을 대신하지 않는다.
+- 사용자 DDS 질문 답변: “바인딩하지 않아 샘플링 불가”를 업로드/읽기 상태 준비도 필요하다고 보완했다. ddsData 수명과 SRV/업로드 차이는 모르겠다고 답해 위 내용을 설명했다. 이후 재질문으로 이해를 확인하지는 않았다.
+
+### 다음 한 단계: 텍스처 GPU 업로드
+
+아직 구체적인 업로드 구현 과제는 제시하지 않았다. 다음 조력자는 현재 코드/로더/사용 가능한 d3dx12 헬퍼를 읽고 한 소단계씩 안내한다.
+
+1. DDS 서브리소스 전체에 필요한 UPLOAD 크기와 레이아웃을 GetCopyableFootprints 또는 그 기반 헬퍼로 계산한다. 파일 크기나 폭×높이만으로 추정하지 않는다.
+2. UPLOAD/GENERIC_READ 버퍼를 만들고 원본 RowPitch와 GPU 복사용 행 정렬 차이를 반영해 데이터를 배치한다. d3dx12 UpdateSubresources 같은 헬퍼를 사용할 수 있으나 무엇을 복사/기록하는지 설명한다.
+3. BuildObjects의 기록 중인 CommandList에 텍스처 복사를 기록한다. DDS 로더가 만든 목적지 상태와 복사 전후 상태를 확인한다. 일반 버퍼 CopyResource 경로를 DDS 텍스처에 그대로 쓰지 않는다.
+4. PS용 읽기 상태로 전환을 기록하고 기존 Close/Execute/WaitForGPUComplete 경로로 제출·완료를 확인한 뒤 텍스처 UPLOAD 버퍼를 해제한다. Mesh의 업로드 해제와 텍스처 업로드 해제를 구분한다.
+5. 그다음 실제 SRV 작성 → 루트 인덱스 1 GPU 테이블 바인딩 → PS Sample 출력 순으로 이어간다. 업로드와 화면 출력 전체를 한번에 구현하도록 요구하지 않는다.
+
+범위는 일반 2D 텍스처 한 장이다. 실제 GetDesc/isCubeMap으로 차원·배열·밉·형식을 확인하고 큐브맵/배열/볼륨은 범위 밖으로 둔다. 사용자 데이터 확인 보고에 없는 구체적인 값은 추정해 기록하지 않는다.
+
+### 계속 남아 있는 보완 항목
+
+- CreateBufferResource의 DEFAULT 업로드 Map 대상은 UPLOAD로 수정됐고 COPY_DEST→요청 상태 전환도 확인된다. 하지만 null Device/필수 CommandList/업로드 출력, 같은 출력 변수, 크기0, 지원 힙 검사 및 READBACK 초기 데이터 거부는 아직 보완 대상이다.
+- DEFAULT에 pData가 없으면 요청 상태 대신 COPY_DEST로 남고, 최종 상태가 COPY_DEST여도 동일 상태 배리어를 기록한다. 범용화 계약 보완은 계속 필요하다.
+- 기존 소유 리소스를 출력 ComPtr에 교체할 때 GPU 수명을 보장해야 한다. 생성 실패 시 출력 보존은 지역 ComPtr 성공 후 전달 방식으로 개선 가능하다.
+- 종료 GPU 대기 실패/초기화 부분 실패/Present/device removed/최종 Live Objects 보고 순서의 이전 보류 사항도 유지한다.
+- 협업 규칙: 사용자가 코드 작성, AI는 한국어 설명/질문/리뷰, 한 번에 한 단계, 빌드·실행은 사용자 담당. ComPtr Blob 멤버와 AntialiasedLineEnable=TRUE 선택 유지.
 
 ### 새 대화 시작용 문구
 
-> LEARNING_PROGRESS.md의 14절을 우선 읽고 현재 코드를 확인해줘. Mesh/Shader 분리, UPLOAD 상수 버퍼와 root CBV 월드 행렬, TEXCOORD 및 사각형 UV 시각화 코드까지 구현돼 있어. 다음은 텍스처용 SRV 디스크립터 테이블·샘플러·힙 단계부터 한 단계씩 진행하자. 코드는 내가 작성하고 너는 가이드·질문·리뷰만 담당해. 빌드·실행과 커밋은 내가 한다. 공통 CreateBufferResource의 남은 계약 보완과 종료 실패 정책은 관련 단계에서 다루자.
+> LEARNING_PROGRESS.md의 14절부터 읽고 현재 DX12Rebuild 코드를 확인해줘. Mesh/Shader 분리, 월드 행렬 상수 버퍼, UV 전달, SRV 힙/루트 테이블/정적 샘플러 준비를 했고 DDS 로딩 데이터도 정상 확인했어. 아직 텍스처 GPU 업로드·실제 SRV·테이블 바인딩·Sample 출력은 없어. 다음은 DDS CPU 데이터를 UPLOAD 버퍼에 배치하고 DEFAULT 텍스처로 복사를 기록하는 한 단계부터 설명해줘. 특히 CreateTexture의 지역 ddsData/subData 수명을 유지해야 해. 코드는 내가 작성하고 너는 가이드·질문·리뷰만 해줘. 임의 소스 수정이나 빌드·실행은 하지 마.

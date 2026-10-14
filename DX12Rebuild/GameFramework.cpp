@@ -290,19 +290,90 @@ HRESULT CGameFramework::CreateDSV()
 	return S_OK;
 }
 
+HRESULT CGameFramework::CreateTexture()
+{
+	D3D12_DESCRIPTOR_HEAP_DESC heapDesc;
+	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	heapDesc.NumDescriptors = 1;
+	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	heapDesc.NodeMask = 0;
+
+	HRESULT hr = m_cpDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_cpSRVDesc.GetAddressOf()));
+	if (FAILED(hr)) return hr;
+
+	std::unique_ptr<uint8_t[]> ddsData;
+	std::vector<D3D12_SUBRESOURCE_DATA> subData;
+	DDS_ALPHA_MODE ddsAlpha = DDS_ALPHA_MODE_UNKNOWN;
+	bool bIsCubeMap = false;
+
+	hr = LoadDDSTextureFromFileEx(
+		m_cpDevice.Get(),
+		L"../Resources/moon.dds",
+		0,
+		D3D12_RESOURCE_FLAG_NONE,
+		DDS_LOADER_DEFAULT,
+		m_cpTextureResource.GetAddressOf(),
+		ddsData,
+		subData,
+		&ddsAlpha,
+		&bIsCubeMap
+	);
+
+	if (FAILED(hr)) return hr;
+
+	D3D12_RESOURCE_DESC texResDesc = m_cpTextureResource->GetDesc();
+
+	//D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc;
+	//SRVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	//SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	//SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	//SRVDesc.Texture2D.MostDetailedMip = 0;
+	//SRVDesc.Texture2D.MipLevels = -1;
+
+	return S_OK;
+}
+
 HRESULT CGameFramework::CreateRootSignature()
 {
-	D3D12_ROOT_PARAMETER rootParamCBV;
-	rootParamCBV.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParamCBV.Descriptor.ShaderRegister = 0;
-	rootParamCBV.Descriptor.RegisterSpace = 0;
-	rootParamCBV.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	D3D12_DESCRIPTOR_RANGE descRange;
+	descRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	descRange.NumDescriptors = 1;
+	descRange.BaseShaderRegister = 0;
+	descRange.RegisterSpace = 0;
+	descRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	D3D12_ROOT_PARAMETER rootParams[2];
+	rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	rootParams[0].Descriptor.ShaderRegister = 0;
+	rootParams[0].Descriptor.RegisterSpace = 0;
+	rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+
+	rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParams[1].DescriptorTable.NumDescriptorRanges = 1;
+	rootParams[1].DescriptorTable.pDescriptorRanges = &descRange;
+	rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+	D3D12_STATIC_SAMPLER_DESC samplerDesc;
+	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	samplerDesc.MipLODBias = 0;
+	samplerDesc.MaxAnisotropy = 1;
+	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	samplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+	samplerDesc.MinLOD = 0;
+	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
+	samplerDesc.ShaderRegister = 0;
+	samplerDesc.RegisterSpace = 0;
+	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc;
 	::ZeroMemory(&rootSigDesc, sizeof(D3D12_ROOT_SIGNATURE_DESC));
-	rootSigDesc.NumParameters = 1;
-	rootSigDesc.pParameters = &rootParamCBV;
-	rootSigDesc.NumStaticSamplers = 0;
+	rootSigDesc.NumParameters = 2;
+	rootSigDesc.pParameters = rootParams;
+	rootSigDesc.NumStaticSamplers = 1;
+	rootSigDesc.pStaticSamplers = &samplerDesc;
 	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
 	ComPtr<ID3DBlob> cpd3dBlob, cpd3dErrBlob;
@@ -333,6 +404,9 @@ HRESULT CGameFramework::CreateRootSignature()
 HRESULT CGameFramework::BuildObjects()
 {
 	HRESULT hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), NULL);
+	if (FAILED(hr)) return hr;
+
+	hr = CreateTexture();
 	if (FAILED(hr)) return hr;
 
 	//행렬 버퍼 생성
@@ -404,7 +478,7 @@ void CGameFramework::FrameAdvance()
 	ProcessInput();
 
 	AnimateObjects();
-
+	
 	HRESULT hr = m_cpCommandAllocator->Reset();
 	if (FAILED(hr)) { OutputDebugString(L"CommandAllocatorResetFailed\n"); return; }
 	hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), nullptr);
@@ -432,6 +506,8 @@ void CGameFramework::FrameAdvance()
 	m_cpCommandList->OMSetRenderTargets(1, &RTVDescHandle, TRUE, &DSVDescHandle);
 	m_cpCommandList->ClearRenderTargetView(RTVDescHandle, Colors::CadetBlue, 0, NULL);
 	m_cpCommandList->ClearDepthStencilView(DSVDescHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
+
+	m_cpCommandList->SetDescriptorHeaps(1, m_cpSRVDesc.GetAddressOf());
 
 	//Scene Render Here
 	m_cpCommandList->SetGraphicsRootConstantBufferView(0, m_cpMtxBuffer->GetGPUVirtualAddress());

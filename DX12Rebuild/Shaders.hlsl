@@ -3,6 +3,9 @@ cbuffer cbGameObjInfo : register(b0)
     matrix gmtxWorld : packoffset(c0);
 };
 
+texture tex1 : register(t0);
+sampler2D sample : register(s0);
+
 struct VS_INPUT
 {
     float3 pos : POSITION;

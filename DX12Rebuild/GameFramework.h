@@ -22,6 +22,7 @@ public:
 
 	HRESULT CreateRTV();
 	HRESULT CreateDSV();
+	HRESULT CreateTexture();
 
 	HRESULT CreateRootSignature();
 
@@ -108,5 +109,8 @@ private:
 	UINT8*								m_mappedMtxBuffer;
 	XMFLOAT4X4 mtxTest;
 	float rotation = 0.0f;
+
+	ComPtr<ID3D12DescriptorHeap>		m_cpSRVDesc;
+	ComPtr<ID3D12Resource>				m_cpTextureResource;
 };
 
