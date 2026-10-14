@@ -391,8 +391,6 @@ HRESULT CGameFramework::CreateTexture()
 
 	if (FAILED(hr)) return hr;
 
-	D3D12_RESOURCE_DESC texResDesc = m_cpTextureBuffer->GetDesc();
-
 	if (subData.empty()) return E_FAIL;
 	//GPU복사용 배치를 고려한 UPLOAD 버퍼 크기 계산
 	UINT64 reqSize = GetRequiredIntermediateSize(m_cpTextureBuffer.Get(), 0, subData.size());
@@ -436,12 +434,9 @@ HRESULT CGameFramework::CreateTexture()
 	resBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 	m_cpCommandList->ResourceBarrier(1, &resBarrier);
 
-	//D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc;
-	//SRVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	//SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	//SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	//SRVDesc.Texture2D.MostDetailedMip = 0;
-	//SRVDesc.Texture2D.MipLevels = -1;
+	D3D12_RESOURCE_DESC texResDesc = m_cpTextureBuffer->GetDesc();
+
+	m_cpDevice->CreateShaderResourceView(m_cpTextureBuffer.Get(), nullptr, m_cpSRVDesc->GetCPUDescriptorHandleForHeapStart());
 
 	return S_OK;
 }
@@ -561,6 +556,7 @@ void CGameFramework::FrameAdvance()
 	m_cpCommandList->SetDescriptorHeaps(1, m_cpSRVDesc.GetAddressOf());
 
 	//Scene Render Here
+	m_cpCommandList->SetGraphicsRootDescriptorTable(1, m_cpSRVDesc->GetGPUDescriptorHandleForHeapStart());
 	m_cpCommandList->SetGraphicsRootConstantBufferView(0, m_cpMtxBuffer->GetGPUVirtualAddress());
 	m_upMesh->DrawMesh(m_cpCommandList);
 

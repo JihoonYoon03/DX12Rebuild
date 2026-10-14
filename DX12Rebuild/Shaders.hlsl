@@ -3,8 +3,8 @@ cbuffer cbGameObjInfo : register(b0)
     matrix gmtxWorld : packoffset(c0);
 };
 
-texture tex1 : register(t0);
-sampler2D sample : register(s0);
+Texture2D tex1 : register(t0);
+SamplerState sample : register(s0);
 
 struct VS_INPUT
 {
@@ -32,7 +32,5 @@ VS_OUTPUT VSMain(VS_INPUT input)
 
 float4 PSMain(VS_OUTPUT input) : SV_Target
 {
-    input.color.rg = input.uv.xy;
-    input.color.b = 0;
-    return input.color;
+    return tex1.Sample(sample, input.uv);
 }

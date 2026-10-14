@@ -3,7 +3,7 @@
 
 최종 정리: 2026-10-14. 이 문서는 다른 컴퓨터/새 대화에서 학습을 이어가기 위한 기록이다. 실제 코드는 이후 변경될 수 있으므로 다음 조력자는 작업 전에 현재 파일을 확인한다.
 
-**최신 진행 기준은 14절이다.** 13절은 리소스 헬퍼/상수 버퍼 착수 시점, 12절 및 그 이전은 과거 기록이다. 미구현 여부나 현재 과제 설명이 다르면 14절을 우선한다.
+**최신 진행 기준은 15절이다.** DDS 출력 이후의 개발 방향은 GAME_FRAMEWORK_PLAN.md를 함께 읽는다. 14절 및 그 이전은 과거 기록이며 미구현 여부나 현재 과제가 다르면 15절을 우선한다.
 
 ## 1. 가장 중요한 협업 규칙
 
@@ -397,3 +397,22 @@ LoadDDSTextureFromFileEx는 텍스처를 만들고 CPU 초기 데이터와 서�
 ### 새 대화 시작용 문구
 
 > LEARNING_PROGRESS.md의 14절부터 읽고 현재 DX12Rebuild 코드를 확인해줘. Mesh/Shader 분리, 월드 행렬 상수 버퍼, UV 전달, SRV 힙/루트 테이블/정적 샘플러 준비를 했고 DDS 로딩 데이터도 정상 확인했어. 아직 텍스처 GPU 업로드·실제 SRV·테이블 바인딩·Sample 출력은 없어. 다음은 DDS CPU 데이터를 UPLOAD 버퍼에 배치하고 DEFAULT 텍스처로 복사를 기록하는 한 단계부터 설명해줘. 특히 CreateTexture의 지역 ddsData/subData 수명을 유지해야 해. 코드는 내가 작성하고 너는 가이드·질문·리뷰만 해줘. 임의 소스 수정이나 빌드·실행은 하지 마.
+
+## 15. DDS 출력 완료와 게임 제작용 API로 방향 변경 (2026-10-14)
+
+- 사용자는 DDS GPU 업로드 후 실행에 문제가 없다고 확인했고, 이후 SRV/테이블/HLSL Sample 연결 후 텍스처가 문제없이 표시된다고 보고했다. 기존 DDS 출력 목표는 달성했다.
+- 현재 CreateTexture는 COMMON→COPY_DEST 배리어, UpdateSubresources, COPY_DEST→PIXEL_SHADER_RESOURCE 배리어를 기록한다. Subresource에 개수를 잘못 넣던 문제는 ALL_SUBRESOURCES로 수정됐다.
+- BuildObjects는 Close/Execute/WaitForGPUComplete 성공 확인 뒤 텍스처와 Mesh의 업로드 버퍼를 해제한다. ddsData/subData는 함수 내부의 CPU→UPLOAD 복사가 완료될 때까지 유지한다.
+- 실제 SRV는 CreateShaderResourceView의 pDesc=nullptr와 SRV 힙 CPU 시작 핸들로 작성한다. FrameAdvance는 힙 설정 뒤 루트1에 GPU 테이블 핸들, 루트0에 월드 CBV를 설정한다. HLSL Texture2D t0/SamplerState s0의 Sample 결과를 출력한다.
+- d3dx12 최신 분리 헤더와 설치 SDK의 Tight Alignment 식별자 불일치 오류가 있었다. 사용자가 제공한 이전 단일 헤더의 업로드 헬퍼 존재/호환 가능성을 정적으로 확인했다. 현재 사용하는 헤더 경로·버전은 환경 변경 시 다시 확인한다.
+- 이해 확인 보완: CPU 핸들은 디스크립터 작성용, GPU 핸들은 Draw의 테이블 위치 설정용이다. 루트 인덱스와 t0는 별개다. 업로드/읽기 상태 준비만으로 셰이더 바인딩이 이루어지지 않는다. ddsData는 CPU 메모리 소유자이고 subData는 그 내부 주소와 pitch 설명이며 데이터 자체를 소유하지 않는다.
+- 새 목표: 과제에서 Texture 로딩, Mesh 파일 파싱, Object의 Mesh/Material 지정, Material의 Shader 선택, Scene의 객체 관리와 렌더링, Camera/입력을 간결한 클래스/API로 사용할 수 있게 한다.
+- 새 계획은 **GAME_FRAMEWORK_PLAN.md의 7단계**다. 기간 제약으로 최초 14단계에서 범위까지 줄여 압축했다. 매번 한 단계씩 진행하며 리뷰/보완은 나눌 수 있다. 구현은 사용자가 한다는 기존 규칙은 유지한다.
+- Review 참고 체크아웃은 실제 DescriptorTable이다. Shader가 Object를 소유하는 흐름은 복제하지 않고 Scene 소유/Renderer 렌더 책임/공유 에셋의 구성을 제안했다. 클래스/API 세부 이름은 각 단계에서 확정한다.
+- 다음은 새 계획 1단계인 **리소스 생성 API와 Texture/공용 SRV 구조**다. 이후 Mesh/단일 포맷 파싱 → Shader/Material → Transform/GameObject → Scene/Renderer → Camera/입력 → 에셋 공유/통합/필수 정리로 진행한다. 별도 GraphicsDevice 추출, 고급 할당/캐시/비동기 구조는 미룬다. 안전한 실패 전파와 GPU 수명은 각 단계에서 유지하고 나머지 종료 점검은 7단계에 통합한다.
+- 기존 GPU 대기 실패, Present/device removed, 부분 실패, 최종 Live Objects 보고 및 공통 버퍼 헬퍼 계약 문제는 새 계획의 해당 단계에서 해결한다.
+- 이번 계획 작성에서는 기존 GameFramework.cpp/Shaders.hlsl 사용자 변경을 보존했다. 문서만 생성/갱신했으며 빌드·실행·소스 변경·커밋·푸시는 하지 않았다.
+
+새 대화 시작 문구:
+
+> LEARNING_PROGRESS.md의 15절과 GAME_FRAMEWORK_PLAN.md를 읽고 이어가자. DDS 텍스처 출력까지 완료했고 지금은 게임 제작에 적합한 Texture/Mesh/Material/Object/Scene/Camera API를 만드는 학습으로 방향을 바꿨어. 새 계획 1단계부터 한 소과제씩 안내해줘. 코드 작성과 빌드/실행/커밋은 내가 하고, 너는 설명·질문·리뷰만 담당해. 실제 코드를 확인해서 이미 완료된 기능을 되풀이하지 마.
