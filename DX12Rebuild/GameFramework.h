@@ -22,11 +22,12 @@ public:
 
 	HRESULT CreateRTV();
 	HRESULT CreateDSV();
-	HRESULT CreateTexture();
 
 	HRESULT CreateRootSignature();
 
+	HRESULT CreateTexture();
 	HRESULT BuildObjects();
+	void ReleaseUploadBuffers();
 	void ReleaseObjects();
 
 	void ProcessInput();
@@ -111,6 +112,7 @@ private:
 	float rotation = 0.0f;
 
 	ComPtr<ID3D12DescriptorHeap>		m_cpSRVDesc;
-	ComPtr<ID3D12Resource>				m_cpTextureResource;
+	ComPtr<ID3D12Resource>				m_cpTextureBuffer;
+	ComPtr<ID3D12Resource>				m_cpTextureUploadBuffer;
 };
 

@@ -290,49 +290,6 @@ HRESULT CGameFramework::CreateDSV()
 	return S_OK;
 }
 
-HRESULT CGameFramework::CreateTexture()
-{
-	D3D12_DESCRIPTOR_HEAP_DESC heapDesc;
-	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	heapDesc.NumDescriptors = 1;
-	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	heapDesc.NodeMask = 0;
-
-	HRESULT hr = m_cpDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_cpSRVDesc.GetAddressOf()));
-	if (FAILED(hr)) return hr;
-
-	std::unique_ptr<uint8_t[]> ddsData;
-	std::vector<D3D12_SUBRESOURCE_DATA> subData;
-	DDS_ALPHA_MODE ddsAlpha = DDS_ALPHA_MODE_UNKNOWN;
-	bool bIsCubeMap = false;
-
-	hr = LoadDDSTextureFromFileEx(
-		m_cpDevice.Get(),
-		L"../Resources/moon.dds",
-		0,
-		D3D12_RESOURCE_FLAG_NONE,
-		DDS_LOADER_DEFAULT,
-		m_cpTextureResource.GetAddressOf(),
-		ddsData,
-		subData,
-		&ddsAlpha,
-		&bIsCubeMap
-	);
-
-	if (FAILED(hr)) return hr;
-
-	D3D12_RESOURCE_DESC texResDesc = m_cpTextureResource->GetDesc();
-
-	//D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc;
-	//SRVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	//SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	//SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	//SRVDesc.Texture2D.MostDetailedMip = 0;
-	//SRVDesc.Texture2D.MipLevels = -1;
-
-	return S_OK;
-}
-
 HRESULT CGameFramework::CreateRootSignature()
 {
 	D3D12_DESCRIPTOR_RANGE descRange;
@@ -401,6 +358,94 @@ HRESULT CGameFramework::CreateRootSignature()
 	return S_OK;
 }
 
+HRESULT CGameFramework::CreateTexture()
+{
+	D3D12_DESCRIPTOR_HEAP_DESC heapDesc;
+	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	heapDesc.NumDescriptors = 1;
+	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	heapDesc.NodeMask = 0;
+
+	HRESULT hr = m_cpDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_cpSRVDesc.GetAddressOf()));
+	if (FAILED(hr)) return hr;
+
+	std::unique_ptr<uint8_t[]> ddsData;
+	std::vector<D3D12_SUBRESOURCE_DATA> subData;
+	DDS_ALPHA_MODE ddsAlpha = DDS_ALPHA_MODE_UNKNOWN;
+	bool bIsCubeMap = false;
+
+	//m_cpTextureResource에 디폴트 텍스처 리소스 생성
+	//DDS 이미지 데이터를 GPU에 복사한 상태는 아님
+	hr = LoadDDSTextureFromFileEx(
+		m_cpDevice.Get(),
+		L"../Resources/moon.dds",
+		0,
+		D3D12_RESOURCE_FLAG_NONE,
+		DDS_LOADER_DEFAULT,
+		m_cpTextureBuffer.GetAddressOf(),
+		ddsData,
+		subData,
+		&ddsAlpha,
+		&bIsCubeMap
+	);
+
+	if (FAILED(hr)) return hr;
+
+	D3D12_RESOURCE_DESC texResDesc = m_cpTextureBuffer->GetDesc();
+
+	if (subData.empty()) return E_FAIL;
+	//GPU복사용 배치를 고려한 UPLOAD 버퍼 크기 계산
+	UINT64 reqSize = GetRequiredIntermediateSize(m_cpTextureBuffer.Get(), 0, subData.size());
+
+	//UPLOAD BUFFER
+	hr = CreateBufferResource(
+		m_cpDevice,
+		m_cpCommandList,
+		m_cpTextureUploadBuffer,
+		nullptr,
+		reqSize,
+		D3D12_HEAP_TYPE_UPLOAD,
+		D3D12_RESOURCE_STATE_GENERIC_READ
+	);
+	if (FAILED(hr)) return hr;
+
+	//텍스처 COMMON->COPY_DEST 전환
+	D3D12_RESOURCE_BARRIER resBarrier;
+	resBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	resBarrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+	resBarrier.Transition.pResource = m_cpTextureBuffer.Get();
+	resBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	resBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+	resBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+	m_cpCommandList->ResourceBarrier(1, &resBarrier);
+
+	//CPU데이터를 UPLOAD 버퍼에 배치 -> 텍스처 복사 명령 기록
+	UINT64 result = UpdateSubresources(
+		m_cpCommandList.Get(),
+		m_cpTextureBuffer.Get(),
+		m_cpTextureUploadBuffer.Get(),
+		0,
+		0,
+		subData.size(),
+		subData.data()
+	);
+	if (result == 0) return E_FAIL;
+
+	//텍스처 COPY_DEST->PIXEL_SHADER_RESOURCE 전환
+	resBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+	resBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+	m_cpCommandList->ResourceBarrier(1, &resBarrier);
+
+	//D3D12_SHADER_RESOURCE_VIEW_DESC SRVDesc;
+	//SRVDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	//SRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	//SRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	//SRVDesc.Texture2D.MostDetailedMip = 0;
+	//SRVDesc.Texture2D.MipLevels = -1;
+
+	return S_OK;
+}
+
 HRESULT CGameFramework::BuildObjects()
 {
 	HRESULT hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), NULL);
@@ -444,9 +489,15 @@ HRESULT CGameFramework::BuildObjects()
 	hr = WaitForGPUComplete();
 	if (FAILED(hr)) return hr;
 
-	m_upMesh->ReleaseUploadBuffer();
+	ReleaseUploadBuffers();
 
 	return S_OK;
+}
+
+void CGameFramework::ReleaseUploadBuffers()
+{
+	m_cpTextureUploadBuffer.Reset();
+	m_upMesh->ReleaseUploadBuffer();
 }
 
 void CGameFramework::ReleaseObjects()
