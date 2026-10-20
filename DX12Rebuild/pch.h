@@ -17,6 +17,9 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <optional>
+#include <fstream>
+#include <sstream>
 
 #include <wrl.h>
 #include <shellapi.h>

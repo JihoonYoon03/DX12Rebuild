@@ -21,19 +21,46 @@ struct MeshData
 	std::vector<uint32_t>		indices;
 };
 
+//매쉬에 대한 인덱스, 머터리얼 등 부가정보
+//인덱스 범위를 통해 같은 매쉬라도 영역을 나눠 머터리얼 지정 가능
+struct SubMesh
+{
+	unsigned int	startIndex;
+	unsigned int	indexAmount;
+	unsigned int	materialSlot;
+};
+
+struct Material
+{
+	XMFLOAT4	albedoColor;
+	XMFLOAT4	emissiveColor;
+	float		glossiness;
+	float		metallic;
+	float		SpecularHighlight;
+	float		GlossyReflection;
+};
+
+struct NodeData
+{
+	int										index;
+	std::string								name;
+	
+	//optional로 빈 상태 지정. 매쉬가 없는 경우 등
+	std::optional<unsigned int>				parent = std::nullopt;
+	std::optional<MeshData<VertexTexcoord>>	meshData = std::nullopt;
+
+	std::vector<SubMesh>					subMeshes;
+	std::vector<Material>					materials;
+
+	XMFLOAT4X4								mtxTransform;
+};
+
+struct ModelData
+{
+	std::vector<NodeData> nodes;
+};
+
 class CMesh {
-private:
-	ComPtr<ID3D12Resource>				m_cpVertexUploadBuffer;
-	ComPtr<ID3D12Resource>				m_cpVertexBuffer;
-	ComPtr<ID3D12Resource>				m_cpIndexUploadBuffer;
-	ComPtr<ID3D12Resource>				m_cpIndexBuffer;
-
-	D3D12_VERTEX_BUFFER_VIEW			m_VertexBufferView;
-	D3D12_INDEX_BUFFER_VIEW				m_IndexBufferView;
-	UINT								m_nVertices;
-	UINT								m_nIndices;
-	D3D_PRIMITIVE_TOPOLOGY				m_topology;
-
 public:
 	CMesh();
 	~CMesh();
@@ -103,5 +130,40 @@ public:
 	void ReleaseUploadBuffer();
 
 	void DrawMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+
+private:
+	ComPtr<ID3D12Resource>				m_cpVertexUploadBuffer;
+	ComPtr<ID3D12Resource>				m_cpVertexBuffer;
+	ComPtr<ID3D12Resource>				m_cpIndexUploadBuffer;
+	ComPtr<ID3D12Resource>				m_cpIndexBuffer;
+
+	D3D12_VERTEX_BUFFER_VIEW			m_VertexBufferView;
+	D3D12_INDEX_BUFFER_VIEW				m_IndexBufferView;
+	UINT								m_nVertices;
+	UINT								m_nIndices;
+	D3D_PRIMITIVE_TOPOLOGY				m_topology;
+
 };
 
+
+class CModel : public CMesh
+{
+public:
+	using CMesh::CMesh;
+
+	bool LoadModelData(std::string filePath, std::string* debug = nullptr);
+
+	//프레임 별 데이터를 읽어들이는 함수. 재귀적 호출
+	bool ReadFrameData(std::ifstream& file, std::istringstream& iss, std::string& buffer,
+		const std::optional<unsigned int> parent = std::nullopt);
+
+	//Bounds, Positions, Colors, Normals, SubMeshes
+	bool ReadMeshBlock(std::ifstream& file, std::istringstream& iss, std::string& buffer, NodeData& node);
+
+	bool ReadMaterialBlock(std::ifstream& file, std::istringstream& iss, std::string& buffer, NodeData& node);
+
+	const ModelData& getData() { return data; }
+
+private:
+	ModelData	data;
+};
