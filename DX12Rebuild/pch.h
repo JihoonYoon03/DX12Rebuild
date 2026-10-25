@@ -20,6 +20,9 @@
 #include <optional>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
+#include <functional>
+#include <ranges>
 
 #include <wrl.h>
 #include <shellapi.h>

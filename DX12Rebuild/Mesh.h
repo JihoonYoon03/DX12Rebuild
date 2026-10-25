@@ -19,15 +19,19 @@ struct MeshData
 {
 	std::vector<VERTEXDATA>		vertices;
 	std::vector<uint32_t>		indices;
+	std::vector<XMFLOAT3>		normals;
 };
 
 //매쉬에 대한 인덱스, 머터리얼 등 부가정보
 //인덱스 범위를 통해 같은 매쉬라도 영역을 나눠 머터리얼 지정 가능
 struct SubMesh
 {
-	unsigned int	startIndex;
-	unsigned int	indexAmount;
+	//해당 서브매쉬에 적용할 머터리얼
 	unsigned int	materialSlot;
+	//해당 서브매쉬가 인덱스 배열 몇 번부터 시작하는가
+	unsigned int	startIndex;
+	//해당 서브매쉬가 총 몇 개의 인덱스를 갖는가
+	unsigned int	indexAmount;
 };
 
 struct Material
@@ -40,7 +44,7 @@ struct Material
 	float		GlossyReflection;
 };
 
-struct NodeData
+struct FrameData
 {
 	int										index;
 	std::string								name;
@@ -57,7 +61,7 @@ struct NodeData
 
 struct ModelData
 {
-	std::vector<NodeData> nodes;
+	std::vector<FrameData> frames;
 };
 
 class CMesh {
@@ -154,16 +158,13 @@ public:
 	bool LoadModelData(std::string filePath, std::string* debug = nullptr);
 
 	//프레임 별 데이터를 읽어들이는 함수. 재귀적 호출
-	bool ReadFrameData(std::ifstream& file, std::istringstream& iss, std::string& buffer,
+	bool ReadFrameData(
+		ModelData& modelData,
+		std::ifstream& file, std::istringstream& iss, std::string& buffer,
 		const std::optional<unsigned int> parent = std::nullopt);
 
-	//Bounds, Positions, Colors, Normals, SubMeshes
-	bool ReadMeshBlock(std::ifstream& file, std::istringstream& iss, std::string& buffer, NodeData& node);
-
-	bool ReadMaterialBlock(std::ifstream& file, std::istringstream& iss, std::string& buffer, NodeData& node);
-
-	const ModelData& getData() { return data; }
+	const ModelData& getData() { return m_modelData; }
 
 private:
-	ModelData	data;
+	ModelData	m_modelData;
 };
