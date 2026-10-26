@@ -56,7 +56,7 @@ struct FrameData
 	std::vector<SubMesh>					subMeshes;
 	std::vector<Material>					materials;
 
-	XMFLOAT4X4								mtxTransform;
+	XMFLOAT4X4								mtxModel;
 };
 
 struct ModelData
@@ -71,7 +71,7 @@ public:
 
 	//다양한 정점 타입에 대한 버퍼 생성
 	template<class VERTEXTYPE>
-	HRESULT CreateVertexBuffer(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const MeshData<VERTEXTYPE>& meshData)
+	HRESULT CreateBuffer(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const MeshData<VERTEXTYPE>& meshData)
 	{
 		std::wstring str = std::to_wstring(meshData.indices.size() % 3);
 
@@ -150,12 +150,18 @@ private:
 };
 
 
-class CModel : public CMesh
+class CModel
 {
 public:
-	using CMesh::CMesh;
+	CModel();
+	~CModel();
 
-	bool LoadModelData(std::string filePath, std::string* debug = nullptr);
+	bool LoadModelData(
+		const ComPtr<ID3D12Device>& cpDevice,
+		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, 
+		std::string filePath,
+		std::string* debug = nullptr
+	);
 
 	//프레임 별 데이터를 읽어들이는 함수. 재귀적 호출
 	bool ReadFrameData(
@@ -163,8 +169,13 @@ public:
 		std::ifstream& file, std::istringstream& iss, std::string& buffer,
 		const std::optional<unsigned int> parent = std::nullopt);
 
+	void ReleaseUploadBuffer();
+
+	XMFLOAT4X4 GetWorldMatrix(unsigned int index);
+
 	const ModelData& getData() { return m_modelData; }
 
 private:
-	ModelData	m_modelData;
+	ModelData							m_modelData;
+	std::vector<std::unique_ptr<CMesh>> m_vCMeshes;
 };

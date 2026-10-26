@@ -24,6 +24,7 @@ CGameFramework::CGameFramework()
 
 	m_upShader = std::make_unique<CShader>();
 	m_upMesh = std::make_unique<CMesh>();
+	m_upModel = std::make_unique<CModel>();
 
 	XMStoreFloat4x4(&mtxTest, XMMatrixInverse(nullptr, XMMatrixIdentity()));
 
@@ -375,6 +376,13 @@ HRESULT CGameFramework::BuildObjects()
 	hr = tex2->CreateTexture(*m_SRVDescHeapAllocator, m_cpDevice, m_cpCommandList, L"../Resources/SkydomeTex.dds");
 	if (FAILED(hr)) return hr;
 
+	if (!m_upModel->LoadModelData(m_cpDevice, m_cpCommandList, "../Resources/AbramsTank.txt"))
+	{
+		return E_FAIL;
+	}
+
+	XMFLOAT4X4 test = m_upModel->GetWorldMatrix(1);
+
 	//행렬 버퍼 생성
 	hr = CreateBufferResource(
 		m_cpDevice,
@@ -403,7 +411,7 @@ HRESULT CGameFramework::BuildObjects()
 		}
 	};
 
-	hr = m_upMesh->CreateVertexBuffer<VertexTexcoord>(m_cpDevice, m_cpCommandList, triangle);
+	hr = m_upMesh->CreateBuffer<VertexTexcoord>(m_cpDevice, m_cpCommandList, triangle);
 	if (FAILED(hr)) return hr;
 
 	hr = m_cpCommandList->Close();
@@ -424,6 +432,7 @@ void CGameFramework::ReleaseUploadBuffers()
 	tex1->ReleaseUploadBuffer();
 	tex2->ReleaseUploadBuffer();
 	m_upMesh->ReleaseUploadBuffer();
+	m_upModel->ReleaseUploadBuffer();
 }
 
 void CGameFramework::ReleaseObjects()
@@ -431,6 +440,7 @@ void CGameFramework::ReleaseObjects()
 	m_cpMtxBuffer->Unmap(0, nullptr);
 	m_upShader.reset();
 	m_upMesh.reset();
+	m_upModel.reset();
 }
 
 void CGameFramework::ProcessInput()

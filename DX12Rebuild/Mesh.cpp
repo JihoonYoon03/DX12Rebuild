@@ -18,7 +18,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 		float n;
 			for (int i = 0; i < 16; ++i) {
 				if (iss >> n)
-					frame.mtxTransform.m[i / 4][i % 4] = n;
+					frame.mtxModel.m[i / 4][i % 4] = n;
 				else
 					return true;
 			}
@@ -271,7 +271,20 @@ void CMesh::DrawMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 //=======================================================================================
 //=======================================================================================
 
-bool CModel::LoadModelData(std::string filePath, std::string* debug)
+CModel::CModel()
+{
+}
+
+CModel::~CModel()
+{
+}
+
+bool CModel::LoadModelData(
+	const ComPtr<ID3D12Device>& cpDevice,
+	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+	std::string filePath,
+	std::string* debug
+)
 {
 	std::ifstream file{ filePath };
 	if (file.fail())
@@ -291,6 +304,21 @@ bool CModel::LoadModelData(std::string filePath, std::string* debug)
 	if (ReadFrameData(model, file, iss, buffer))
 	{
 		m_modelData = model;
+		for (auto& frame : m_modelData.frames)
+		{
+			m_vCMeshes.push_back(std::make_unique<CMesh>());
+			if (frame.meshData.has_value()			&&
+				frame.meshData->vertices.size() > 0 &&
+				frame.meshData->indices.size() > 0)
+			{
+				HRESULT hr = m_vCMeshes.back()->CreateBuffer<VertexTexcoord>(cpDevice, cpCommandList, frame.meshData.value());
+				if (FAILED(hr))
+				{
+					if (debug) *debug = "Cannot Create Vertex Buffer";
+					return false;
+				}
+			}
+		}
 		return true;
 	}
 	else
@@ -363,4 +391,35 @@ bool CModel::ReadFrameData(
 	}
 
 	return false;
+}
+
+void CModel::ReleaseUploadBuffer()
+{
+	for (auto& mesh : m_vCMeshes)
+	{
+		mesh->ReleaseUploadBuffer();
+	}
+}
+
+XMFLOAT4X4 CModel::GetWorldMatrix(unsigned int index)
+{
+	XMFLOAT4X4 retValue;
+	XMStoreFloat4x4(&retValue, XMMatrixIdentity());
+
+	if (index >= m_modelData.frames.size()) return retValue;
+
+	XMMATRIX world;
+	auto& current = m_modelData.frames[index];
+	world = XMLoadFloat4x4(&current.mtxModel);
+
+	if (current.parent.has_value())
+	{
+		XMFLOAT4X4 mtxParent = GetWorldMatrix(current.parent.value());
+		//¿Á±Õ»£√‚
+		world = XMMatrixMultiply(world, XMLoadFloat4x4(&mtxParent));
+	}
+
+	XMStoreFloat4x4(&retValue, world);
+
+	return retValue;
 }

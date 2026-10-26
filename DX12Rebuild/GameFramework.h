@@ -6,6 +6,7 @@ class CMesh;
 class CShader;
 class CSRVDescHeapAllocator;
 class CTexture;
+class CModel;
 
 class CGameFramework
 {
@@ -117,6 +118,7 @@ private:
 	UINT8*								m_mappedMtxBuffer;
 	XMFLOAT4X4 mtxTest;
 	float rotation = 0.0f;
+	std::unique_ptr<CModel>				m_upModel;
 
 };
 
