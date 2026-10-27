@@ -133,7 +133,8 @@ public:
 	//업로드 버퍼 반환
 	void ReleaseUploadBuffer();
 
-	void DrawMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	void RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	void RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const std::vector<SubMesh>& subMeshes);
 
 private:
 	ComPtr<ID3D12Resource>				m_cpVertexUploadBuffer;
@@ -172,10 +173,16 @@ public:
 	void ReleaseUploadBuffer();
 
 	XMFLOAT4X4 GetWorldMatrix(unsigned int index);
+	void SetFramesData(const size_t index);
 
 	const ModelData& getData() { return m_modelData; }
+
+	void RenderModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 
 private:
 	ModelData							m_modelData;
 	std::vector<std::unique_ptr<CMesh>> m_vCMeshes;
+	//아직 미사용
+	//ComPtr<ID3D12Resource>				m_cpFrameMatrixBuffer;
+	//UINT8*								m_MappedFrameMatrixBuffer;
 };

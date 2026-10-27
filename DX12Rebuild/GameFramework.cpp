@@ -307,10 +307,17 @@ HRESULT CGameFramework::CreateRootSignature()
 	descRange.RegisterSpace = 0;
 	descRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-	D3D12_ROOT_PARAMETER rootParams[2];
-	rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	rootParams[0].Descriptor.ShaderRegister = 0;
-	rootParams[0].Descriptor.RegisterSpace = 0;
+	D3D12_ROOT_PARAMETER rootParams[4];
+
+	//rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+	//rootParams[0].Descriptor.ShaderRegister = 0;
+	//rootParams[0].Descriptor.RegisterSpace = 0;
+	//rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+
+	rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParams[0].Constants.ShaderRegister = 0;
+	rootParams[0].Constants.RegisterSpace = 0;
+	rootParams[0].Constants.Num32BitValues = 48;
 	rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
 
 	rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -498,8 +505,21 @@ void CGameFramework::FrameAdvance()
 
 	//Scene Render Here
 	m_cpCommandList->SetGraphicsRootDescriptorTable(1, tex2->getGPUDescHandle());
-	m_cpCommandList->SetGraphicsRootConstantBufferView(0, m_cpMtxBuffer->GetGPUVirtualAddress());
-	m_upMesh->DrawMesh(m_cpCommandList);
+	//m_cpCommandList->SetGraphicsRootConstantBufferView(0, m_cpMtxBuffer->GetGPUVirtualAddress());
+	//m_upMesh->RenderMesh(m_cpCommandList);
+
+	XMFLOAT3 eye{ 2.5, 1.0, -2.5 };
+	XMFLOAT3 look{ 0, 0, 0 };
+	XMFLOAT3 up{ 0, 1, 0 };
+	XMFLOAT4X4 view = Matrix4x4::LookAtLH(eye, look, up);
+	view = Matrix4x4::Transpose(view);
+	m_cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
+
+	XMFLOAT4X4 proj = Matrix4x4::PerspectiveFovLH(XMConvertToRadians(90), config::FRAME_BUFFER_W / config::FRAME_BUFFER_H, 0.01f, 100.0f);
+	proj = Matrix4x4::Transpose(proj);
+	m_cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &proj, 32);
+
+	m_upModel->RenderModel(m_cpCommandList);
 
 	//Player Render Here
 	//

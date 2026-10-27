@@ -1,6 +1,8 @@
 cbuffer cbGameObjInfo : register(b0)
 {
-    matrix gmtxWorld : packoffset(c0);
+    matrix gmtxWorld;
+    matrix gmtxView;
+    matrix gmtxProjection;
 };
 
 Texture2D tex1 : register(t0);
@@ -23,7 +25,7 @@ struct VS_OUTPUT
 VS_OUTPUT VSMain(VS_INPUT input)
 {
     VS_OUTPUT output;
-    output.pos = mul(float4(input.pos, 1), gmtxWorld);
+    output.pos = mul(mul(mul(float4(input.pos, 1), gmtxWorld), gmtxView), gmtxProjection);
     output.color = input.color;
     output.uv = input.uv;
     
@@ -32,5 +34,6 @@ VS_OUTPUT VSMain(VS_INPUT input)
 
 float4 PSMain(VS_OUTPUT input) : SV_Target
 {
-    return tex1.Sample(sample, input.uv);
+    //return tex1.Sample(sample, input.uv);
+    return input.color;
 }

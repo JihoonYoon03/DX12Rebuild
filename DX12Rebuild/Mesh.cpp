@@ -1,6 +1,45 @@
 #include "pch.h"
 #include "Mesh.h"
 
+CMesh::CMesh()
+{
+	::ZeroMemory(&m_VertexBufferView, sizeof(D3D12_VERTEX_BUFFER_VIEW));
+	::ZeroMemory(&m_IndexBufferView, sizeof(D3D12_INDEX_BUFFER_VIEW));
+	m_nVertices = 0;
+	m_nIndices = 0;
+	m_topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+}
+
+CMesh::~CMesh()
+{}
+
+void CMesh::ReleaseUploadBuffer()
+{
+	m_cpVertexUploadBuffer.Reset();
+	m_cpIndexUploadBuffer.Reset();
+}
+
+void CMesh::RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	cpCommandList->IASetPrimitiveTopology(m_topology);
+	cpCommandList->IASetVertexBuffers(0, 1, &m_VertexBufferView);
+	cpCommandList->IASetIndexBuffer(&m_IndexBufferView);
+	cpCommandList->DrawIndexedInstanced(m_nIndices, 1, 0, 0, 0);
+}
+
+void CMesh::RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const std::vector<SubMesh>& subMeshes)
+{
+	cpCommandList->IASetPrimitiveTopology(m_topology);
+	cpCommandList->IASetVertexBuffers(0, 1, &m_VertexBufferView);
+	cpCommandList->IASetIndexBuffer(&m_IndexBufferView);
+	for (const SubMesh& subMesh : subMeshes) {
+		cpCommandList->DrawIndexedInstanced(subMesh.indexAmount, 1, subMesh.startIndex, 0, 0);
+	}
+}
+
+
+//=======================================================================================
+//=======================================================================================
 //map으로 태그 별 데이터 저장하는 람다 함수 지정해주기. 파싱 편의성을 위해
 std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameData&)>> parseByTag
 = {
@@ -241,43 +280,14 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}}
 };
 
-CMesh::CMesh()
-{
-	::ZeroMemory(&m_VertexBufferView, sizeof(D3D12_VERTEX_BUFFER_VIEW));
-	::ZeroMemory(&m_IndexBufferView, sizeof(D3D12_INDEX_BUFFER_VIEW));
-	m_nVertices = 0;
-	m_nIndices = 0;
-	m_topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-}
-
-CMesh::~CMesh()
-{}
-
-void CMesh::ReleaseUploadBuffer()
-{
-	m_cpVertexUploadBuffer.Reset();
-	m_cpIndexUploadBuffer.Reset();
-}
-
-void CMesh::DrawMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
-{
-	cpCommandList->IASetPrimitiveTopology(m_topology);
-	cpCommandList->IASetVertexBuffers(0, 1, &m_VertexBufferView);
-	cpCommandList->IASetIndexBuffer(&m_IndexBufferView);
-	cpCommandList->DrawIndexedInstanced(m_nIndices, 1, 0, 0, 0);
-}
-
-
 //=======================================================================================
 //=======================================================================================
 
 CModel::CModel()
-{
-}
+{}
 
 CModel::~CModel()
-{
-}
+{}
 
 bool CModel::LoadModelData(
 	const ComPtr<ID3D12Device>& cpDevice,
@@ -306,11 +316,14 @@ bool CModel::LoadModelData(
 		m_modelData = model;
 		for (auto& frame : m_modelData.frames)
 		{
-			m_vCMeshes.push_back(std::make_unique<CMesh>());
-			if (frame.meshData.has_value()			&&
+			//빈 unique 포인터 객체를 만듦
+			m_vCMeshes.push_back({});
+			if (frame.meshData.has_value() &&
 				frame.meshData->vertices.size() > 0 &&
 				frame.meshData->indices.size() > 0)
 			{
+				//매쉬가 있는 경우만 포인터 객체에 CMesh 지정
+				m_vCMeshes.back() = std::make_unique<CMesh>();
 				HRESULT hr = m_vCMeshes.back()->CreateBuffer<VertexTexcoord>(cpDevice, cpCommandList, frame.meshData.value());
 				if (FAILED(hr))
 				{
@@ -319,6 +332,20 @@ bool CModel::LoadModelData(
 				}
 			}
 		}
+
+		//행렬 업로드용 버퍼 생성
+		// 아직 미사용
+		//::CreateBufferResource(
+		//	cpDevice,
+		//	cpCommandList,
+		//	m_cpFrameMatrixBuffer,
+		//	nullptr,
+		//	m_modelData.frames.size() * sizeof(XMFLOAT4X4)
+		//);
+
+		//D3D12_RANGE range{ 0, 0 };
+		//if (FAILED(m_cpFrameMatrixBuffer->Map(0, &range, (void**)m_MappedFrameMatrixBuffer))) return false;
+
 		return true;
 	}
 	else
@@ -397,29 +424,54 @@ void CModel::ReleaseUploadBuffer()
 {
 	for (auto& mesh : m_vCMeshes)
 	{
-		mesh->ReleaseUploadBuffer();
+		if (mesh) mesh->ReleaseUploadBuffer();
 	}
 }
 
 XMFLOAT4X4 CModel::GetWorldMatrix(unsigned int index)
 {
 	XMFLOAT4X4 retValue;
-	XMStoreFloat4x4(&retValue, XMMatrixIdentity());
 
-	if (index >= m_modelData.frames.size()) return retValue;
+	if (index >= m_modelData.frames.size()) return Matrix4x4::Identity();
 
-	XMMATRIX world;
-	auto& current = m_modelData.frames[index];
-	world = XMLoadFloat4x4(&current.mtxModel);
+	FrameData& current = m_modelData.frames[index];
+	retValue = current.mtxModel;
 
+	//부모 인덱스 정보가 있는 경우
 	if (current.parent.has_value())
 	{
 		XMFLOAT4X4 mtxParent = GetWorldMatrix(current.parent.value());
 		//재귀호출
-		world = XMMatrixMultiply(world, XMLoadFloat4x4(&mtxParent));
+		retValue = Matrix4x4::Multiply(retValue, mtxParent);
 	}
 
-	XMStoreFloat4x4(&retValue, world);
-
 	return retValue;
+}
+
+//아직 미사용
+//void CModel::SetFramesData(const size_t index)
+//{
+//	if (!m_modelData.frames[index].meshData.has_value() ||
+//		m_modelData.frames[index].meshData->vertices.size() == 0 ||
+//		m_modelData.frames[index].meshData->indices.size() == 0)
+//		return;
+//
+//	XMFLOAT4X4 world = GetWorldMatrix(index);
+//	world = Matrix4x4::Transpose(world);
+//	//root constant 256바이트 정렬. 나중에 최적화 필요
+//	::memcpy(m_MappedFrameMatrixBuffer + index * 256, &world, sizeof(XMFLOAT4X4));
+//}
+
+void CModel::RenderModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	//비효율적 렌더링 구조 개선 필요
+	for (int i = 0; i < m_modelData.frames.size(); ++i)
+	{
+		if (!m_vCMeshes[i])	continue;
+
+		XMFLOAT4X4 world = GetWorldMatrix(i);
+		world = Matrix4x4::Transpose(world);
+		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
+		m_vCMeshes[i]->RenderMesh(cpCommandList, m_modelData.frames[i].subMeshes);
+	}
 }

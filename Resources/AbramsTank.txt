@@ -1,7 +1,7 @@
 <Hierarchy>:
 	<Frame>: 0 Full_Abrams_1
-		<Transform>: -5 0 0 0 0 0 1 1 1 0 0 0 1  
-		<TransformMatrix>: 1 0 0 0 0 1 0 0 0 0 1 0 -5 0 0 1  
+		<Transform>: 0 0 0 0 0 0 1 1 1 0 0 0 1  
+		<TransformMatrix>: 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1  
 		<Children>: 232
 			<Frame>: 1 Box01
 				<Transform>: 0.4529923 -0.05170288 0.002450218 270 0 0 1 1 1 -0.7071068 0 0 0.7071068  
