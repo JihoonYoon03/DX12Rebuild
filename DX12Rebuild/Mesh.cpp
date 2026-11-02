@@ -27,26 +27,23 @@ void CMesh::RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	cpCommandList->DrawIndexedInstanced(m_nIndices, 1, 0, 0, 0);
 }
 
-void CMesh::RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const FrameData& frame)
+void CMesh::RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const uint32_t baseVertex, const SubMeshData& subMesh)
 {
 	cpCommandList->IASetPrimitiveTopology(m_topology);
 	cpCommandList->IASetVertexBuffers(0, 1, &m_VertexBufferView);
 	cpCommandList->IASetIndexBuffer(&m_IndexBufferView);
-	for (const SubMeshData& subMesh : frame.subMeshes) {
-		frame.m_vCMaterials[subMesh.materialSlot]->BindMaterial(cpCommandList);
-		cpCommandList->DrawIndexedInstanced(subMesh.indexAmount, 1, subMesh.startIndex, 0, 0);
-	}
+	cpCommandList->DrawIndexedInstanced(subMesh.indexAmount, 1, subMesh.startIndex, baseVertex, 0);
 }
 
 
 //=======================================================================================
 //=======================================================================================
 //map으로 태그 별 데이터 저장하는 람다 함수 지정해주기. 파싱 편의성을 위해
-std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameData&)>> parseByTag
+std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDataReader&)>> parseByTag
 = {
 	//Frame 속성 파싱 관련. Children의 재귀호출 제외
 	{ "<Frame>:",
-	[](std::istringstream& iss, FrameData& frame) {
+	[](std::istringstream& iss, FrameDataReader& frame) {
 		if (iss >> frame.index && iss >> frame.name)
 			return false;
 		else
@@ -54,7 +51,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<TransformMatrix>:",
-	[](std::istringstream& iss, FrameData& frame) {
+	[](std::istringstream& iss, FrameDataReader& frame) {
 		float n;
 			for (int i = 0; i < 16; ++i) {
 				if (iss >> n)
@@ -66,20 +63,20 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<Mesh>:",
-	[](std::istringstream& iss, FrameData& frame) {
+	[](std::istringstream& iss, FrameDataReader& frame) {
 		frame.meshData.emplace();
 		return false;
 	}},
 
 	{ "<Materials>:",
-	[](std::istringstream& iss, FrameData& frame) {
+	[](std::istringstream& iss, FrameDataReader& frame) {
 		int numMaterial;
 		if (iss >> numMaterial)
 		{
 			if (numMaterial < 0)
 				return true;
 
-			frame.materials.reserve(numMaterial);
+			frame.materialData.reserve(numMaterial);
 			return false;
 		}
 		return true;
@@ -87,12 +84,12 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 
 	//Mesh 속성 파싱 관련
 	{ "<Bounds>:",
-	[](std::istringstream& iss, FrameData& frame) {
+	[](std::istringstream& iss, FrameDataReader& frame) {
 		return false;
 	}},
 
 	{ "<Positions>:",
-	[](std::istringstream& iss, FrameData& frame) {
+	[](std::istringstream& iss, FrameDataReader& frame) {
 		int numVertex;
 		if (iss >> numVertex)
 		{
@@ -118,7 +115,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<Colors>:",
-	[](std::istringstream& iss, FrameData& frame) {
+	[](std::istringstream& iss, FrameDataReader& frame) {
 		int numColors;
 		bool colored = false;
 		if (iss >> numColors)
@@ -149,7 +146,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<Normals>:",
-	[](std::istringstream& iss, FrameData& frame) {
+	[](std::istringstream& iss, FrameDataReader& frame) {
 		int numVertex;
 		if (iss >> numVertex)
 		{
@@ -172,7 +169,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<SubMeshes>:",
-	[](std::istringstream& iss, FrameData& frame) {
+	[](std::istringstream& iss, FrameDataReader& frame) {
 		int numSubMesh;
 		if (iss >> numSubMesh)
 		{
@@ -187,9 +184,9 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<SubMesh>:",
-	[](std::istringstream& iss, FrameData& frame) {
+	[](std::istringstream& iss, FrameDataReader& frame) {
 		SubMeshData sMesh;
-		if (iss >> sMesh.materialSlot >> sMesh.indexAmount)
+		if (iss >> sMesh.materialIndex >> sMesh.indexAmount)
 		{
 			if (frame.subMeshes.empty())
 			{
@@ -221,15 +218,14 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 
 	//Material 속성 파싱 관련
 	{ "<Material>:",
-	[](std::istringstream& iss, FrameData& frame) {
-		frame.m_vCMaterials.push_back(std::make_shared<CMaterial>());
-		frame.materials.push_back({});
+	[](std::istringstream& iss, FrameDataReader& frame) {
+		frame.materialDatas.push_back({});
 		return false;
 	}},
 
 	{ "<AlbedoColor>:",
-	[](std::istringstream& iss, FrameData& frame) {
-		MaterialData& mat = frame.materials.back();
+	[](std::istringstream& iss, FrameDataReader& frame) {
+		MaterialData& mat = frame.materialDatas.back();
 		if (iss >> mat.albedoColor.x >> mat.albedoColor.y >> mat.albedoColor.z >> mat.albedoColor.w)
 			return false;
 		else
@@ -237,8 +233,8 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<EmissiveColor>:",
-	[](std::istringstream& iss, FrameData& frame) {
-		MaterialData& mat = frame.materials.back();
+	[](std::istringstream& iss, FrameDataReader& frame) {
+		MaterialData& mat = frame.materialDatas.back();
 		if (iss >> mat.emissiveColor.x >> mat.emissiveColor.y >> mat.emissiveColor.z >> mat.emissiveColor.w)
 			return false;
 		else
@@ -246,8 +242,8 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<Glossiness>:",
-	[](std::istringstream& iss, FrameData& frame) {
-		MaterialData& mat = frame.materials.back();
+	[](std::istringstream& iss, FrameDataReader& frame) {
+		MaterialData& mat = frame.materialDatas.back();
 		if (iss >> mat.glossiness)
 			return false;
 		else
@@ -255,8 +251,8 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<Metallic>:",
-	[](std::istringstream& iss, FrameData& frame) {
-		MaterialData& mat = frame.materials.back();
+	[](std::istringstream& iss, FrameDataReader& frame) {
+		MaterialData& mat = frame.materialDatas.back();
 		if (iss >> mat.metallic)
 			return false;
 		else
@@ -264,8 +260,8 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<SpecularHighlight>:",
-	[](std::istringstream& iss, FrameData& frame) {
-		MaterialData& mat = frame.materials.back();
+	[](std::istringstream& iss, FrameDataReader& frame) {
+		MaterialData& mat = frame.materialDatas.back();
 		if (iss >> mat.SpecularHighlight)
 			return false;
 		else
@@ -273,8 +269,8 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<GlossyReflection>:",
-	[](std::istringstream& iss, FrameData& frame) {
-		MaterialData& mat = frame.materials.back();
+	[](std::istringstream& iss, FrameDataReader& frame) {
+		MaterialData& mat = frame.materialDatas.back();
 		if (iss >> mat.GlossyReflection)
 			return false;
 		else
@@ -295,7 +291,7 @@ bool CModel::LoadModelData(
 	const ComPtr<ID3D12Device>& cpDevice,
 	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
 	std::string filePath,
-	std::shared_ptr<CShader>& shader,
+	std::shared_ptr<CMaterial>& material,
 	std::string* debug
 )
 {
@@ -314,32 +310,34 @@ bool CModel::LoadModelData(
 
 	std::istringstream iss;
 	std::string buffer;
+
 	if (ReadFrameData(model, file, iss, buffer))
 	{
-		m_modelData = model;
-		for (auto& frame : m_modelData.frames)
+		//읽은 데이터 하나로 붙이기.
+		MeshData<VertexTexcoord> combinedMesh;
+		
+		for (auto& frame : model.frames)
 		{
-			for (int i = 0; i < frame.m_vCMaterials.size(); ++i)
+			//해당 프레임 매쉬의 정점 버퍼 시작 위치 저장
+			frame.baseVertex = combinedMesh.vertices.size();
+			for (auto& subMesh : frame.subMeshes)
 			{
-				frame.m_vCMaterials[i]->SetMaterialData(frame.materials[i]);
-				frame.m_vCMaterials[i]->SetShader(shader);
+				//서브매쉬의 인덱스 배열 시작 위치도 갱신
+				subMesh.startIndex += combinedMesh.indices.size();
 			}
-			//빈 unique 포인터 객체를 만듦
-			m_vCMeshes.push_back({});
-			if (frame.meshData.has_value() &&
-				frame.meshData->vertices.size() > 0 &&
-				frame.meshData->indices.size() > 0)
+			if (frame.meshData.has_value())
 			{
-				//매쉬가 있는 경우만 포인터 객체에 CMesh 지정
-				m_vCMeshes.back() = std::make_unique<CMesh>();
-				HRESULT hr = m_vCMeshes.back()->CreateBuffer<VertexTexcoord>(cpDevice, cpCommandList, frame.meshData.value());
-				if (FAILED(hr))
-				{
-					if (debug) *debug = "Cannot Create Vertex Buffer";
-					return false;
-				}
+				combinedMesh.vertices.insert(combinedMesh.vertices.end(), frame.meshData->vertices.begin(), frame.meshData->vertices.end());
+				combinedMesh.indices.insert(combinedMesh.indices.end(), frame.meshData->indices.begin(), frame.meshData->indices.end());
+				combinedMesh.normals.insert(combinedMesh.normals.end(), frame.meshData->normals.begin(), frame.meshData->normals.end());
 			}
 		}
+
+		if (combinedMesh.vertices.empty()) return false;
+
+		m_spMesh = std::make_shared<CMesh>();
+		m_spMaterial = material;
+		if (FAILED(m_spMesh->CreateBuffer(cpDevice, cpCommandList, combinedMesh))) return false;
 
 		//행렬 업로드용 버퍼 생성
 		// 아직 미사용
@@ -364,7 +362,7 @@ bool CModel::LoadModelData(
 }
 
 bool CModel::ReadFrameData(
-	ModelData& modelData,
+	ModelDataReader& modelData,
 	std::ifstream& file, std::istringstream& iss, std::string& buffer,
 	const std::optional<unsigned int> parent)
 {
@@ -430,10 +428,7 @@ bool CModel::ReadFrameData(
 
 void CModel::ReleaseUploadBuffer()
 {
-	for (auto& mesh : m_vCMeshes)
-	{
-		if (mesh) mesh->ReleaseUploadBuffer();
-	}
+	m_spMesh->ReleaseUploadBuffer();
 }
 
 XMFLOAT4X4 CModel::GetWorldMatrix(unsigned int index)
@@ -472,14 +467,22 @@ XMFLOAT4X4 CModel::GetWorldMatrix(unsigned int index)
 
 void CModel::RenderModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
+	if (!m_spMesh) return;
+
 	//비효율적 렌더링 구조 개선 필요
+	m_spMaterial->BindMaterial(cpCommandList);
+
 	for (int i = 0; i < m_modelData.frames.size(); ++i)
 	{
-		if (!m_vCMeshes[i])	continue;
 
 		XMFLOAT4X4 world = GetWorldMatrix(i);
 		world = Matrix4x4::Transpose(world);
 		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
-		m_vCMeshes[i]->RenderMesh(cpCommandList, m_modelData.frames[i]);
+		for (auto& subMesh : m_modelData.frames[i].subMeshes)
+		{
+			//현재 프레임의 머터리얼 데이터에서 선택 후 적용
+			m_spMaterial->SetMaterialData(cpCommandList, m_modelData.frames[i].materialDatas[subMesh.materialSlot]);
+			m_spMesh->RenderMesh(cpCommandList, m_modelData.frames[i].baseVertex, subMesh);
+		}
 	}
 }

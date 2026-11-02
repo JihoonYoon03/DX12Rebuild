@@ -22,7 +22,7 @@ CGameFramework::CGameFramework()
 	tex1 = std::make_unique<CTexture>();
 	tex2 = std::make_unique<CTexture>();
 
-	m_upShader = std::make_shared<CShader>();
+	m_spShader = std::make_shared<CShader>();
 	m_upMesh = std::make_unique<CMesh>();
 	m_upModel = std::make_unique<CModel>();
 
@@ -48,7 +48,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 	if (FAILED(CreateDSV()))				return false;
 	if (FAILED(CreateRootSignature()))		return false;
 
-	if (FAILED(m_upShader->CreateShader(m_cpDevice, m_cpRootSignature)))	return false;
+	if (FAILED(m_spShader->CreateShader(m_cpDevice, m_cpRootSignature)))	return false;
 
 	if (FAILED(m_SRVDescHeapAllocator->CreateSRVDescHeap(m_cpDevice)))		return false;
 
@@ -389,7 +389,8 @@ HRESULT CGameFramework::BuildObjects()
 	hr = tex2->CreateTexture(*m_SRVDescHeapAllocator, m_cpDevice, m_cpCommandList, L"../Resources/SkydomeTex.dds");
 	if (FAILED(hr)) return hr;
 
-	if (!m_upModel->LoadModelData(m_cpDevice, m_cpCommandList, "../Resources/AbramsTank.txt", m_upShader))
+	std::shared_ptr<CMaterial> material = std::make_shared<CMaterial>(m_spShader);
+	if (!m_upModel->LoadModelData(m_cpDevice, m_cpCommandList, "../Resources/AbramsTank.txt", material))
 	{
 		return E_FAIL;
 	}
@@ -451,7 +452,7 @@ void CGameFramework::ReleaseUploadBuffers()
 void CGameFramework::ReleaseObjects()
 {
 	m_cpMtxBuffer->Unmap(0, nullptr);
-	m_upShader.reset();
+	m_spShader.reset();
 	m_upMesh.reset();
 	m_upModel.reset();
 }
@@ -486,7 +487,7 @@ void CGameFramework::FrameAdvance()
 
 	m_cpCommandList->SetGraphicsRootSignature(m_cpRootSignature.Get());
 	
-	m_upShader->SetPipelineState(m_cpCommandList);
+	m_spShader->SetPipelineState(m_cpCommandList);
 
 	m_cpCommandList->RSSetViewports(1, &m_viewport);
 	m_cpCommandList->RSSetScissorRects(1, &m_scissorRect);

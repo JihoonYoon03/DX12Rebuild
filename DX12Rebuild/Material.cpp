@@ -2,19 +2,27 @@
 #include "Material.h"
 #include "Shader.h"
 
-CMaterial::CMaterial(const std::shared_ptr<CShader>& spShader, std::optional<MaterialData> mData)
+CMaterial::CMaterial(const std::shared_ptr<CShader>& spShader)
 	: m_spShader(spShader)
 {
-	if (mData.has_value()) m_matData = mData.value();
-	else ::ZeroMemory(&m_matData, sizeof(MaterialData));
+	::ZeroMemory(&m_matData, sizeof(MaterialData));
 }
 
 CMaterial::~CMaterial()
 {
 }
 
+void CMaterial::SetDefaultMaterialData(const MaterialData& mData)
+{
+	m_matData = mData;
+}
+
+void CMaterial::SetMaterialData(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const MaterialData& mData)
+{
+	cpCommandList->SetGraphicsRoot32BitConstants(2, 4, &mData.albedoColor, 0);
+}
+
 void CMaterial::BindMaterial(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	m_spShader->SetPipelineState(cpCommandList);
-	cpCommandList->SetGraphicsRoot32BitConstants(2, 4, &m_matData.albedoColor, 0);
 }

@@ -28,11 +28,13 @@ struct MeshData
 struct SubMeshData
 {
 	//해당 서브매쉬에 적용할 머터리얼
-	unsigned int	materialSlot;
+
+	MaterialData	materialData;
+	uint32_t		materialIndex;
 	//해당 서브매쉬가 인덱스 배열 몇 번부터 시작하는가
-	unsigned int	startIndex;
+	uint32_t		startIndex;
 	//해당 서브매쉬가 총 몇 개의 인덱스를 갖는가
-	unsigned int	indexAmount;
+	uint32_t		indexAmount;
 };
 
 struct FrameData
@@ -42,19 +44,26 @@ struct FrameData
 	
 	//optional로 빈 상태 지정. 매쉬가 없는 경우 등
 	std::optional<unsigned int>				parent = std::nullopt;
-	std::optional<MeshData<VertexTexcoord>>	meshData = std::nullopt;
+
+	//이 프레임의 매쉬가 정점 배열의 몇 번 정점부터 시작되는가
+	uint32_t								baseVertex;
 
 	std::vector<SubMeshData>				subMeshes;
-	std::vector<MaterialData>				materials;
-	//공용 머터리얼을 갖는 형태로 변경 필요
-	std::vector<std::shared_ptr<CMaterial>> m_vCMaterials;
+	std::vector<MaterialData>					materialDatas;
 
 	XMFLOAT4X4								mtxModel;
 };
 
 struct ModelData
 {
-	std::vector<FrameData> frames;
+	std::vector<FrameData>		frames;
+	MeshData<VertexTexcoord>	meshData;
+};
+
+//파일 읽기 전용
+struct FrameDataReader : FrameData
+{
+	std::optional<MeshData<VertexTexcoord>>	meshData = std::nullopt;
 };
 
 class CMesh {
@@ -127,7 +136,7 @@ public:
 	void ReleaseUploadBuffer();
 
 	void RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
-	void RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const FrameData& frame);
+	void RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const uint32_t baseVertex, const SubMeshData& subMesh);
 
 private:
 	ComPtr<ID3D12Resource>				m_cpVertexUploadBuffer;
@@ -153,7 +162,7 @@ public:
 		const ComPtr<ID3D12Device>& cpDevice,
 		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, 
 		std::string filePath,
-		std::shared_ptr<CShader>& shader,
+		std::shared_ptr<CMaterial>& material,
 		std::string* debug = nullptr
 	);
 
@@ -166,15 +175,15 @@ public:
 	void ReleaseUploadBuffer();
 
 	XMFLOAT4X4 GetWorldMatrix(unsigned int index);
-	void SetFramesData(const size_t index);
 
-	const ModelData& getData() { return m_modelData; }
+	const std::vector<FrameData>& getData() { return m_frameData; }
 
 	void RenderModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 
 private:
-	ModelData								m_modelData;
-	std::vector<std::unique_ptr<CMesh>>		m_vCMeshes;
+	std::vector<FrameData>					m_frameData;
+	std::unique_ptr<CMesh>					m_spMesh;
+	std::shared_ptr<CMaterial>				m_spMaterial;
 
 	//아직 미사용
 	//ComPtr<ID3D12Resource>				m_cpFrameMatrixBuffer;
