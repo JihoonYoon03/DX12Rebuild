@@ -3,7 +3,7 @@
 
 최종 정리: 2026-11-03. 이 문서는 다른 컴퓨터/새 대화에서 학습을 이어가기 위한 기록이다. 실제 코드는 이후 변경될 수 있으므로 다음 조력자는 작업 전에 현재 파일을 확인한다.
 
-**최신 진행 기준은 16절이다. 먼저 16절을 읽는다.** DDS 출력 이후의 전체 개발 방향은 GAME_FRAMEWORK_PLAN.md를 함께 읽는다. 15절 및 그 이전은 과거 기록이며, 현재 구현 여부·소유권·바인딩·다음 과제가 다르면 16절과 실제 코드를 우선한다. 특히 과거 절의 '다음 단계'와 새 대화 시작 문구를 현재 과제로 오인하지 않는다.
+**최신 진행 기준은 17절이다. 먼저 17절을 읽는다.** 전체 방향은 GAME_FRAMEWORK_PLAN.md를 함께 읽는다. 16절의 전환 중 오류와 다음 과제는 과거 기록이다. 모델 리팩토링 보완과 Transform/GameObject는 진행됐고, 사용자 요청으로 Shader 범용 설정화는 건너뛴다. 다음은 Scene 객체 소유·순회다. 현재 파일이 기록과 다르면 실제 코드를 먼저 확인한다.
 
 ## 1. 가장 중요한 협업 규칙
 
@@ -525,3 +525,68 @@ LoadDDSTextureFromFileEx는 텍스처를 만들고 CPU 초기 데이터와 서�
 새 대화 시작 문구:
 
 > LEARNING_PROGRESS.md의 16절과 GAME_FRAMEWORK_PLAN.md의 최신 진행 상태를 먼저 읽고 현재 코드를 확인해줘. 계층 모델과 서브메시별 기본 색상 출력까지 확인했고, 지금은 모델당 VB/IB 하나씩으로 통합하면서 FrameDataReader 상속과 CPU/실행용 데이터의 중복을 정리하는 중이야. 최신 헤더와 구현부는 전환 중이므로 빌드 가능하다고 가정하지 마. 다음 기능보다 이 리팩토링을 한 소과제씩 이어가자. 코드 작성·빌드·실행·커밋은 내가 하고, 너는 가이드·질문·리뷰와 요청한 문서 정리만 담당해.
+
+## 17. 최신 인수인계: 모델 리팩토링 보완 및 Transform/GameObject 완료 (2026-11-03)
+
+### 현재 위치와 검증 수준
+
+- 확인한 최신 커밋은 `9652ccf` (GameObject 클래스 추가), 이전 관련 커밋은 `8c219d1` (Mesh 리팩토링) 및 `a1ad532` (브랜치 병합)이다. 최신 파일을 직접 읽었으며 미커밋 변경 여부와 원격 동기화까지 확인한 것은 아니다.
+- **사용자가 공유 모델을 두 객체에 연결한 결과가 잘 작동한다고 보고했다.** AI는 정적 리뷰를 수행했고 마지막 getMatrix/DrawModel 연결 수정까지 확인했다. AI가 빌드·실행을 직접 수행하거나 모든 실패 경로를 검증한 것은 아니다.
+- 다음은 **Scene이 객체를 소유하고 일괄 순회하는 작은 단계**다. 구체적인 Scene 구현 과제/API와 이해 확인 질문은 아직 제시하지 않았다. 이름만 있는 Renderer 등의 클래스를 한꺼번에 늘리지 않는다.
+- 사용자 지시에 따라 Shader 파일·진입점·입력 레이아웃을 범용 설정화하는 과정은 건너뛰었다. 과제에 필요한 고정 Shader/파생 클래스 방식으로 계속한다. 이 선택을 완료된 설정 API로 기록하거나 다음 대화에서 다시 선결 과제로 요구하지 않는다.
+
+### 모델 리팩토링의 실제 결과
+
+- FrameDataReader/ModelDataReader와 Reader 상속을 제거했다. CModel의 private ModelData는 로딩 중 임시 결과이며, FrameData 목록과 프레임에 대응하는 MeshData 목록을 별도로 가진다. Mesh 없는 프레임에도 빈 MeshData를 추가해 인덱스를 대응시킨다.
+- ReadFrameData 선언·정의와 태그 콜백은 새 자료형으로 일치한다. CModel 런타임 목록은 m_vFrameData다. 재귀 중 벡터 요소 참조를 장기간 보관하지 않는다.
+- 로딩 후 combinedMesh에 정점/인덱스를 이어 붙이고 CMesh 하나의 DEFAULT VB/IB를 생성한다. 원래 메시 내부 인덱스는 유지하며 frame.baseVertex와 통합 subMesh.startIndex를 DrawIndexedInstanced에 전달한다.
+- 지역 unique_ptr<CMesh> upMesh에 CreateBuffer를 수행하고 실패하면 false를 반환한다. 성공한 뒤에만 m_spMaterial, m_upMesh, m_vFrameData를 교체한다. 프레임 목록은 누적 insert가 아닌 move 대입이다.
+- 기존 리소스 교체 전 GPU 완료는 여전히 호출자의 책임이다. 생성 함수 성공은 GPU 업로드 완료가 아니며, 실패한 명령 기록을 호출자가 무조건 제출해도 된다는 뜻도 아니다. 현재 초기화 실패 시 반환하는 흐름을 유지한다.
+- SubMeshData.materialData를 직접 사용하는 방향은 최종 적용되지 않았다. **현재 실제 출력은 FrameData.materialDatas와 subMesh.materialIndex로 재질을 선택한다.** 16절의 재질 직접 포함 제안을 완료된 구조로 오인하지 않는다.
+- RenderModel/DrawModel의 재질 선택은 MaterialData{}로 초기화하고 materialIndex < materialDatas.size()일 때 파일 값을 사용한다. 대응이 없으면 albedoColor=(1,1,1,1)을 매 Draw마다 기록한다.
+- 이전 리뷰의 .at 예외, 반대 방향 범위 조건, 기본값 미초기화, GPU 생성 전 기존 Mesh 교체 문제를 순차적으로 수정했다. 이 문제들을 현재 코드 재확인 없이 미수정으로 반복 지적하지 않는다.
+
+### 모델 파일에서 확인한 프레임당 Mesh 계약
+
+- 현재 Resources/AbramsTank.txt는 233프레임 중 루트 1개에 Mesh가 없고 나머지 232개에 각각 Mesh 태그 1개다. 태그가 있어도 데이터가 빈 Mesh가 포함돼 실제 GPU 데이터가 있는 메시 개수와 다르다.
+- 이전 Apache 샘플은 32프레임 중 루트 1개가 Mesh 없음, 31개가 Mesh 태그 1개다. 계층 종료 불일치는 기존 기록대로 남아 있다.
+- 확인한 두 파일은 프레임당 Mesh가 0~1개이고 그 안에 여러 SubMesh가 들어가는 구조다. exporter 전체 명세를 검증한 보편 규칙은 아니며 현재 지원 범위의 계약이다.
+
+### Transform과 GameObject 구현
+
+- 현재 둘 다 Mesh.h/.cpp에 있다. 이 단계에서 파일 분리를 요구하지 않았다.
+- Transform은 scale=(1,1,1), rotation/position을 보관한다. CGameObject 생성자에서 rotation/position을 (0,0,0)으로 초기화한다.
+- Transform::getMatrix는 DirectXMath로 **Scale × Rotation × Translation**을 계산해 XMFLOAT4X4를 반환한다. 회전 단위는 라디안이다. CPU 월드 계산에서는 전치하지 않는다.
+- CGameObject는 Transform을 값으로, CModel은 shared_ptr로 보관한다. SetModel 및 위치/회전/크기 변경 함수를 제공한다. DrawObject는 모델이 있을 때 getMatrix 결과를 DrawModel로 전달한다.
+- CModel::DrawModel은 객체 World를 값 인자로 받으며 기본값은 단위 행렬이다. 각 프레임의 모델 내부 World에 객체 World를 곱하고 전달 직전에 전치해 루트 상수에 기록한다. 원본 로컬 행렬을 변경하지 않는다.
+- Framework는 m_spModel을 한 번 로드하고 두 unique_ptr<CGameObject>에 공유한다. 객체1은 Y축 90도 회전, 객체2는 (2,0,2) 이동을 지정한다. FrameAdvance가 두 DrawObject를 호출한다.
+- GPU 업로드 버퍼 해제는 기존 제출/Fence 성공 이후 공유 모델에 한 번 수행한다. 객체마다 모델 GPU 버퍼를 재생성하지 않는다.
+- 루트 상수이므로 Draw마다 World 값을 기록하는 현재 방식에 별도 객체 ConstantBuffer를 추가할 필요는 없다. View/Projection 구간 및 재질 상수는 기존 계약을 유지한다.
+
+### 이해 확인과 최근 리뷰
+
+- 사용자는 객체마다 변환이 다름, 공유 모델의 로컬 행렬을 수정하면 모든 객체에 영향, 행렬 곱 순서를 바꾸면 결과가 달라짐을 올바르게 답했다.
+- 마지막 답변은 “변환이 튄다”보다 회전/이동 적용 순서가 달라진다는 설명으로 보완했다. 회전 후 이동은 회전한 뒤 배치, 이동 후 회전은 이동한 위치도 원점 주위로 회전하는 결과가 된다.
+- 비어 있던 Transform::getMatrix 반환을 구현했고 DrawObject의 중복 계산을 getMatrix 호출로 정리했다. 실제 선언·정의·호출을 확인했다.
+- CGameObject 생성자에는 아직 빈 CModel을 make_shared하는 코드가 남아 있다. 불필요한 생성이지만 기능 오류나 다음 단계 차단 조건으로 보지 않는다. 사용자가 원하면 null 기본 포인터로 단순화한다.
+
+### 다음 단계: Scene 객체 소유와 일괄 순회
+
+1. 현재 Framework의 객체 두 개 개별 소유·개별 Draw 호출을 작은 Scene 목록으로 옮기는 가이드부터 제시한다.
+2. Scene은 unique_ptr<GameObject> 목록을 소유하고 객체는 shared_ptr<Model>로 에셋을 공유하는 기존 방향을 유지한다. Scene에 추가하면 렌더 순회에 포함되도록 한다.
+3. 모델 로딩/업로드 제출/Fence/Present는 당장 새 Scene에 모두 옮기지 않는다. Framework의 GPU 실행 흐름을 유지하며 한 책임씩 분리한다.
+4. 현재 모델/재질 렌더링 연결을 활용한다. 별도 Renderer는 실제 책임 분리가 필요할 때 추가하고 큰 추상 계층을 먼저 만들지 않는다.
+5. 기존 두 객체의 독립 위치/회전과 재질 색상이 Scene 경유에서도 유지되는 것이 다음 확인 기준이다. 그다음 Camera/입력, 에셋 공유·통합으로 진행한다.
+
+### 남은 보완과 사용자 범위 선택
+
+- SubMeshData.materialData 및 CMaterial의 저장 기본값/설정 API가 실제 출력에서 쓰이지 않는 흔적은 후속 정리 대상이다. 현재 작동하는 FrameData.materialDatas 경로를 잘못된 것으로 단정하거나 직접 포함 구조로 강제 전환하지 않는다.
+- 공용 VBV/IBV를 서브메시마다 다시 바인딩하는 중복, getWorldMatrix의 재귀 계산 최적화, 미사용 행렬 버퍼 주석 등의 정리는 후속이다.
+- Transform을 CGameObject 외부에서 독립 생성할 경우 rotation/position 기본값 보장 여부는 필요 시 정리한다. 현재 객체 생성자 초기화는 존재한다.
+- 파서 전체 개수의 정확한 일치 검증은 사용자 선택으로 미뤘다. 실제 배열 접근/Draw 범위 안전성을 유지하되 이를 반복 선결 과제로 요구하지 않는다.
+- 범용 버퍼 헬퍼 입력 계약, 초기화 부분 실패/GPU 대기 실패, Present/device removed, 최종 누수 보고 등 기존 보류 사항은 유지한다.
+- 코드 작성·빌드·실행·커밋은 사용자 담당. AI는 한국어 가이드·질문·리뷰 및 요청된 문서 정리만 수행한다. 이번 기록은 소스 수정·빌드·실행·커밋·푸시 없이 문서만 갱신한다.
+
+### 새 대화 시작용 문구
+
+> LEARNING_PROGRESS.md의 17절과 GAME_FRAMEWORK_PLAN.md를 먼저 읽고 실제 코드를 확인해줘. 모델당 VB/IB 통합과 데이터 구조 보완을 했고, 같은 CModel을 두 GameObject가 공유하며 독립 Transform으로 출력되는 것을 확인했어. Shader 범용 설정화는 과제 수준에서 불필요해 건너뛰기로 했어. 다음은 Scene이 객체를 소유하고 일괄 순회하는 작은 단계부터 안내해줘. 지금 getMatrix와 DrawModel 연결은 구현됐으니 다시 요구하지 마. 코드 작성·빌드·실행·커밋은 내가 하고 너는 가이드·질문·리뷰와 요청된 문서 정리만 해줘.

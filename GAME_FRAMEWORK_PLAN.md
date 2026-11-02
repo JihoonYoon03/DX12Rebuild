@@ -4,16 +4,18 @@
 
 ## 현재 진행 위치
 
-최신 인수인계는 [LEARNING_PROGRESS.md](LEARNING_PROGRESS.md)의 **16절**이다. 해당 절과 실제 코드를 우선하며, 아래 계획의 미실행 항목을 완료된 것으로 취급하지 않는다.
+최신 인수인계는 [LEARNING_PROGRESS.md](LEARNING_PROGRESS.md)의 **17절**이다. 16절의 전환 중 상태보다 최신 절과 실제 코드를 우선한다. 아래 표는 범위를 조정한 현재 진행 상태이며, 원래 단계표 전체를 다시 구현해야 한다는 의미는 아니다.
 
 | 단계 | 진행 상태 |
 |---|---|
-| 1. 리소스/Texture | 공용 SRV 슬롯과 DDS 두 장 선택 출력을 사용자 확인. 공통 버퍼 헬퍼의 범용 입력 계약은 보완 여지 있음 |
-| 2. Mesh/파일 로딩 | 인덱스 메시, Abrams 233프레임 파싱·계층 모델 출력 확인. 모델당 VB/IB 통합 및 CPU/실행용 데이터 구조를 정리하는 중 |
-| 3. Shader/Material | 서브메시별 albedoColor 출력 사용자 확인. Shader 설정화·Texture 선택 등은 남아 있음 |
-| 4~7 | 아직 완료되지 않음. 고정 View/Projection을 연결했지만 Camera 클래스/입력 시스템은 미구현 |
+| 1. 리소스/Texture | 공용 SRV와 DDS 선택 출력 완료 이력 유지. 공통 버퍼 헬퍼의 범용 계약은 후속 보완 |
+| 2. Mesh/파일 로딩 | 계층 모델 파싱·출력, 모델당 VB/IB 통합, Reader 상속 제거 및 프레임/임시 CPU 데이터 분리 보완 확인 |
+| 3. Shader/Material | 서브메시 albedoColor 출력과 범위 밖 흰색 대체 처리. Shader 범용 설정화는 사용자 요청으로 건너뜀. 추가 Texture/재질 기능은 과제 필요 시 진행 |
+| 4. Transform/GameObject | 구현·정적 리뷰 및 사용자 정상 작동 보고. 하나의 CModel을 두 객체가 공유하며 독립 Transform 적용 |
+| 5. Scene/렌더링 흐름 | **다음 과제:** Scene의 객체 단독 소유와 일괄 순회. 구체적 구현 과제는 아직 미제시 |
+| 6~7 | Camera/입력, 에셋 공유·통합·필수 정리는 후속. 고정 View/Projection은 Camera 시스템 완료가 아님 |
 
-**당장 이어갈 과제는 모델 구조 리팩토링이다.** FrameDataReader 상속 제거, 로딩 중 임시 ModelData에 합쳐진 CPU MeshData 보관, CModel에는 실행용 프레임/GPU 메시만 보관, SubMeshData에 재질 값 포함, 단독 소유/범위 Draw를 정리한다. 사용자가 직접 구현 중이며 최신 저장본의 헤더·구현부 전환이 완료됐다고 가정하지 않는다. 소스 구현·빌드·실행·커밋은 계속 사용자 담당이다.
+**당장 이어갈 과제는 Scene 객체 관리다.** 현재 Framework가 개별 소유·Draw하는 객체를 Scene 목록으로 옮기는 작은 단계부터 진행한다. GPU 제출/Fence/Present는 Framework에 유지하고 불필요한 Renderer/Reader/래퍼를 먼저 늘리지 않는다. Shader 설정화는 다음 단계의 선결 조건이 아니다. 구현·빌드·실행·커밋은 계속 사용자 담당이다.
 
 ## 목표와 진행 방식
 
