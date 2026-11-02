@@ -1,9 +1,9 @@
-# DX12 Rebuild 학습 인수인계 — 메인 PC용
+# DX12 Rebuild 학습 인수인계
 
 
-최종 정리: 2026-10-14. 이 문서는 다른 컴퓨터/새 대화에서 학습을 이어가기 위한 기록이다. 실제 코드는 이후 변경될 수 있으므로 다음 조력자는 작업 전에 현재 파일을 확인한다.
+최종 정리: 2026-11-03. 이 문서는 다른 컴퓨터/새 대화에서 학습을 이어가기 위한 기록이다. 실제 코드는 이후 변경될 수 있으므로 다음 조력자는 작업 전에 현재 파일을 확인한다.
 
-**최신 진행 기준은 15절이다.** DDS 출력 이후의 개발 방향은 GAME_FRAMEWORK_PLAN.md를 함께 읽는다. 14절 및 그 이전은 과거 기록이며 미구현 여부나 현재 과제가 다르면 15절을 우선한다.
+**최신 진행 기준은 16절이다. 먼저 16절을 읽는다.** DDS 출력 이후의 전체 개발 방향은 GAME_FRAMEWORK_PLAN.md를 함께 읽는다. 15절 및 그 이전은 과거 기록이며, 현재 구현 여부·소유권·바인딩·다음 과제가 다르면 16절과 실제 코드를 우선한다. 특히 과거 절의 '다음 단계'와 새 대화 시작 문구를 현재 과제로 오인하지 않는다.
 
 ## 1. 가장 중요한 협업 규칙
 
@@ -16,8 +16,8 @@
 
 ## 2. 목표와 프로젝트 위치
 
-- 최종 목표: Review 프로젝트의 DescriptorHeap 브랜치를 참고하여 DDS 텍스처를 로드하고 화면에 표시하기까지 학습한다.
-- 이번에 확인한 저장소: `C:\Users\user\Documents\GitHub\DX12Rebuild`.
+- 기존 DDS 출력 목표는 달성했다. 현재 목표는 게임 제작에 적합한 Mesh/Material/Object/Scene/Camera API이며, 모델 구조와 GPU 버퍼 통합을 먼저 정리하는 중이다.
+- 현재 PC 저장소: `C:\Users\wlgns\Documents\Github\DX12Rebuild`. 노트북에서는 실제 경로를 다시 확인한다.
 - 메인 PC에서는 실제 저장소 경로를 확인한다. GameSoftware 프로젝트와 혼동하지 않는다.
 - 솔루션: `DX12Framework.sln`.
 - 프로젝트: `DX12Rebuild/DX12Rebuild.vcxproj`.
@@ -416,3 +416,112 @@ LoadDDSTextureFromFileEx는 텍스처를 만들고 CPU 초기 데이터와 서�
 새 대화 시작 문구:
 
 > LEARNING_PROGRESS.md의 15절과 GAME_FRAMEWORK_PLAN.md를 읽고 이어가자. DDS 텍스처 출력까지 완료했고 지금은 게임 제작에 적합한 Texture/Mesh/Material/Object/Scene/Camera API를 만드는 학습으로 방향을 바꿨어. 새 계획 1단계부터 한 소과제씩 안내해줘. 코드 작성과 빌드/실행/커밋은 내가 하고, 너는 설명·질문·리뷰만 담당해. 실제 코드를 확인해서 이미 완료된 기능을 되풀이하지 마.
+
+## 16. 최신 인수인계: 모델·재질 출력 이후 구조 정리 중 (2026-11-03)
+
+### 가장 먼저 확인할 현재 위치
+
+- **다음 기능으로 넘어가지 말고, 모델 데이터 구조 리팩토링을 이어간다.** 사용자는 메시마다 GPU 버퍼를 생성하는 방식의 개선을 필수로 요청했고, 불필요한 Reader 자료형·상속·복잡한 참조 관계를 줄이고 싶어 한다.
+- 7단계 계획 중 Texture/공용 SRV, 인덱스 Mesh, 과제 모델 파싱과 계층 렌더링까지 진행했다. Shader/Material 단계에서는 서브메시별 albedoColor 출력을 구현했다. Shader 설정 API 전체, GameObject, Scene/Renderer, Camera 클래스/입력, AssetManager는 아직 완료되지 않았다.
+- 고정 View/Projection은 모델 표시를 위해 먼저 연결했다. 이것을 Camera 시스템 완료로 취급하지 않는다.
+- 사용자는 계층 모델 정상 출력과 재질 색상 적용을 보고했다. **그 뒤 진행한 최신 구조 변경까지 빌드·실행이 확인된 것은 아니다.** 최신 저장 파일은 헤더와 구현부가 전환 중인 상태다.
+- 이번 인수인계에서는 문서만 수정한다. 소스 수정·빌드·실행·테스트·커밋·푸시는 하지 않는다.
+
+### 협업 규칙과 사용자 선택
+
+- 사용자가 구현하고 AI는 한국어 개념 설명·작은 과제·질문·리뷰를 담당한다. 완성 코드 답안이나 임의 소스 수정을 제공하지 않는다.
+- 한 번에 한 소단계만 진행한다. 오래 걸리는 작업과 빌드는 사용자가 실행한다. 커밋도 사용자 담당이다.
+- 사용자 코드를 먼저 읽는다. 이미 고친 오류를 반복 지적하지 말고, 제안된 설계와 실제 적용된 변경을 구분한다.
+- ComPtr은 COM 자원, unique_ptr/값은 단독 소유, shared_ptr은 실제 공유에 사용한다. GPU 완료와 참조 카운트는 별개다.
+- 전체 개수의 정확한 일치 검증은 사용자가 후속 처리로 미뤘다. 이를 파서 진행의 반복적인 선결 조건으로 요구하지 않는다. 다만 실제 배열 접근과 Draw 범위의 안전성은 해당 경계에서 확보한다.
+- 불필요한 클래스·래퍼·상속을 늘리지 않는다. 특히 FrameDataReader처럼 값만 담는 상속 자료형을 유지해야 한다고 강요하지 않는다.
+
+### 완료 이력과 검증 수준
+
+| 범위 | 현재까지 확인한 내용 |
+|---|---|
+| Texture/공용 SRV | Framework가 allocator를 단독 소유하고 allocator가 공용 shader-visible SRV 힙을 소유. Texture는 슬롯 핸들/리소스를 보관. 사용자가 DDS 두 장을 각각 로딩하고 선택 출력하는 데 성공 |
+| 인덱스 Mesh | 정점/인덱스 DEFAULT 버퍼, UPLOAD 중간 버퍼, VBV/IBV, R32_UINT, DrawIndexedInstanced. 사용자 사각형 정상 출력 확인 |
+| CPU 모델 파싱 | Abrams 계층 233프레임 파싱 확인. 부모는 프레임 벡터 위치로 연결. 재귀 중 벡터 재할당에 무효화되는 참조를 유지하지 않음 |
+| GPU 계층 모델 | 원래 233개 프레임 위치에 대응하는 메시 목록 중 GPU 버퍼가 있는 메시 230개. 사용자 개수와 부모 변환 계산 결과 확인 후 모델 정상 출력 보고 |
+| 행렬 전달 | 사용자 선택으로 root CBV 방식에서 루트 상수로 변경. World/View/Projection을 한 b0에 배치하고 구간별로 설정 |
+| 기본 재질 | b1의 float4 albedoColor를 Pixel Shader에 전달. PS가 정점 색상과 기본 색상을 곱함. 사용자 색상 적용 확인 |
+| 모델 버퍼 통합 | 최신 코드가 메시 배열을 합치고 CMesh 하나의 VB/IB를 생성하도록 변경됨. 정적 검토에서 누적 오프셋 계산 방향을 확인. 후속 데이터 구조 변경 및 최종 실행 검증은 진행 중 |
+
+### 모델 파일과 번호의 의미
+
+- 현재 기본 입력: Resources/AbramsTank.txt. 원본 참고 경로는 C:/Users/wlgns/Documents/Github/3DGP_Assignment4/3DGP_Assignment4/Models/ 아래 AbramsTank.txt 및 Apache.txt.
+- 파일은 매우 긴 데이터 행을 포함한다. 전체 행을 그대로 출력하지 말고 태그/개수만 읽거나 출력 길이를 제한한다.
+- Abrams: 233프레임, Mesh 블록 232개, 실제 정점/인덱스가 있는 메시 230개. 루트는 메시가 없고, Box01 및 Line04 메시가 비어 있다.
+- 67,962정점, 370,263인덱스, 서브메시 444개. VertexTexcoord는 위치3+색4+UV2로 36바이트. 순수 VB/IB 데이터 합은 약 3.75 MiB다.
+- 기존 개별 committed VB/IB 460개는 64 KiB 단위 올림 계산 시 DEFAULT 할당 약 29.3 MiB로 추정했다. 실행 측정값이 아니며 텍스처·추가 비용을 포함하지 않는다. 개선 목표는 모델당 DEFAULT VB/IB 두 개다.
+- 두 모델 파일에는 UV가 없다. 현재 모델은 텍스처 매핑이 아니라 정점 색상(기본 흰색)과 파일 albedoColor를 이용해 표시한다. 노멀은 CPU로 파싱하지만 현재 입력 형식/셰이더에서 조명에 사용하지 않는다.
+- 루트 Full_Abrams_1의 로컬 행렬에는 X=-5 이동이 있다. 원점을 바라볼 때 왼쪽에 보인 것은 원본 부모 변환이 적용된 결과다. 이 값이 현재도 유지되는지는 실제 파일/코드를 확인한다.
+- SubMesh 태그 첫 숫자는 서브메시 번호, 다음은 인덱스 개수, 그 뒤는 정점 인덱스 값들이다. 현재 포맷은 같은 번호의 프레임 내부 Material 항목과 대응시키는 방식이다. 전역 재질 ID나 중복 제거 ID가 아니다.
+- Material 태그 번호는 프레임 내부 번호다. 현재 파일은 0부터 순차적으로 저장되어 있어 push_back 순서와 벡터 위치가 일치한다. 기존 파서는 Material 태그의 숫자를 읽지 않고 추가하므로 임의 순서/결번을 지원한다고 설명하지 않는다.
+- 같은 값의 재질도 다른 번호로 저장되어 있다. 실제 Abrams 9번 headlight 프레임의 재질 0/1은 저장된 속성이 같지만 별도 항목이다. 현재 파일이 중복 재질을 자동 통합한다고 가정하지 않는다.
+- Apache는 이전 확인에서 Children 수와 실제 계층 종료 태그가 맞지 않는 원본 문제를 발견했다. Abrams를 우선 대상으로 사용하며 Apache 원본을 임의로 수정하지 않는다.
+
+### 현재 바인딩 계약
+
+| 루트 인덱스 | 타입/값 개수 | HLSL 연결 | Visibility |
+|---|---|---|---|
+| 0 | 루트 상수 48개 | b0, space0: World/View/Projection | Vertex |
+| 1 | SRV 테이블 1개 | t0, space0 | Pixel |
+| 2 | 루트 상수 4개 | b1, space0: float4 기본 색상 | Pixel |
+
+- 0번의 World/View/Projection 목적지 오프셋은 각각 0/16/32이며 단위는 32비트 값이다. 각 행렬 설정 개수는 16. HLSL은 한 cbuffer에 행렬 3개를 순서대로 선언한다.
+- 명시적 packoffset을 쓴다면 c0/c4/c8이다. c 하나는 16바이트로, API 오프셋 단위와 다르다.
+- 루트 상수 pSrcData는 CPU 값의 주소다. GPU 주소를 전달하지 않는다. 호출 시 복사되므로 전치한 지역 XMFLOAT4X4의 주소를 사용할 수 있다.
+- World를 바꿔도 같은 루트 파라미터의 나머지 View/Projection 구간은 유지된다. Reset 후 사용하는 구간을 다시 초기화한다. 일반 상수 버퍼의 동일 메모리 덮어쓰기와 구분한다.
+- 전체 비용은 48+1+4=53 DWORD. 색상 개수를 16으로 선언하면 65가 되어 64 DWORD 한도를 넘는다. float4는 16바이트이지만 32비트 값은 4개다.
+- 같은 visibility에서 같은 b 레지스터/space에 CBV와 루트 상수를 중복 선언하지 않는다. RegisterSpace는 이름 공간이며 루트 인덱스/버퍼 내부 오프셋이 아니다.
+- 행 벡터 기준 Local * ParentWorld. CPU 로컬 행렬은 보존하고 전달 직전에 전치한다. VS는 위치 * World * View * Projection, PS는 input.color * matBaseColor.
+- View/Projection은 Framework의 임시 고정 시점이다. 시야각은 XMConvertToRadians, 현재 near=0.01/far=100. 종횡비는 아직 config 상수 나눗셈이며 실제 클라이언트 크기의 실수 나눗셈/Resize 연계는 Camera 단계에서 정리한다.
+
+### 버퍼 통합에서 유지할 계약
+
+- 모든 메시의 정점을 한 배열에, 인덱스를 한 배열에 이어 붙인다. GPU CMesh 생성은 합친 뒤 한 번 수행한다.
+- 각 프레임의 baseVertex는 그 메시를 추가하기 전 누적 정점 개수다. 같은 프레임의 서브메시는 이를 공유해도 된다.
+- 통합 startIndex는 메시 추가 전 누적 인덱스 개수 + 원래 서브메시의 로컬 startIndex다. indexAmount는 그대로 유지한다.
+- 실제 인덱스 값은 원래 메시 내부의 로컬 번호를 유지한다. Draw의 BaseVertexLocation으로 정점 기준 위치를 더한다. 인덱스 값에도 같은 오프셋을 더하면 이중 보정이다.
+- startIndex/baseVertex는 바이트가 아닌 원소 개수다. 전체 VBV/IBV를 바인딩하고 DrawIndexedInstanced의 개수/시작/정점 기준 위치를 맞춘다.
+- 메시가 없는 부모도 로컬 행렬/계층에 남긴다. 그릴 범위가 비어 있으면 Draw를 생략하되 모델 렌더링 함수 전체에서 return하지 않는다.
+- 원본 CPU 배열은 업로드 헬퍼의 CPU memcpy가 끝나면 불필요해질 수 있다. GPU가 참조하는 UPLOAD 리소스는 Framework 제출/Fence 완료 뒤 해제한다.
+
+### 최신 저장 코드: 완료된 보완과 전환 중인 부분
+
+작성 중 사용자의 저장 내용이 변경되었다. 아래는 문서 작성 시 마지막으로 읽은 파일 기준이며, 다음 조력자는 현재 파일을 다시 확인한다.
+
+- CreateBuffer 실패 반환값을 무시하던 문제는 **이미 수정됨**: 실패 시 LoadModelData가 false를 반환한다. 이를 미수정 과제로 반복 제시하지 않는다.
+- Mesh.h는 ModelData에 합쳐진 CPU meshData를 추가했고, CModel 보관 데이터를 vector<FrameData> m_frameData로 바꾸는 중이다.
+- Mesh.h의 SubMeshData에는 MaterialData materialData와 materialIndex가 추가됐지만, FrameData의 materialDatas 벡터도 남아 있다. 재질 포함 구조로 전환 중이며 아직 양쪽이 완전히 정리되지 않았다.
+- CModel의 메시 소유 타입은 unique_ptr<CMesh>로 변경됐으나 이름은 m_spMesh이고, Mesh.cpp 생성부에는 make_shared<CMesh>가 남아 있었다. 소유 타입과 생성 방식/이름을 맞춰야 한다.
+- FrameDataReader : FrameData 상속 자료형과 parseByTag의 Reader 인자가 남아 있다. 현재 ModelData.frames는 FrameData 목록이므로 Reader를 요구하는 호출과 맞지 않는다.
+- Mesh.cpp는 아직 프레임별 frame.meshData를 접근하고, GetWorldMatrix/RenderModel 등에서 옛 m_modelData를 참조하는 부분이 남아 있다. 새 m_frameData 및 합쳐진 ModelData.meshData 흐름으로 전환이 필요하다.
+- CMaterial의 SetDefaultMaterialData는 멤버를 저장하지만 BindMaterial은 PSO만 설정한다. SetMaterialData는 멤버를 바꾸지 않고 전달받은 albedoColor를 루트 상수로 기록한다. 저장된 기본값은 실제 출력에 사용되지 않는다.
+- 공용 VBV/IBV를 서브메시 Draw마다 다시 바인딩하는 코드가 남아 있다. 모델 시작 시 Bind, 각 범위 Draw로 정리하는 것은 후속 작업이다.
+- 옛 SetFramesData/행렬 버퍼 관련 주석과 미사용 흔적이 남아 있다. 최종 정리 시 선언·정의·호출을 함께 확인한다.
+- 위 상태는 소스 정적 확인 결과다. 컴파일을 실행하지 않았으며 최신 저장본이 빌드된다고 보장하지 않는다.
+
+### 합의한 정리 방향: 제안이며 아직 완료 아님
+
+1. FrameDataReader/ModelDataReader 및 데이터 상속을 없앤다. 별도 Reader 클래스를 더 만들 필요는 없다. 읽는 함수와 읽은 결과 자료형을 구분한다.
+2. FrameData에는 계층/로컬 행렬/baseVertex/서브메시 메타데이터만 둔다. SubMeshData에는 Draw 범위와 MaterialData 값을 직접 넣는 방향을 사용자가 검토·선택했다.
+3. ModelData 하나를 로딩 중 임시 결과로 사용한다. 합쳐진 MeshData와 최종 프레임 목록을 보관하고, CModel은 GPU 생성 성공 후 프레임 목록만 가져간다. 런타임에 원본 정점·인덱스를 보관해야 한다고 가정하지 않는다.
+4. 재질 블록은 서브메시 뒤에 나온다. Material 번호로 대응하는 서브메시를 찾아 값을 채운다. 항상 subMeshes.back()만 수정하지 않는다. 없거나 잘못된 대응은 기본 흰색으로 처리하고 미설정 루트 상수를 그대로 사용하지 않는다.
+5. CMesh는 단독 소유(값/unique_ptr)와 GPU 버퍼 Bind/범위 Draw에 집중한다. 프레임 계층이나 재질 목록 전체를 알지 않게 한다. 여러 게임 객체의 에셋 공유는 이후 CModel 공유를 기준으로 검토한다.
+6. CMaterial은 현재 역할에 맞춰 Shader와 전달받은 재질 값을 적용하는 Bind로 단순화한다. 기본값을 보관한다면 대체 재질에 실제로 사용하고, 사용하지 않으면 관련 멤버/API를 제거한다. 여러 객체가 공유하는 재질 값을 Draw마다 불필요하게 영구 변경하는 설계는 피한다.
+7. 구조를 먼저 일관되게 완성한 뒤 파일 분리를 판단한다. 기능 없는 래퍼/Loader/Reader 클래스를 이름만 늘리지 않는다.
+
+### 다음 조력자의 진행 순서
+
+1. Mesh.h/.cpp, Material.h/.cpp, GameFramework.h/.cpp, Shaders.hlsl을 읽어 전환 중인 변경이 어디까지 반영됐는지 확인한다.
+2. 다음 학습 과제는 **모델 데이터 구조 정리**다. Reader 상속 제거, 합친 CPU 데이터의 임시 수명, FrameData/SubMeshData와 재질 대응, 소유권 타입 일치를 먼저 작은 범위로 안내한다.
+3. 사용자가 직접 구현한 뒤, 오류 전파와 오프셋/원래 로컬 인덱스 유지 여부를 정적으로 리뷰한다. 개별 버퍼 460개가 아닌 모델 VB/IB 두 개와 기존 형상·계층·색상이 유지되는지는 사용자가 실행해 확인한다.
+4. 이 정리가 완료되면 Shader 설정 API 및 Material의 Texture 선택 등 3단계의 남은 부분으로 돌아간다. 이후 Transform/GameObject → Scene/Renderer → Camera/입력 → 에셋 공유·통합 순서를 유지한다.
+5. 반복 로딩 시 기존 자원 교체는 GPU 완료를 보장한다. Present/초기화 부분 실패/최종 Live Objects 보고 순서, 공통 버퍼 헬퍼 계약 등 기존 보류 사항은 해당 단계에서 이어간다.
+
+새 대화 시작 문구:
+
+> LEARNING_PROGRESS.md의 16절과 GAME_FRAMEWORK_PLAN.md의 최신 진행 상태를 먼저 읽고 현재 코드를 확인해줘. 계층 모델과 서브메시별 기본 색상 출력까지 확인했고, 지금은 모델당 VB/IB 하나씩으로 통합하면서 FrameDataReader 상속과 CPU/실행용 데이터의 중복을 정리하는 중이야. 최신 헤더와 구현부는 전환 중이므로 빌드 가능하다고 가정하지 마. 다음 기능보다 이 리팩토링을 한 소과제씩 이어가자. 코드 작성·빌드·실행·커밋은 내가 하고, 너는 가이드·질문·리뷰와 요청한 문서 정리만 담당해.

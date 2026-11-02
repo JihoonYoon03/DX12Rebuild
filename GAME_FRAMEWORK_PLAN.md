@@ -1,6 +1,19 @@
 # 게임 제작용 DX12 프레임워크 개발 계획
 
-작성/갱신: 2026-10-14. 기간 제약에 따라 최초 14단계 계획을 아래 7단계로 축소했다. 기존 DDS 출력 학습 이후의 새 개발 방향이다. 구체적 API 이름은 설계 제안이며 각 단계에서 현재 코드와 과제 요구에 맞춰 확정한다.
+작성: 2026-10-14 / 진행 상태 갱신: 2026-11-03. 기간 제약에 따라 최초 14단계 계획을 아래 7단계로 축소했다. 기존 DDS 출력 학습 이후의 새 개발 방향이다. 구체적 API 이름은 설계 제안이며 각 단계에서 현재 코드와 과제 요구에 맞춰 확정한다.
+
+## 현재 진행 위치
+
+최신 인수인계는 [LEARNING_PROGRESS.md](LEARNING_PROGRESS.md)의 **16절**이다. 해당 절과 실제 코드를 우선하며, 아래 계획의 미실행 항목을 완료된 것으로 취급하지 않는다.
+
+| 단계 | 진행 상태 |
+|---|---|
+| 1. 리소스/Texture | 공용 SRV 슬롯과 DDS 두 장 선택 출력을 사용자 확인. 공통 버퍼 헬퍼의 범용 입력 계약은 보완 여지 있음 |
+| 2. Mesh/파일 로딩 | 인덱스 메시, Abrams 233프레임 파싱·계층 모델 출력 확인. 모델당 VB/IB 통합 및 CPU/실행용 데이터 구조를 정리하는 중 |
+| 3. Shader/Material | 서브메시별 albedoColor 출력 사용자 확인. Shader 설정화·Texture 선택 등은 남아 있음 |
+| 4~7 | 아직 완료되지 않음. 고정 View/Projection을 연결했지만 Camera 클래스/입력 시스템은 미구현 |
+
+**당장 이어갈 과제는 모델 구조 리팩토링이다.** FrameDataReader 상속 제거, 로딩 중 임시 ModelData에 합쳐진 CPU MeshData 보관, CModel에는 실행용 프레임/GPU 메시만 보관, SubMeshData에 재질 값 포함, 단독 소유/범위 Draw를 정리한다. 사용자가 직접 구현 중이며 최신 저장본의 헤더·구현부 전환이 완료됐다고 가정하지 않는다. 소스 구현·빌드·실행·커밋은 계속 사용자 담당이다.
 
 ## 목표와 진행 방식
 
@@ -53,7 +66,7 @@ API 이름은 완성 코드 답안이 아니다. 별도 GraphicsDevice 추출은
 - Material은 shared_ptr<Shader/Pipeline>과 shared_ptr<Texture>를 가진다. 공유 Material 수정은 이를 사용하는 모든 Object에 영향을 준다. 독립 색상 변경은 별도 Material 또는 Object별 오버라이드로 구분한다.
 - 자식이 부모 Scene/Renderer를 shared_ptr로 되잡지 않는다. 게임 코드에는 ID3D12Device/CommandList 등 COM 소유권을 전달할 필요가 없게 한다. 내부 호출은 비소유 참조/포인터를 기본으로 한다.
 - shared_ptr 참조 카운트와 GPU 사용 완료는 별개다. 리소스/디스크립터 슬롯을 실제로 해제하거나 재사용하는 시점은 Fence 완료 조건을 따라야 한다.
-- Object/Frame/Material 상수 버퍼와 descriptor heap의 수명을 GPU 사용 완료까지 보장한다. 4단계는 객체별 단순 ConstantBuffer부터 연결하고 5단계의 Renderer가 그리기 바인딩을 담당한다.
+- Object/Frame/Material의 GPU 버퍼와 descriptor heap은 GPU 사용 완료까지 수명을 보장한다. 현재 행렬과 기본 색상은 루트 상수로 전달하며 명령 기록 시 값이 복사된다. 4단계에서는 Draw마다 올바른 객체 변환을 설정하고 5단계의 Renderer가 그리기 바인딩을 담당한다.
 - 초기에는 씬 생성·에셋 로딩·교체·삭제를 GPU 완료가 확인된 프레임 경계에서 수행한다. 런타임 비동기 로딩과 지연 해제는 나중 과제다.
 
 프레임 흐름은 입력 수집 → Scene/Controller Update(dt) → 기존 프레임 시작 → Scene 객체 순회/Renderer의 카메라·객체·Material 준비와 Mesh Draw → 기존 프레임 종료다. Scene을 한 번 렌더링한다는 것은 한 번의 상위 API 호출로 모든 Object를 처리한다는 뜻이다. 여러 Object를 자동으로 한 GPU Draw로 합치는 것은 아니며 배치/인스턴싱은 후속 최적화다.
@@ -65,27 +78,27 @@ API 이름은 완성 코드 답안이 아니다. 별도 GraphicsDevice 추출은
 | 1. 리소스 생성 API와 Texture | 기존 버퍼 헬퍼의 필수 입력/실패 계약 정리. DDS 생성/업로드/SRV를 TextureLoader로 추출. 고정 용량 공용 SRV 슬롯, 완료까지 중간 자원 보관. 기존 Framework의 제출/대기 유지 | 파일 경로로 Texture를 생성하고 텍스처 2개를 한 힙에서 선택 가능. 잘못된 경로/필수 입력은 안전하게 실패 |
 | 2. Mesh와 파일 로딩 | CPU MeshData와 GPU Mesh를 분리. 인덱스 버퍼/DrawIndexed, 정점 형식 일치. 과제 포맷 하나를 CPU 데이터로 파싱하며 인덱스 범위 검사 | 파일에서 읽은 Mesh를 기존 셰이더/텍스처로 표시 |
 | 3. Shader와 Material | 기존 CShader를 유지하며 필요한 파일/진입점/입력 형식만 설정화. 공통 바인딩 규칙. Material이 Shader, Texture, tint를 보관. 불투명 기본 재질만 지원 | 동일 Mesh의 Shader/Texture/색상을 Material로 선택 |
-| 4. Transform과 GameObject | 위치/회전/크기와 World 계산, Mesh/Material 지정. 객체별 독립 ConstantBuffer로 먼저 구현. 행렬 전치 경계 통일 | Mesh를 공유하는 객체 두 개가 독립 변환/재질로 표시 |
+| 4. Transform과 GameObject | 위치/회전/크기와 World 계산, Mesh/Material 지정. 현재 루트 상수 방식을 활용해 Draw마다 객체 변환 설정. 행렬 전치 경계 통일 | Mesh를 공유하는 객체 두 개가 독립 변환/재질로 표시 |
 | 5. Scene과 렌더링 흐름 | Scene이 Object 소유/Update/Render를 담당. 작은 Renderer/RenderContext가 Object→Material→Mesh 바인딩. 목록 단순 순회, 기존 프레임 실행 유지 | 객체를 Scene에 추가하는 것만으로 화면에 포함 |
 | 6. Camera와 기본 조작 | View/Projection, Frame 상수, Resize aspect. 기본 입력 상태와 dt 기반 자유 이동/마우스 회전 Controller | 원근 공간에서 WASD/마우스로 카메라 조작, 화면 비율 유지 |
 | 7. 에셋 공유·통합·필수 정리 | 에셋 루트 경로와 단순 Mesh/Texture/Shader 캐시. 씬 교체/객체 삭제는 GPU 완료 프레임 경계에서 수행. 초기화/종료 실패, Map/HANDLE, Present 및 최종 Live Objects 순서 정리 | 파일 에셋과 공유 Material로 작은 과제 씬 제작, 로딩 실패/씬 교체/종료 확인 |
 
-다음은 1단계의 Texture/공용 SRV API 구성부터 시작한다. 자원 생성 실패·업로드 대기 실패처럼 수명에 직접 영향을 주는 오류는 각 단계에서 바로 다룬다. 나머지 초기화/종료 정리는 7단계에서 통합하며 Device 재생성 복구는 포함하지 않는다. 7단계는 7번의 대화나 정해진 기간을 보장하는 수치가 아니다.
+현재는 모델 데이터/버퍼 구조 정리를 먼저 완료한 뒤 3단계의 남은 Shader/Material API로 돌아간다. 1단계부터 다시 시작하지 않는다. 자원 생성 실패·업로드 대기 실패처럼 수명에 직접 영향을 주는 오류는 각 단계에서 바로 다룬다. 나머지 초기화/종료 정리는 7단계에서 통합하며 Device 재생성 복구는 포함하지 않는다. 7단계는 7번의 대화나 정해진 기간을 보장하는 수치가 아니다.
 
 ## 중요한 렌더링 설계 결정
 
 - 모든 텍스처를 공용 SRV 힙의 슬롯으로 관리한다. Texture마다 힙을 만들거나 Material마다 힙을 바꾸지 않는다. 힙 고정 용량은 명시하고 런타임 자동 확장/핸들 이동은 처음에는 하지 않는다.
-- 바인딩 레이아웃은 Renderer 측에서 통일한다. 기존 Object CBV b0/루트0, Texture t0/루트1을 유지하면서 Camera/Frame b1과 Material b2를 필요한 단계에 추가하는 방향이다. 실제 루트 인덱스는 이름 있는 상수로 관리하며 HLSL 레지스터 번호와 구분한다. 변경 시 해당 레이아웃으로 생성한 모든 PSO도 맞춘다.
+- 현재 바인딩은 루트0=World/View/Projection 루트 상수 48개(b0, Vertex), 루트1=Texture SRV 테이블(t0, Pixel), 루트2=기본 색상 루트 상수 4개(b1, Pixel)다. 모두 space0이며 총 53 DWORD다. 0번 내부 행렬 오프셋은 0/16/32다. Camera/Renderer 도입 시 확장 여부를 다시 판단하며, 이전 계획의 별도 b1 Camera/b2 Material 배치를 현재 구현으로 오인하지 않는다. 실제 루트 인덱스와 HLSL 레지스터 번호를 구분하고, 변경 시 루트 시그니처·HLSL·호출·PSO를 함께 맞춘다.
 - 첫 Material은 기본 색상 Texture 1개와 색상 tint를 지원한다. 정적 샘플러 1개를 유지하고 재질별 필터/주소 모드는 필요 시 PSO/루트 레이아웃 또는 sampler heap 설계를 별도로 추가한다.
-- GameObject와 Camera는 CPU의 게임 데이터가 중심이다. Object별 작은 ConstantBuffer로 먼저 정확성을 확보하고 Renderer가 바인딩한다. 공용 상수 버퍼 풀·프레임별 할당 구조는 나중에 도입한다.
+- GameObject와 Camera는 CPU의 게임 데이터가 중심이다. 현재는 독립 상수 버퍼 대신 루트 상수 부분 갱신으로 각 Draw의 변환을 전달한다. 향후 버퍼를 도입하면 Draw마다 독립 구간과 GPU 수명을 보장한다. 공용 상수 버퍼 풀·프레임별 할당 구조는 나중에 도입한다.
 - 여러 Object의 월드 행렬을 하나의 같은 버퍼 주소에 덮어쓰며 Draw하는 방식은 사용하지 않는다. 각각의 Draw가 GPU에서 읽을 독립 구간이 필요하다. 현재 프레임 대기는 이전 프레임과의 충돌만 막는다.
 - 같은 Material/PSO를 기준으로 Draw 순서를 묶는 것은 7단계 이후의 최적화다. 초기에는 Scene 목록을 단순 순회한다. 투명 렌더링의 깊이 정렬은 별도 규칙이다.
-- Mesh 파서는 과제 요구 포맷을 우선한다. 아직 형식이 정해지지 않았으므로 OBJ/glTF/Blender 바이너리 전체 지원을 확정하지 않는다. 단순 과제 포맷은 직접 파싱하고 복잡한 표준 포맷은 라이브러리 사용 여부를 해당 단계에서 판단한다.
+- Mesh 파서는 현재 과제의 계층형 텍스트 포맷(AbramsTank.txt)을 우선한다. CPU 재귀 파싱과 모델 표시까지 진행했으며 UV가 없는 파일이라 기본 색상으로 표시한다. OBJ/glTF/Blender 바이너리 전체 지원을 확정하지 않는다. Apache 원본의 계층 수/종료 태그 문제는 별도이며 조용히 수정하지 않는다.
 - 행렬은 일관된 좌표계와 단위를 문서화한다. 초기에는 DirectXMath LH 및 행 벡터 규칙을 사용하고 HLSL 전달 시 전치 경계를 한 곳으로 모으는 방향이다. 파일 포맷의 좌표계 변환은 CPU 가져오기 단계에서 수행한다.
 
 ## 먼저 미루는 기능
 
-기간 단축을 위해 별도 GraphicsDevice 추출, 일반화된 RenderItem 큐, Draw 정렬, 공용 상수 버퍼 풀, SRV 힙 자동 확장/슬롯별 지연 회수, 다중 Mesh 포맷과 여러 Material의 Submesh, AssetManager의 자동 제거 정책을 미룬다. 공용 SRV 힙은 증가형 할당과 명시적 용량 제한을 사용하며 반복 씬 로딩의 슬롯 사용량도 확인한다. 필요 시 GPU 대기와 기존 에셋 수명을 보장한 전체 재생성 방식부터 판단한다.
+기간 단축을 위해 별도 GraphicsDevice 추출, 일반화된 RenderItem 큐, Draw 정렬, 공용 상수 버퍼 풀, SRV 힙 자동 확장/슬롯별 지연 회수, 다중 Mesh 포맷, AssetManager의 자동 제거 정책을 미룬다. 서브메시별 기본 재질은 이미 표시했고 모델 VB/IB 통합은 사용자가 필수 개선으로 요청했으므로 보류 기능이 아니다. 공용 SRV 힙은 증가형 할당과 명시적 용량 제한을 사용하며 반복 씬 로딩의 슬롯 사용량도 확인한다. 필요 시 GPU 대기와 기존 에셋 수명을 보장한 전체 재생성 방식부터 판단한다.
 
 ECS, 범용 컴포넌트/리플렉션 시스템, 에디터, 직렬화 엔진, 비동기 에셋 스트리밍, bindless, render graph, 프레임 병렬화, 다중 큐, 스키닝/스켈레탈 애니메이션, PBR는 현재 기본 프레임워크 완료 조건에 포함하지 않는다. 충돌·조명·투명도·UI·Player 행동 등 과제에 꼭 필요한 기능은 실제 요구에 맞춰 별도 소단계로 추가한다. 기간이 촉박해도 GPU 완료 전 해제나 여러 객체의 같은 상수 버퍼 덮어쓰기를 허용하지 않는다.
 
