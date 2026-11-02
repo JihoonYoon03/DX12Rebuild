@@ -1,5 +1,6 @@
 #pragma once
 #include "pch.h"
+#include "Material.h"
 
 struct VertexDiffused
 {
@@ -24,7 +25,7 @@ struct MeshData
 
 //매쉬에 대한 인덱스, 머터리얼 등 부가정보
 //인덱스 범위를 통해 같은 매쉬라도 영역을 나눠 머터리얼 지정 가능
-struct SubMesh
+struct SubMeshData
 {
 	//해당 서브매쉬에 적용할 머터리얼
 	unsigned int	materialSlot;
@@ -32,16 +33,6 @@ struct SubMesh
 	unsigned int	startIndex;
 	//해당 서브매쉬가 총 몇 개의 인덱스를 갖는가
 	unsigned int	indexAmount;
-};
-
-struct Material
-{
-	XMFLOAT4	albedoColor;
-	XMFLOAT4	emissiveColor;
-	float		glossiness;
-	float		metallic;
-	float		SpecularHighlight;
-	float		GlossyReflection;
 };
 
 struct FrameData
@@ -53,8 +44,10 @@ struct FrameData
 	std::optional<unsigned int>				parent = std::nullopt;
 	std::optional<MeshData<VertexTexcoord>>	meshData = std::nullopt;
 
-	std::vector<SubMesh>					subMeshes;
-	std::vector<Material>					materials;
+	std::vector<SubMeshData>				subMeshes;
+	std::vector<MaterialData>				materials;
+	//공용 머터리얼을 갖는 형태로 변경 필요
+	std::vector<std::shared_ptr<CMaterial>> m_vCMaterials;
 
 	XMFLOAT4X4								mtxModel;
 };
@@ -134,7 +127,7 @@ public:
 	void ReleaseUploadBuffer();
 
 	void RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
-	void RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const std::vector<SubMesh>& subMeshes);
+	void RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const FrameData& frame);
 
 private:
 	ComPtr<ID3D12Resource>				m_cpVertexUploadBuffer;
@@ -150,7 +143,6 @@ private:
 
 };
 
-
 class CModel
 {
 public:
@@ -161,6 +153,7 @@ public:
 		const ComPtr<ID3D12Device>& cpDevice,
 		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, 
 		std::string filePath,
+		std::shared_ptr<CShader>& shader,
 		std::string* debug = nullptr
 	);
 
@@ -180,8 +173,9 @@ public:
 	void RenderModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 
 private:
-	ModelData							m_modelData;
-	std::vector<std::unique_ptr<CMesh>> m_vCMeshes;
+	ModelData								m_modelData;
+	std::vector<std::unique_ptr<CMesh>>		m_vCMeshes;
+
 	//아직 미사용
 	//ComPtr<ID3D12Resource>				m_cpFrameMatrixBuffer;
 	//UINT8*								m_MappedFrameMatrixBuffer;

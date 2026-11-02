@@ -6,9 +6,9 @@ public:
 
 	HRESULT CompileShaderFromFile(ComPtr<ID3DBlob>& blob, const LPCWSTR fileName, const LPCSTR entryPoint, const LPCSTR version);
 	virtual HRESULT CompileShader();
-	HRESULT CreateShader(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12RootSignature>& cpRootSignature);
+	HRESULT CreateShader(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12RootSignature>& cpRootSignature);
 
-	void SetPipelineState(ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	void SetPipelineState(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 
 protected:
 	//PSO

@@ -5,6 +5,11 @@ cbuffer cbGameObjInfo : register(b0)
     matrix gmtxProjection;
 };
 
+cbuffer cbMatBaseColor : register(b1)
+{
+    float4 matBaseColor;
+};
+
 Texture2D tex1 : register(t0);
 SamplerState sample : register(s0);
 
@@ -35,5 +40,5 @@ VS_OUTPUT VSMain(VS_INPUT input)
 float4 PSMain(VS_OUTPUT input) : SV_Target
 {
     //return tex1.Sample(sample, input.uv);
-    return input.color;
+    return input.color * matBaseColor;
 }

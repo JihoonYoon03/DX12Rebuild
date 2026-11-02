@@ -22,7 +22,7 @@ CGameFramework::CGameFramework()
 	tex1 = std::make_unique<CTexture>();
 	tex2 = std::make_unique<CTexture>();
 
-	m_upShader = std::make_unique<CShader>();
+	m_upShader = std::make_shared<CShader>();
 	m_upMesh = std::make_unique<CMesh>();
 	m_upModel = std::make_unique<CModel>();
 
@@ -307,7 +307,7 @@ HRESULT CGameFramework::CreateRootSignature()
 	descRange.RegisterSpace = 0;
 	descRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-	D3D12_ROOT_PARAMETER rootParams[4];
+	D3D12_ROOT_PARAMETER rootParams[3];
 
 	//rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
 	//rootParams[0].Descriptor.ShaderRegister = 0;
@@ -324,6 +324,12 @@ HRESULT CGameFramework::CreateRootSignature()
 	rootParams[1].DescriptorTable.NumDescriptorRanges = 1;
 	rootParams[1].DescriptorTable.pDescriptorRanges = &descRange;
 	rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+	rootParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParams[2].Constants.ShaderRegister = 1;
+	rootParams[2].Constants.RegisterSpace = 0;
+	rootParams[2].Constants.Num32BitValues = 4;
+	rootParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
 	D3D12_STATIC_SAMPLER_DESC samplerDesc;
 	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -342,7 +348,7 @@ HRESULT CGameFramework::CreateRootSignature()
 
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc;
 	::ZeroMemory(&rootSigDesc, sizeof(D3D12_ROOT_SIGNATURE_DESC));
-	rootSigDesc.NumParameters = 2;
+	rootSigDesc.NumParameters = 3;
 	rootSigDesc.pParameters = rootParams;
 	rootSigDesc.NumStaticSamplers = 1;
 	rootSigDesc.pStaticSamplers = &samplerDesc;
@@ -383,7 +389,7 @@ HRESULT CGameFramework::BuildObjects()
 	hr = tex2->CreateTexture(*m_SRVDescHeapAllocator, m_cpDevice, m_cpCommandList, L"../Resources/SkydomeTex.dds");
 	if (FAILED(hr)) return hr;
 
-	if (!m_upModel->LoadModelData(m_cpDevice, m_cpCommandList, "../Resources/AbramsTank.txt"))
+	if (!m_upModel->LoadModelData(m_cpDevice, m_cpCommandList, "../Resources/AbramsTank.txt", m_upShader))
 	{
 		return E_FAIL;
 	}

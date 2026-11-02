@@ -27,12 +27,13 @@ void CMesh::RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	cpCommandList->DrawIndexedInstanced(m_nIndices, 1, 0, 0, 0);
 }
 
-void CMesh::RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const std::vector<SubMesh>& subMeshes)
+void CMesh::RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const FrameData& frame)
 {
 	cpCommandList->IASetPrimitiveTopology(m_topology);
 	cpCommandList->IASetVertexBuffers(0, 1, &m_VertexBufferView);
 	cpCommandList->IASetIndexBuffer(&m_IndexBufferView);
-	for (const SubMesh& subMesh : subMeshes) {
+	for (const SubMeshData& subMesh : frame.subMeshes) {
+		frame.m_vCMaterials[subMesh.materialSlot]->BindMaterial(cpCommandList);
 		cpCommandList->DrawIndexedInstanced(subMesh.indexAmount, 1, subMesh.startIndex, 0, 0);
 	}
 }
@@ -187,7 +188,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 
 	{ "<SubMesh>:",
 	[](std::istringstream& iss, FrameData& frame) {
-		SubMesh sMesh;
+		SubMeshData sMesh;
 		if (iss >> sMesh.materialSlot >> sMesh.indexAmount)
 		{
 			if (frame.subMeshes.empty())
@@ -221,13 +222,14 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	//Material 加己 颇教 包访
 	{ "<Material>:",
 	[](std::istringstream& iss, FrameData& frame) {
+		frame.m_vCMaterials.push_back(std::make_shared<CMaterial>());
 		frame.materials.push_back({});
 		return false;
 	}},
 
 	{ "<AlbedoColor>:",
 	[](std::istringstream& iss, FrameData& frame) {
-		Material& mat = frame.materials.back();
+		MaterialData& mat = frame.materials.back();
 		if (iss >> mat.albedoColor.x >> mat.albedoColor.y >> mat.albedoColor.z >> mat.albedoColor.w)
 			return false;
 		else
@@ -236,7 +238,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 
 	{ "<EmissiveColor>:",
 	[](std::istringstream& iss, FrameData& frame) {
-		Material& mat = frame.materials.back();
+		MaterialData& mat = frame.materials.back();
 		if (iss >> mat.emissiveColor.x >> mat.emissiveColor.y >> mat.emissiveColor.z >> mat.emissiveColor.w)
 			return false;
 		else
@@ -245,7 +247,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 
 	{ "<Glossiness>:",
 	[](std::istringstream& iss, FrameData& frame) {
-		Material& mat = frame.materials.back();
+		MaterialData& mat = frame.materials.back();
 		if (iss >> mat.glossiness)
 			return false;
 		else
@@ -254,7 +256,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 
 	{ "<Metallic>:",
 	[](std::istringstream& iss, FrameData& frame) {
-		Material& mat = frame.materials.back();
+		MaterialData& mat = frame.materials.back();
 		if (iss >> mat.metallic)
 			return false;
 		else
@@ -263,7 +265,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 
 	{ "<SpecularHighlight>:",
 	[](std::istringstream& iss, FrameData& frame) {
-		Material& mat = frame.materials.back();
+		MaterialData& mat = frame.materials.back();
 		if (iss >> mat.SpecularHighlight)
 			return false;
 		else
@@ -272,7 +274,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 
 	{ "<GlossyReflection>:",
 	[](std::istringstream& iss, FrameData& frame) {
-		Material& mat = frame.materials.back();
+		MaterialData& mat = frame.materials.back();
 		if (iss >> mat.GlossyReflection)
 			return false;
 		else
@@ -293,6 +295,7 @@ bool CModel::LoadModelData(
 	const ComPtr<ID3D12Device>& cpDevice,
 	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
 	std::string filePath,
+	std::shared_ptr<CShader>& shader,
 	std::string* debug
 )
 {
@@ -316,6 +319,11 @@ bool CModel::LoadModelData(
 		m_modelData = model;
 		for (auto& frame : m_modelData.frames)
 		{
+			for (int i = 0; i < frame.m_vCMaterials.size(); ++i)
+			{
+				frame.m_vCMaterials[i]->SetMaterialData(frame.materials[i]);
+				frame.m_vCMaterials[i]->SetShader(shader);
+			}
 			//后 unique 器牢磐 按眉甫 父店
 			m_vCMeshes.push_back({});
 			if (frame.meshData.has_value() &&
@@ -472,6 +480,6 @@ void CModel::RenderModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 		XMFLOAT4X4 world = GetWorldMatrix(i);
 		world = Matrix4x4::Transpose(world);
 		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
-		m_vCMeshes[i]->RenderMesh(cpCommandList, m_modelData.frames[i].subMeshes);
+		m_vCMeshes[i]->RenderMesh(cpCommandList, m_modelData.frames[i]);
 	}
 }

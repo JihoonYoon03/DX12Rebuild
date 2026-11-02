@@ -41,7 +41,7 @@ HRESULT CShader::CompileShader()
 	return S_OK;
 }
 
-HRESULT CShader::CreateShader(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12RootSignature>& cpRootSignature)
+HRESULT CShader::CreateShader(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12RootSignature>& cpRootSignature)
 {
 	//=====================================================================
 	//PSO Creation
@@ -140,7 +140,7 @@ HRESULT CShader::CreateShader(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12RootS
 	return S_OK;
 }
 
-void CShader::SetPipelineState(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+void CShader::SetPipelineState(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	cpCommandList->SetPipelineState(m_cpPipelineState.Get());
 }
