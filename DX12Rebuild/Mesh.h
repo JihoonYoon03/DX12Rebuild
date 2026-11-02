@@ -41,7 +41,7 @@ struct FrameData
 {
 	int										index;
 	std::string								name;
-	
+
 	//optional로 빈 상태 지정. 매쉬가 없는 경우 등
 	std::optional<unsigned int>				parent = std::nullopt;
 
@@ -49,21 +49,9 @@ struct FrameData
 	uint32_t								baseVertex;
 
 	std::vector<SubMeshData>				subMeshes;
-	std::vector<MaterialData>					materialDatas;
+	std::vector<MaterialData>				materialDatas;
 
 	XMFLOAT4X4								mtxModel;
-};
-
-struct ModelData
-{
-	std::vector<FrameData>		frames;
-	MeshData<VertexTexcoord>	meshData;
-};
-
-//파일 읽기 전용
-struct FrameDataReader : FrameData
-{
-	std::optional<MeshData<VertexTexcoord>>	meshData = std::nullopt;
 };
 
 class CMesh {
@@ -154,6 +142,13 @@ private:
 
 class CModel
 {
+private:
+	struct ModelData
+	{
+		std::vector<FrameData>					frames;
+		std::vector<MeshData<VertexTexcoord>>	meshData;
+	};
+
 public:
 	CModel();
 	~CModel();
@@ -176,13 +171,13 @@ public:
 
 	XMFLOAT4X4 GetWorldMatrix(unsigned int index);
 
-	const std::vector<FrameData>& getData() { return m_frameData; }
+	const std::vector<FrameData>& getData() { return m_vFrameData; }
 
 	void RenderModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 
 private:
-	std::vector<FrameData>					m_frameData;
-	std::unique_ptr<CMesh>					m_spMesh;
+	std::vector<FrameData>					m_vFrameData;
+	std::unique_ptr<CMesh>					m_upMesh;
 	std::shared_ptr<CMaterial>				m_spMaterial;
 
 	//아직 미사용
