@@ -24,9 +24,9 @@ CGameFramework::CGameFramework()
 
 	m_spShader = std::make_shared<CShader>();
 	m_upMesh = std::make_unique<CMesh>();
-	m_upModel = std::make_unique<CModel>();
-
-	XMStoreFloat4x4(&mtxTest, XMMatrixInverse(nullptr, XMMatrixIdentity()));
+	m_spModel = std::make_shared<CModel>();
+	m_upObject1 = std::make_unique<CGameObject>();
+	m_upObject2 = std::make_unique<CGameObject>();
 
 	m_wsTitle = L"DX12 Base Framework (";
 }
@@ -390,12 +390,16 @@ HRESULT CGameFramework::BuildObjects()
 	if (FAILED(hr)) return hr;
 
 	std::shared_ptr<CMaterial> material = std::make_shared<CMaterial>(m_spShader);
-	if (!m_upModel->LoadModelData(m_cpDevice, m_cpCommandList, "../Resources/AbramsTank.txt", material))
+	if (!m_spModel->LoadModelData(m_cpDevice, m_cpCommandList, "../Resources/AbramsTank.txt", material))
 	{
 		return E_FAIL;
 	}
 
-	XMFLOAT4X4 test = m_upModel->GetWorldMatrix(1);
+	m_upObject1->SetModel(m_spModel);
+	m_upObject2->SetModel(m_spModel);
+
+	m_upObject1->SetRotation(0, XMConvertToRadians(90), 0);
+	m_upObject2->SetPosition(2, 0, 2);
 
 	//행렬 버퍼 생성
 	hr = CreateBufferResource(
@@ -446,7 +450,7 @@ void CGameFramework::ReleaseUploadBuffers()
 	tex1->ReleaseUploadBuffer();
 	tex2->ReleaseUploadBuffer();
 	m_upMesh->ReleaseUploadBuffer();
-	m_upModel->ReleaseUploadBuffer();
+	m_spModel->ReleaseUploadBuffer();
 }
 
 void CGameFramework::ReleaseObjects()
@@ -454,7 +458,9 @@ void CGameFramework::ReleaseObjects()
 	m_cpMtxBuffer->Unmap(0, nullptr);
 	m_spShader.reset();
 	m_upMesh.reset();
-	m_upModel.reset();
+	m_spModel.reset();
+	m_upObject1.reset();
+	m_upObject2.reset();
 }
 
 void CGameFramework::ProcessInput()
@@ -463,11 +469,6 @@ void CGameFramework::ProcessInput()
 
 void CGameFramework::AnimateObjects()
 {
-	//rotation += 0.5f * m_timer.GetTimeElapsed();
-	if (rotation >= 360) rotation = 0;
-
-	XMStoreFloat4x4(&mtxTest, XMMatrixTranspose(XMMatrixRotationRollPitchYaw(0.0f, 0.0f, rotation)));
-	::memcpy(m_mappedMtxBuffer, &mtxTest, sizeof(XMMATRIX));
 }
 
 void CGameFramework::FrameAdvance()
@@ -526,7 +527,9 @@ void CGameFramework::FrameAdvance()
 	proj = Matrix4x4::Transpose(proj);
 	m_cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &proj, 32);
 
-	m_upModel->RenderModel(m_cpCommandList);
+	//m_spModel->DrawModel(m_cpCommandList);
+	m_upObject1->DrawObject(m_cpCommandList);
+	m_upObject2->DrawObject(m_cpCommandList);
 
 	//Player Render Here
 	//

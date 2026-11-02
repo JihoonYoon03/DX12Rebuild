@@ -7,6 +7,7 @@ class CShader;
 class CSRVDescHeapAllocator;
 class CTexture;
 class CModel;
+class CGameObject;
 
 class CGameFramework
 {
@@ -116,9 +117,8 @@ private:
 	XMFLOAT4X4	mtx44World;
 	ComPtr<ID3D12Resource>				m_cpMtxBuffer;
 	UINT8*								m_mappedMtxBuffer;
-	XMFLOAT4X4 mtxTest;
-	float rotation = 0.0f;
-	std::unique_ptr<CModel>				m_upModel;
-
+	std::shared_ptr<CModel>				m_spModel;
+	std::unique_ptr<CGameObject>		m_upObject1;
+	std::unique_ptr<CGameObject>		m_upObject2;
 };
 

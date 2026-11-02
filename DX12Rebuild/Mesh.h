@@ -54,6 +54,27 @@ struct FrameData
 	XMFLOAT4X4								mtxModel;
 };
 
+struct Transform
+{
+	XMFLOAT3 scale { 1, 1, 1 };
+	XMFLOAT3 rotation;
+	XMFLOAT3 position;
+
+	inline XMFLOAT4X4 getMatrix() {
+		XMMATRIX objWorldXM = 
+			XMMatrixMultiply(
+				XMMatrixMultiply(
+					XMMatrixScaling(scale.x, scale.y, scale.z),
+					XMMatrixRotationRollPitchYaw(rotation.x, rotation.y, rotation.z)),
+					XMMatrixTranslation(position.x, position.y, position.z));
+
+		XMFLOAT4X4 objWorld;
+		XMStoreFloat4x4(&objWorld, objWorldXM);
+
+		return objWorld;
+	}
+};
+
 class CMesh {
 public:
 	CMesh();
@@ -123,8 +144,8 @@ public:
 	//업로드 버퍼 반환
 	void ReleaseUploadBuffer();
 
-	void RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
-	void RenderMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const uint32_t baseVertex, const SubMeshData& subMesh);
+	void DrawMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	void DrawMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const uint32_t baseVertex, const SubMeshData& subMesh);
 
 private:
 	ComPtr<ID3D12Resource>				m_cpVertexUploadBuffer;
@@ -173,7 +194,7 @@ public:
 
 	const std::vector<FrameData>& getData() { return m_vFrameData; }
 
-	void RenderModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	virtual void DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, XMFLOAT4X4 objWorld = Matrix4x4::Identity());
 
 private:
 	std::vector<FrameData>					m_vFrameData;
@@ -183,4 +204,26 @@ private:
 	//아직 미사용
 	//ComPtr<ID3D12Resource>				m_cpFrameMatrixBuffer;
 	//UINT8*								m_MappedFrameMatrixBuffer;
+};
+
+class CGameObject
+{
+public:
+	CGameObject();
+	virtual ~CGameObject();
+
+	void SetModel(std::shared_ptr<CModel>& model) { m_spModel = model; }
+
+	void SetScale(const float x, const float y, const float z);
+	void SetScale(const XMFLOAT3& scale);
+	void SetRotation(const float x, const float y, const float z);
+	void SetRotation(const XMFLOAT3& rotation);
+	void SetPosition(const float x, const float y, const float z);
+	void SetPosition(const XMFLOAT3& position);
+
+	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+
+private:
+	std::shared_ptr<CModel>		m_spModel;
+	Transform					m_Transform;
 };
