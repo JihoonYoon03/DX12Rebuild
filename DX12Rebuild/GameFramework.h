@@ -110,7 +110,7 @@ private:
 	//Debug
 
 	//Test
-	std::shared_ptr<CShader>			m_upShader;
+	std::shared_ptr<CShader>			m_spShader;
 	std::unique_ptr<CMesh>				m_upMesh;
 	
 	XMFLOAT4X4	mtx44World;

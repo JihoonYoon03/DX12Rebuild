@@ -15,11 +15,13 @@ struct MaterialData
 class CMaterial
 {
 public:
-	CMaterial(const std::shared_ptr<CShader>& spShader = nullptr, std::optional<MaterialData> mData = std::nullopt);
+	CMaterial(const std::shared_ptr<CShader>& spShader = nullptr);
 	~CMaterial();
 
 	void SetShader(const std::shared_ptr<CShader>& spShader) { m_spShader = spShader; }
-	void SetMaterialData(const MaterialData& mData) { m_matData = mData; }
+
+	void SetDefaultMaterialData(const MaterialData& mData);
+	void SetMaterialData(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const MaterialData& mData);
 
 	void BindMaterial(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 
