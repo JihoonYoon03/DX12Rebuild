@@ -1,6 +1,8 @@
 #include "pch.h"
 #include "Scene.h"
 #include "GameObject.h"
+#include "Mesh.h"
+#include "Shader.h"
 
 CScene::CScene()
 {
@@ -14,6 +16,11 @@ CScene::CScene()
 
 CScene::~CScene()
 {}
+
+HRESULT CScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	return S_OK;
+}
 
 void CScene::AddObject(std::unique_ptr<CGameObject>& upObject)
 {
@@ -95,3 +102,78 @@ void CScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	}
 }
 
+
+//===============================================================================================
+//===============================================================================================
+
+CGameScene::CGameScene()
+	: CScene()
+{
+}
+
+HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	HRESULT hr;
+
+	m_spShader = std::make_shared<CShader>();
+	m_spModel = std::make_shared<CModel>();
+	std::shared_ptr<CMaterial> material = std::make_shared<CMaterial>(m_spShader);
+	if (!m_spModel->LoadModelData(cpDevice, cpCommandList, "../Resources/AbramsTank.txt", material))
+	{
+		return E_FAIL;
+	}
+
+	std::unique_ptr<CGameObject> upObj[2];
+	upObj[0] = std::make_unique<CGameObject>();
+	upObj[1] = std::make_unique<CGameObject>();
+	upObj[0]->SetModel(m_spModel);
+	upObj[1]->SetModel(m_spModel);
+
+	upObj[0]->SetRotation(0, XMConvertToRadians(90), 0);
+	upObj[1]->SetPosition(2, 0, 2);
+	
+	AddObjects(upObj, 2);
+
+
+	MeshData<VertexTexcoord> triangle = {
+		{
+			{ XMFLOAT3(-0.5f, 0.5f, 0.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f) },
+			{ XMFLOAT3(0.5f, 0.5f, 0.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f) },
+			{ XMFLOAT3(0.5f, -0.5f, 0.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f) },
+			{ XMFLOAT3(-0.5f, -0.5f, 0.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 1.0f) }
+		},
+
+		{
+			0, 1, 2,
+			0, 2, 3
+		}
+	};
+
+	m_upMesh = std::make_unique<CMesh>();
+	hr = m_upMesh->CreateBuffer<VertexTexcoord>(cpDevice, cpCommandList, triangle);
+	if (FAILED(hr))
+	{
+		OutputDebugString(L"CGameScene::BuildObjects() Failed to Create Buffer\n");
+		return hr;
+	}
+
+	return S_OK;
+}
+
+void CGameScene::ReleaseUploadBuffers()
+{
+	m_upMesh->ReleaseUploadBuffer();
+	m_spModel->ReleaseUploadBuffer();
+}
+
+void CGameScene::ReleaseObjects()
+{
+	m_upMesh.reset();
+	m_spModel.reset();
+	m_spShader.reset();
+}
+
+void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	m_spShader->SetPipelineState(cpCommandList);
+}

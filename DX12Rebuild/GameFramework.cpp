@@ -22,13 +22,10 @@ CGameFramework::CGameFramework()
 
 	m_SRVDescHeapAllocator = std::make_unique<CSRVDescHeapAllocator>();
 	
-	m_upCurrentScene = std::make_unique<CScene>();
 	tex1 = std::make_unique<CTexture>();
 	tex2 = std::make_unique<CTexture>();
-	m_upMesh = std::make_unique<CMesh>();
 
-	m_spShader = std::make_shared<CShader>();
-	m_spModel = std::make_shared<CModel>();
+	m_spGameScene = std::make_shared<CGameScene>();
 
 	m_wsTitle = L"DX12 Base Framework (";
 }
@@ -391,22 +388,8 @@ HRESULT CGameFramework::BuildObjects()
 	hr = tex2->CreateTexture(*m_SRVDescHeapAllocator, m_cpDevice, m_cpCommandList, L"../Resources/SkydomeTex.dds");
 	if (FAILED(hr)) return hr;
 
-	std::shared_ptr<CMaterial> material = std::make_shared<CMaterial>(m_spShader);
-	if (!m_spModel->LoadModelData(m_cpDevice, m_cpCommandList, "../Resources/AbramsTank.txt", material))
-	{
-		return E_FAIL;
-	}
 
-	std::unique_ptr<CGameObject> upObj[2];
-	upObj[0] = std::make_unique<CGameObject>();
-	upObj[1] = std::make_unique<CGameObject>();
-	upObj[0]->SetModel(m_spModel);
-	upObj[1]->SetModel(m_spModel);
-
-	upObj[0]->SetRotation(0, XMConvertToRadians(90), 0);
-	upObj[1]->SetPosition(2, 0, 2);
-
-	m_upCurrentScene->AddObjects(upObj, 2);
+	m_spGameScene->BuildObjects(m_cpDevice, m_cpCommandList);
 
 	//행렬 버퍼 생성
 	hr = CreateBufferResource(
@@ -422,23 +405,6 @@ HRESULT CGameFramework::BuildObjects()
 	hr = m_cpMtxBuffer->Map(0, &range, (void**)&m_mappedMtxBuffer);
 	if (FAILED(hr)) return hr;
 
-	MeshData<VertexTexcoord> triangle = {
-		{
-			{ XMFLOAT3(-0.5f, 0.5f, 0.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f) },
-			{ XMFLOAT3(0.5f, 0.5f, 0.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f) },
-			{ XMFLOAT3(0.5f, -0.5f, 0.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f) },
-			{ XMFLOAT3(-0.5f, -0.5f, 0.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 1.0f) }
-		},
-
-		{
-			0, 1, 2,
-			0, 2, 3
-		}
-	};
-
-	hr = m_upMesh->CreateBuffer<VertexTexcoord>(m_cpDevice, m_cpCommandList, triangle);
-	if (FAILED(hr)) return hr;
-
 	hr = m_cpCommandList->Close();
 	if (FAILED(hr)) return hr;
 	ComPtr<ID3D12CommandList> cpCommandList[] = { m_cpCommandList.Get() };
@@ -449,6 +415,8 @@ HRESULT CGameFramework::BuildObjects()
 
 	ReleaseUploadBuffers();
 
+	m_upCurrentScene = m_spGameScene;
+
 	return S_OK;
 }
 
@@ -457,17 +425,12 @@ void CGameFramework::ReleaseUploadBuffers()
 	//m_upCurrentScene->ReleaseObjectsUploadBuffer();
 	tex1->ReleaseUploadBuffer();
 	tex2->ReleaseUploadBuffer();
-	m_upMesh->ReleaseUploadBuffer();
-	m_spModel->ReleaseUploadBuffer();
 }
 
 void CGameFramework::ReleaseObjects()
 {
 	m_cpMtxBuffer->Unmap(0, nullptr);
 	m_upCurrentScene.reset();
-	m_spShader.reset();
-	m_upMesh.reset();
-	m_spModel.reset();
 }
 
 void CGameFramework::ProcessInput()
@@ -476,7 +439,7 @@ void CGameFramework::ProcessInput()
 
 	DWORD dwDirection = 0;
 
-	m_upCurrentScene->ProcessInput(pKeyBuffer, m_timer.GetTimeElapsed());
+	m_upCurrentScene.lock()->ProcessInput(pKeyBuffer, m_timer.GetTimeElapsed());
 }
 
 void CGameFramework::AnimateObjects()
@@ -499,8 +462,6 @@ void CGameFramework::FrameAdvance()
 	if (FAILED(hr)) { OutputDebugString(L"CommandListResetFailed\n"); return; }
 
 	m_cpCommandList->SetGraphicsRootSignature(m_cpRootSignature.Get());
-	
-	m_spShader->SetPipelineState(m_cpCommandList);
 
 	m_cpCommandList->RSSetViewports(1, &m_viewport);
 	m_cpCommandList->RSSetScissorRects(1, &m_scissorRect);
@@ -529,7 +490,7 @@ void CGameFramework::FrameAdvance()
 	//m_upMesh->RenderMesh(m_cpCommandList);
 
 	//m_spModel->DrawModel(m_cpCommandList);
-	m_upCurrentScene->DrawScene(m_cpCommandList);
+	m_upCurrentScene.lock()->DrawScene(m_cpCommandList);
 
 	//Player Render Here
 	//
@@ -627,7 +588,7 @@ HRESULT CGameFramework::ResizeBackBuffers(WPARAM wParam)
 		hr = CreateDSV();
 		if (FAILED(hr)) { OutputDebugString(L"ResizeBackBuffers(): CreateDSV() Failed\n"); return hr; }
 
-		m_upCurrentScene->WindowResized(m_nClientW, m_nClientH);
+		m_upCurrentScene.lock()->WindowResized(m_nClientW, m_nClientH);
 
 		m_timer.Reset();
 

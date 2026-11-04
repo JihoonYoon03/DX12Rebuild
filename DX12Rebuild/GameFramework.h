@@ -102,7 +102,8 @@ private:
 
 	//Scene
 	ComPtr<ID3D12RootSignature>			m_cpRootSignature;
-	std::unique_ptr<CScene>				m_upCurrentScene;
+	std::weak_ptr<CScene>				m_upCurrentScene;
+	std::shared_ptr<CGameScene>			m_spGameScene;
 
 	//Texture
 	std::unique_ptr<CSRVDescHeapAllocator>	m_SRVDescHeapAllocator;
@@ -112,9 +113,6 @@ private:
 	//Debug
 
 	//Test
-	std::shared_ptr<CShader>			m_spShader;
-	std::unique_ptr<CMesh>				m_upMesh;
-	std::shared_ptr<CModel>				m_spModel;
 	
 	XMFLOAT4X4	mtx44World;
 	ComPtr<ID3D12Resource>				m_cpMtxBuffer;
