@@ -114,10 +114,10 @@ private:
 	//Test
 	std::shared_ptr<CShader>			m_spShader;
 	std::unique_ptr<CMesh>				m_upMesh;
+	std::shared_ptr<CModel>				m_spModel;
 	
 	XMFLOAT4X4	mtx44World;
 	ComPtr<ID3D12Resource>				m_cpMtxBuffer;
 	UINT8*								m_mappedMtxBuffer;
-	std::shared_ptr<CModel>				m_spModel;
 };
 

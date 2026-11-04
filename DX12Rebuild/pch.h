@@ -163,6 +163,18 @@ namespace Vector3
 	{
 		return(TransformCoord(xmf3Vector, XMLoadFloat4x4(&xmmtx4x4Matrix)));
 	}
+	inline XMFLOAT3 Multiply(float fScalar, XMFLOAT3& xmf3Vector)
+	{
+		XMFLOAT3 xmf3Result;
+		XMStoreFloat3(&xmf3Result, fScalar * XMLoadFloat3(&xmf3Vector));
+		return(xmf3Result);
+	}
+	inline XMFLOAT3 DirectionVector(XMFLOAT3& xmf3Dest, XMFLOAT3& xmf3From)
+	{
+		XMFLOAT3 xmf3Result = Subtract(xmf3Dest, xmf3From);
+		xmf3Result = Normalize(xmf3Result);
+		return xmf3Result;
+	}
 }
 //4차원 벡터의 연산
 namespace Vector4

@@ -472,6 +472,11 @@ void CGameFramework::ReleaseObjects()
 
 void CGameFramework::ProcessInput()
 {
+	static UCHAR pKeyBuffer[256];
+
+	DWORD dwDirection = 0;
+
+	m_upCurrentScene->ProcessInput(pKeyBuffer, m_timer.GetTimeElapsed());
 }
 
 void CGameFramework::AnimateObjects()
@@ -522,17 +527,6 @@ void CGameFramework::FrameAdvance()
 	m_cpCommandList->SetGraphicsRootDescriptorTable(1, tex2->getGPUDescHandle());
 	//m_cpCommandList->SetGraphicsRootConstantBufferView(0, m_cpMtxBuffer->GetGPUVirtualAddress());
 	//m_upMesh->RenderMesh(m_cpCommandList);
-
-	XMFLOAT3 eye{ 2.5, 1.0, -2.5 };
-	XMFLOAT3 look{ 0, 0, 0 };
-	XMFLOAT3 up{ 0, 1, 0 };
-	XMFLOAT4X4 view = Matrix4x4::LookAtLH(eye, look, up);
-	view = Matrix4x4::Transpose(view);
-	m_cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
-
-	XMFLOAT4X4 proj = Matrix4x4::PerspectiveFovLH(XMConvertToRadians(90), config::FRAME_BUFFER_W / config::FRAME_BUFFER_H, 0.01f, 100.0f);
-	proj = Matrix4x4::Transpose(proj);
-	m_cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &proj, 32);
 
 	//m_spModel->DrawModel(m_cpCommandList);
 	m_upCurrentScene->DrawScene(m_cpCommandList);
@@ -632,6 +626,8 @@ HRESULT CGameFramework::ResizeBackBuffers(WPARAM wParam)
 
 		hr = CreateDSV();
 		if (FAILED(hr)) { OutputDebugString(L"ResizeBackBuffers(): CreateDSV() Failed\n"); return hr; }
+
+		m_upCurrentScene->WindowResized(m_nClientW, m_nClientH);
 
 		m_timer.Reset();
 
