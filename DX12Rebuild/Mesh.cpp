@@ -336,8 +336,8 @@ bool CModel::LoadModelData(
 
 		std::unique_ptr<CMesh> upMesh = std::make_unique<CMesh>();
 		if (FAILED(upMesh->CreateBuffer(cpDevice, cpCommandList, combinedMesh))) return false;
-		m_spMaterial = material;
-		m_upMesh = std::move(upMesh);
+		m_spMaterial = std::move(material);
+		m_upLandscape = std::move(upMesh);
 		m_vFrameData = std::move(model.frames);
 
 		//행렬 업로드용 버퍼 생성
@@ -431,7 +431,7 @@ bool CModel::ReadFrameData(
 
 void CModel::ReleaseUploadBuffer()
 {
-	if (m_upMesh) m_upMesh->ReleaseUploadBuffer();
+	if (m_upLandscape) m_upLandscape->ReleaseUploadBuffer();
 }
 
 XMFLOAT4X4 CModel::GetWorldMatrix(unsigned int index)
@@ -470,7 +470,7 @@ XMFLOAT4X4 CModel::GetWorldMatrix(unsigned int index)
 
 void CModel::DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const XMFLOAT4X4 objWorld)
 {
-	if (!m_upMesh) return;
+	if (!m_upLandscape) return;
 
 	//비효율적 렌더링 구조 개선 필요
 	m_spMaterial->BindMaterial(cpCommandList);
@@ -490,7 +490,7 @@ void CModel::DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, c
 			else
 				materialData.albedoColor = XMFLOAT4(1, 1, 1, 1);
 			m_spMaterial->SetMaterialData(cpCommandList, materialData);
-			m_upMesh->DrawMesh(cpCommandList, m_vFrameData[i].baseVertex, subMesh);
+			m_upLandscape->DrawMesh(cpCommandList, m_vFrameData[i].baseVertex, subMesh);
 		}
 	}
 }

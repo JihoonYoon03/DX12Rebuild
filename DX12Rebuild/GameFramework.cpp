@@ -47,7 +47,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 	if (FAILED(CreateDSV()))				return false;
 	if (FAILED(CreateRootSignature()))		return false;
 
-	if (FAILED(m_spShader->CreateShader(m_cpDevice, m_cpRootSignature)))	return false;
+	if (FAILED(m_spGameScene->InitScene(m_cpDevice, m_cpRootSignature)))	return false;
 
 	if (FAILED(m_SRVDescHeapAllocator->CreateSRVDescHeap(m_cpDevice)))		return false;
 
@@ -388,7 +388,6 @@ HRESULT CGameFramework::BuildObjects()
 	hr = tex2->CreateTexture(*m_SRVDescHeapAllocator, m_cpDevice, m_cpCommandList, L"../Resources/SkydomeTex.dds");
 	if (FAILED(hr)) return hr;
 
-
 	m_spGameScene->BuildObjects(m_cpDevice, m_cpCommandList);
 
 	//행렬 버퍼 생성
@@ -485,11 +484,7 @@ void CGameFramework::FrameAdvance()
 	m_cpCommandList->SetDescriptorHeaps(1, m_SRVDescHeapAllocator->GetDescriptorHeap());
 
 	//Scene Render Here
-	m_cpCommandList->SetGraphicsRootDescriptorTable(1, tex2->getGPUDescHandle());
-	//m_cpCommandList->SetGraphicsRootConstantBufferView(0, m_cpMtxBuffer->GetGPUVirtualAddress());
-	//m_upMesh->RenderMesh(m_cpCommandList);
-
-	//m_spModel->DrawModel(m_cpCommandList);
+	m_cpCommandList->SetGraphicsRootDescriptorTable(1, tex1->getGPUDescHandle());
 	m_upCurrentScene.lock()->DrawScene(m_cpCommandList);
 
 	//Player Render Here

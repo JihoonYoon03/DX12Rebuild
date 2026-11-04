@@ -177,7 +177,7 @@ public:
 
 private:
 	std::vector<FrameData>					m_vFrameData;
-	std::unique_ptr<CMesh>					m_upMesh;
+	std::unique_ptr<CMesh>					m_upLandscape;
 	std::shared_ptr<CMaterial>				m_spMaterial;
 
 	//아직 미사용

@@ -8,6 +8,7 @@ class CSRVDescHeapAllocator;
 class CTexture;
 class CModel;
 class CScene;
+class CGameScene;
 
 class CGameFramework
 {

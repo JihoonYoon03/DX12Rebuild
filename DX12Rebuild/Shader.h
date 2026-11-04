@@ -20,3 +20,7 @@ protected:
 
 };
 
+class CTextureShader : public CShader
+{
+	HRESULT CompileShader();
+};

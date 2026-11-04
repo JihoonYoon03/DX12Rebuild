@@ -23,11 +23,11 @@ struct Transform
 	}
 };
 
-class CGameObject
+class CModelObject
 {
 public:
-	CGameObject();
-	virtual ~CGameObject();
+	CModelObject();
+	virtual ~CModelObject();
 
 	void SetModel(std::shared_ptr<CModel>& model) { m_spModel = model; }
 

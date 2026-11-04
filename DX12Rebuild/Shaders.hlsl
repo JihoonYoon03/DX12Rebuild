@@ -42,3 +42,8 @@ float4 PSMain(VS_OUTPUT input) : SV_Target
     //return tex1.Sample(sample, input.uv);
     return input.color * matBaseColor;
 }
+
+float4 PSTexMain(VS_OUTPUT input) : SV_Target
+{
+    return tex1.Sample(sample, input.uv);
+}

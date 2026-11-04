@@ -43,7 +43,6 @@ HRESULT CShader::CompileShader()
 
 HRESULT CShader::CreateShader(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12RootSignature>& cpRootSignature)
 {
-	//=====================================================================
 	//PSO Creation
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc;
 	::ZeroMemory(&psoDesc, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
@@ -143,4 +142,20 @@ HRESULT CShader::CreateShader(const ComPtr<ID3D12Device>& cpDevice, const ComPtr
 void CShader::SetPipelineState(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	cpCommandList->SetPipelineState(m_cpPipelineState.Get());
+}
+
+
+
+//======================================================================================
+//======================================================================================
+
+HRESULT CTextureShader::CompileShader()
+{
+	HRESULT hr;
+	hr = CompileShaderFromFile(m_cpVS, L"Shaders.hlsl", "VSMain", "vs_5_0");
+	if (FAILED(hr)) return hr;
+	hr = CompileShaderFromFile(m_cpPS, L"Shaders.hlsl", "PSTexMain", "ps_5_0");
+	if (FAILED(hr)) return hr;
+
+	return S_OK;
 }
