@@ -3,6 +3,8 @@
 #include "Mesh.h"
 #include "Shader.h"
 #include "Texture.h"
+#include "Scene.h"
+#include "GameObject.h"
 
 CGameFramework::CGameFramework()
 {
@@ -19,14 +21,14 @@ CGameFramework::CGameFramework()
 	m_ptOldCursorPos = { 0, 0 };
 
 	m_SRVDescHeapAllocator = std::make_unique<CSRVDescHeapAllocator>();
+	
+	m_upCurrentScene = std::make_unique<CScene>();
 	tex1 = std::make_unique<CTexture>();
 	tex2 = std::make_unique<CTexture>();
+	m_upMesh = std::make_unique<CMesh>();
 
 	m_spShader = std::make_shared<CShader>();
-	m_upMesh = std::make_unique<CMesh>();
 	m_spModel = std::make_shared<CModel>();
-	m_upObject1 = std::make_unique<CGameObject>();
-	m_upObject2 = std::make_unique<CGameObject>();
 
 	m_wsTitle = L"DX12 Base Framework (";
 }
@@ -395,11 +397,16 @@ HRESULT CGameFramework::BuildObjects()
 		return E_FAIL;
 	}
 
-	m_upObject1->SetModel(m_spModel);
-	m_upObject2->SetModel(m_spModel);
+	std::unique_ptr<CGameObject> upObj[2];
+	upObj[0] = std::make_unique<CGameObject>();
+	upObj[1] = std::make_unique<CGameObject>();
+	upObj[0]->SetModel(m_spModel);
+	upObj[1]->SetModel(m_spModel);
 
-	m_upObject1->SetRotation(0, XMConvertToRadians(90), 0);
-	m_upObject2->SetPosition(2, 0, 2);
+	upObj[0]->SetRotation(0, XMConvertToRadians(90), 0);
+	upObj[1]->SetPosition(2, 0, 2);
+
+	m_upCurrentScene->AddObjects(upObj, 2);
 
 	//행렬 버퍼 생성
 	hr = CreateBufferResource(
@@ -447,6 +454,7 @@ HRESULT CGameFramework::BuildObjects()
 
 void CGameFramework::ReleaseUploadBuffers()
 {
+	//m_upCurrentScene->ReleaseObjectsUploadBuffer();
 	tex1->ReleaseUploadBuffer();
 	tex2->ReleaseUploadBuffer();
 	m_upMesh->ReleaseUploadBuffer();
@@ -456,11 +464,10 @@ void CGameFramework::ReleaseUploadBuffers()
 void CGameFramework::ReleaseObjects()
 {
 	m_cpMtxBuffer->Unmap(0, nullptr);
+	m_upCurrentScene.reset();
 	m_spShader.reset();
 	m_upMesh.reset();
 	m_spModel.reset();
-	m_upObject1.reset();
-	m_upObject2.reset();
 }
 
 void CGameFramework::ProcessInput()
@@ -528,8 +535,7 @@ void CGameFramework::FrameAdvance()
 	m_cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &proj, 32);
 
 	//m_spModel->DrawModel(m_cpCommandList);
-	m_upObject1->DrawObject(m_cpCommandList);
-	m_upObject2->DrawObject(m_cpCommandList);
+	m_upCurrentScene->DrawScene(m_cpCommandList);
 
 	//Player Render Here
 	//

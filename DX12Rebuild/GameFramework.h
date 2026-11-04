@@ -7,7 +7,7 @@ class CShader;
 class CSRVDescHeapAllocator;
 class CTexture;
 class CModel;
-class CGameObject;
+class CScene;
 
 class CGameFramework
 {
@@ -102,6 +102,7 @@ private:
 
 	//Scene
 	ComPtr<ID3D12RootSignature>			m_cpRootSignature;
+	std::unique_ptr<CScene>				m_upCurrentScene;
 
 	//Texture
 	std::unique_ptr<CSRVDescHeapAllocator>	m_SRVDescHeapAllocator;
@@ -118,7 +119,5 @@ private:
 	ComPtr<ID3D12Resource>				m_cpMtxBuffer;
 	UINT8*								m_mappedMtxBuffer;
 	std::shared_ptr<CModel>				m_spModel;
-	std::unique_ptr<CGameObject>		m_upObject1;
-	std::unique_ptr<CGameObject>		m_upObject2;
 };
 
