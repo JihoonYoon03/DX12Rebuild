@@ -6,6 +6,7 @@ class CMesh;
 class CShader;
 class CTextureShader;
 class CModel;
+class CTerrainObject;
 
 class CScene
 {
@@ -52,5 +53,5 @@ private:
 	std::shared_ptr<CModel>			m_spModel;
 	std::shared_ptr<CTextureShader> m_spTexShader;
 
-	std::unique_ptr<CMesh>			m_upLandscape;
+	std::unique_ptr<CTerrainObject>	m_upTerrainObj;
 };

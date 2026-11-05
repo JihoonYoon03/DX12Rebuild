@@ -131,3 +131,66 @@ void CTexture::ReleaseUploadBuffer()
 	m_cpUploadBuffer.Reset();
 }
 
+//----------------------------------------------
+//
+// HeightMapImage
+// 
+//----------------------------------------------
+CHeightMapImage::CHeightMapImage(LPCTSTR pFileName, int nWidth, int nLength)
+	:
+	m_nWidth(nWidth),
+	m_nLength(nLength)
+{
+	BYTE* pHeightMapPixels = new BYTE[m_nWidth * m_nLength];
+	std::ifstream file{ pFileName, std::ios::binary };
+	if (!file)
+	{
+		OutputDebugString(L"CHeightMapImage::CHeightMapImage() Failed to open file\n");
+		return;
+	}
+
+	file.read(reinterpret_cast<char*>(pHeightMapPixels), m_nWidth * m_nLength);
+	m_pHeightMapPixels = new BYTE[m_nWidth * m_nLength];
+	for (int z = 0; z < m_nLength; ++z)
+	{
+		for (int x = 0; x < m_nWidth; ++x)
+		{
+			//ÇÈ¼¿ ÁÂÇ¥°è(ÁÂ»ó´Ü ¿øÁ¡)¸¦ ÁöÇü ÁÂÇ¥°è·Î º¯Çü(ÁÂÇÏ´Ü ¿øÁ¡)
+			m_pHeightMapPixels[x + ((m_nLength - 1 - z) * m_nWidth)] = pHeightMapPixels[x + (z * m_nWidth)];
+		}
+	}
+
+	if (pHeightMapPixels) delete[] pHeightMapPixels;
+}
+
+CHeightMapImage::~CHeightMapImage()
+{
+	if (m_pHeightMapPixels) delete[] m_pHeightMapPixels;
+}
+
+float CHeightMapImage::GetHeight(float fx, float fz)
+{
+	if (!m_pHeightMapPixels || m_nWidth < 2 || m_nLength < 2)
+		return 0.0f;
+
+	//ÁöÇü ¹üÀ§ ¹þ¾î³²
+	if (fx < 0.0f || fz < 0.0f || fx >= m_nWidth || fz >= m_nLength)
+		return 0.0f;
+
+	int x = (int)fx, z = (int)fz;
+	if (x == m_nWidth - 1) x = m_nWidth - 2;
+	if (z == m_nLength - 1) z = m_nLength - 2;
+
+	float fxPercent = fx - x, fzPercent = fz - z;
+	
+	float fBottomLeft = (float)m_pHeightMapPixels[x + (z * m_nWidth)];
+	float fBottomRight = (float)m_pHeightMapPixels[(x + 1) + (z * m_nWidth)];
+	float fTopLeft = (float)m_pHeightMapPixels[x + ((z + 1) * m_nWidth)];
+	float fTopRight = (float)m_pHeightMapPixels[(x + 1) + ((z + 1) * m_nWidth)];
+
+	float fTopHeight = fTopLeft * (1 - fxPercent) + fTopRight * fxPercent;
+	float fBottomHeight = fBottomLeft * (1 - fxPercent) + fBottomRight * fxPercent;
+	float fHeight = fBottomHeight * (1 - fzPercent) + fTopHeight * fzPercent;
+
+	return fHeight;
+}

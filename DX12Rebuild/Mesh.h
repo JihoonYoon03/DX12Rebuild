@@ -59,6 +59,8 @@ public:
 	CMesh();
 	~CMesh();
 
+	void SetTopology(D3D12_PRIMITIVE_TOPOLOGY type) { m_topology = type; }
+
 	//다양한 정점 타입에 대한 버퍼 생성
 	template<class VERTEXTYPE>
 	HRESULT CreateBuffer(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const MeshData<VERTEXTYPE>& meshData)
@@ -66,8 +68,9 @@ public:
 		std::wstring str = std::to_wstring(meshData.indices.size() % 3);
 
 		OutputDebugStringW(str.c_str());
-		//데이터 범위에 문제가 있는 경우
-		if (meshData.vertices.empty() || meshData.indices.empty() || meshData.indices.size() % 3 != 0)
+		//데이터 범위에 문제가 있는 경우 (TRIANGLELIST 기준)
+		if (m_topology == D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST &&
+			(meshData.vertices.empty() || meshData.indices.empty() || meshData.indices.size() % 3 != 0))
 			return E_INVALIDARG;
 
 		//인덱스 번호가 정점 개수보다 클 경우

@@ -3,6 +3,7 @@
 #include "GameObject.h"
 #include "Mesh.h"
 #include "Shader.h"
+#include "Texture.h"
 
 CScene::CScene()
 {
@@ -27,6 +28,8 @@ HRESULT CScene::InitScene(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12RootSigna
 		OutputDebugString(L"CScene::InitScene() Failed to create Shader\n");
 		return hr;
 	}
+
+	return S_OK;
 }
 
 HRESULT CScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
@@ -145,6 +148,8 @@ HRESULT CGameScene::InitScene(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12RootS
 		OutputDebugString(L"CScene::InitScene() Failed to create Shader\n");
 		return hr;
 	}
+
+	return S_OK;
 }
 
 HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
@@ -169,23 +174,15 @@ HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12Gr
 	
 	AddObjects(upObj, 2);
 
+	m_Camera.SetPerspective(90, config::FRAME_BUFFER_W / config::FRAME_BUFFER_H, 0.01f, 100.0f);
 
-	MeshData<VertexTexcoord> triangle = {
-		{
-			{ XMFLOAT3(-5.0f, -2.0f, 5.0f), XMFLOAT4(1.0f, 0.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 0.0f) },
-			{ XMFLOAT3(5.0f, -2.0f, 5.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(1.0f, 0.0f) },
-			{ XMFLOAT3(5.0f, -2.0f, -5.0f), XMFLOAT4(0.0f, 0.0f, 1.0f, 1.0f), XMFLOAT2(1.0f, 1.0f) },
-			{ XMFLOAT3(-5.0f, -2.0f, -5.0f), XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f), XMFLOAT2(0.0f, 1.0f) }
-		},
+	m_upTerrainObj = std::make_unique<CTerrainObject>();
+	std::shared_ptr<CHeightMapImage> heightmap = std::make_shared<CHeightMapImage>(L"../Resources/Cheongsando.raw", 505, 505);
+	m_upTerrainObj->SetHeightMap(heightmap);
+	hr = m_upTerrainObj->GenerateTerrain(cpDevice, cpCommandList);
+	//스케일에 정점 사이간 실제 배율 몇m인지 체크해서 넣으면 됨. '가 원래 소수점
+	m_upTerrainObj->SetScale(1.578'37f, 0.075'39f, 1.578'37f);
 
-		{
-			0, 1, 2,
-			0, 2, 3
-		}
-	};
-
-	m_upLandscape = std::make_unique<CMesh>();
-	hr = m_upLandscape->CreateBuffer<VertexTexcoord>(cpDevice, cpCommandList, triangle);
 	if (FAILED(hr))
 	{
 		OutputDebugString(L"CGameScene::BuildObjects() Failed to Create Buffer\n");
@@ -197,13 +194,13 @@ HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12Gr
 
 void CGameScene::ReleaseUploadBuffers()
 {
-	m_upLandscape->ReleaseUploadBuffer();
+	m_upTerrainObj->ReleaseUploadBuffer();
 	m_spModel->ReleaseUploadBuffer();
 }
 
 void CGameScene::ReleaseObjects()
 {
-	m_upLandscape.reset();
+	m_upTerrainObj.reset();
 	m_spModel.reset();
 	m_spShader.reset();
 }
@@ -216,13 +213,13 @@ void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &proj, 32);
 
-	//Landscape
+	//Terrain
 	m_spTexShader->SetPipelineState(cpCommandList);
 	XMFLOAT4X4 temp = Matrix4x4::Transpose(Matrix4x4::Identity());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &temp, 0);
 	XMFLOAT4 color{ 1, 1, 1, 1 };
 	cpCommandList->SetGraphicsRoot32BitConstants(2, 4, &color, 0);
-	m_upLandscape->DrawMesh(cpCommandList);
+	m_upTerrainObj->DrawObject(cpCommandList);
 
 	for (std::unique_ptr<CModelObject>& upObject : m_vObjects)
 	{

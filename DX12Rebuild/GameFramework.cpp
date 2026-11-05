@@ -388,7 +388,8 @@ HRESULT CGameFramework::BuildObjects()
 	hr = tex2->CreateTexture(*m_SRVDescHeapAllocator, m_cpDevice, m_cpCommandList, L"../Resources/SkydomeTex.dds");
 	if (FAILED(hr)) return hr;
 
-	m_spGameScene->BuildObjects(m_cpDevice, m_cpCommandList);
+	hr = m_spGameScene->BuildObjects(m_cpDevice, m_cpCommandList);
+	if (FAILED(hr)) return hr;
 
 	//행렬 버퍼 생성
 	hr = CreateBufferResource(

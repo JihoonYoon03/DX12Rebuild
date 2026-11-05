@@ -51,3 +51,29 @@ private:
 	ComPtr<ID3D12Resource>	m_cpBuffer;
 	ComPtr<ID3D12Resource>	m_cpUploadBuffer;
 };
+
+//----------------------------------------------
+//
+// HeightMapImage
+// 
+//----------------------------------------------
+class CHeightMapImage
+{
+public:
+	CHeightMapImage(LPCTSTR pFileName, int nWidth, int nLength);
+	~CHeightMapImage();
+
+	float GetHeight(float fx, float fz);
+	XMFLOAT3 GetHeightMapNormal(int x, int z);
+
+	BYTE* GetHeightMapPixels() { return m_pHeightMapPixels; }
+
+	int GetHeightMapWidth() const { return m_nWidth; }
+	int GetHeightMapLength() const { return m_nLength; }
+
+private:
+	BYTE*	m_pHeightMapPixels;
+
+	int			m_nWidth;
+	int			m_nLength;
+};
