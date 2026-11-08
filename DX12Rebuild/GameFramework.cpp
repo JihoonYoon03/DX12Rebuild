@@ -425,6 +425,7 @@ void CGameFramework::ReleaseUploadBuffers()
 	//m_upCurrentScene->ReleaseObjectsUploadBuffer();
 	tex1->ReleaseUploadBuffer();
 	tex2->ReleaseUploadBuffer();
+	m_spGameScene->ReleaseUploadBuffers();
 }
 
 void CGameFramework::ReleaseObjects()

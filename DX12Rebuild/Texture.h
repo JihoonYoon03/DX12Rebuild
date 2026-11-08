@@ -66,13 +66,13 @@ public:
 	float GetHeight(float fx, float fz);
 	XMFLOAT3 GetHeightMapNormal(int x, int z);
 
-	BYTE* GetHeightMapPixels() { return m_pHeightMapPixels; }
+	const std::vector<BYTE>& GetHeightMapPixels() { return m_pHeightMapPixels; }
 
 	int GetHeightMapWidth() const { return m_nWidth; }
 	int GetHeightMapLength() const { return m_nLength; }
 
 private:
-	BYTE*	m_pHeightMapPixels;
+	std::vector<BYTE>	m_pHeightMapPixels;
 
 	int			m_nWidth;
 	int			m_nLength;

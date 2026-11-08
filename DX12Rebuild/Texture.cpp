@@ -141,22 +141,24 @@ CHeightMapImage::CHeightMapImage(LPCTSTR pFileName, int nWidth, int nLength)
 	m_nWidth(nWidth),
 	m_nLength(nLength)
 {
-	BYTE* pHeightMapPixels = new BYTE[m_nWidth * m_nLength];
 	std::ifstream file{ pFileName, std::ios::binary };
 	if (!file)
 	{
 		OutputDebugString(L"CHeightMapImage::CHeightMapImage() Failed to open file\n");
 		return;
 	}
+	BYTE* pHeightMapPixels = new BYTE[m_nWidth * m_nLength];
 
-	file.read(reinterpret_cast<char*>(pHeightMapPixels), m_nWidth * m_nLength);
-	m_pHeightMapPixels = new BYTE[m_nWidth * m_nLength];
-	for (int z = 0; z < m_nLength; ++z)
+	if (file.read(reinterpret_cast<char*>(pHeightMapPixels), m_nWidth * m_nLength))
 	{
-		for (int x = 0; x < m_nWidth; ++x)
+		m_pHeightMapPixels.resize(m_nWidth * m_nLength);
+		for (int z = 0; z < m_nLength; ++z)
 		{
-			//ÇÈ¼¿ ÁÂÇ¥°è(ÁÂ»ó´Ü ¿øÁ¡)¸¦ ÁöÇü ÁÂÇ¥°è·Î º¯Çü(ÁÂÇÏ´Ü ¿øÁ¡)
-			m_pHeightMapPixels[x + ((m_nLength - 1 - z) * m_nWidth)] = pHeightMapPixels[x + (z * m_nWidth)];
+			for (int x = 0; x < m_nWidth; ++x)
+			{
+				//ÇÈ¼¿ ÁÂÇ¥°è(ÁÂ»ó´Ü ¿øÁ¡)¸¦ ÁöÇü ÁÂÇ¥°è·Î º¯Çü(ÁÂÇÏ´Ü ¿øÁ¡)
+				m_pHeightMapPixels[x + ((m_nLength - 1 - z) * m_nWidth)] = pHeightMapPixels[x + (z * m_nWidth)];
+			}
 		}
 	}
 
@@ -165,12 +167,11 @@ CHeightMapImage::CHeightMapImage(LPCTSTR pFileName, int nWidth, int nLength)
 
 CHeightMapImage::~CHeightMapImage()
 {
-	if (m_pHeightMapPixels) delete[] m_pHeightMapPixels;
 }
 
 float CHeightMapImage::GetHeight(float fx, float fz)
 {
-	if (!m_pHeightMapPixels || m_nWidth < 2 || m_nLength < 2)
+	if (m_pHeightMapPixels.empty() || m_nWidth < 2 || m_nLength < 2)
 		return 0.0f;
 
 	//ÁöÇü ¹üÀ§ ¹þ¾î³²
@@ -193,4 +194,9 @@ float CHeightMapImage::GetHeight(float fx, float fz)
 	float fHeight = fBottomHeight * (1 - fzPercent) + fTopHeight * fzPercent;
 
 	return fHeight;
+}
+
+XMFLOAT3 CHeightMapImage::GetHeightMapNormal(int x, int z)
+{
+	return XMFLOAT3();
 }

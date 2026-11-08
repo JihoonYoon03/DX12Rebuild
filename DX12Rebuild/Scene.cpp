@@ -156,6 +156,13 @@ HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12Gr
 {
 	HRESULT hr;
 
+	m_upTerrainObj = std::make_unique<CTerrainObject>();
+	std::shared_ptr<CHeightMapImage> heightmap = std::make_shared<CHeightMapImage>(L"../Resources/Cheongsando.raw", 505, 505);
+	m_upTerrainObj->SetHeightMap(heightmap);
+	hr = m_upTerrainObj->GenerateTerrain(cpDevice, cpCommandList);
+	//스케일에 정점 사이간 실제 배율 몇m인지 체크해서 넣으면 됨. '가 원래 소수점
+	m_upTerrainObj->SetScale(1.578'37f, 0.075'39f, 1.578'37f);
+
 	m_spModel = std::make_shared<CModel>();
 	std::shared_ptr<CMaterial> material = std::make_shared<CMaterial>(m_spShader);
 	if (!m_spModel->LoadModelData(cpDevice, cpCommandList, "../Resources/AbramsTank.txt", material))
@@ -170,18 +177,13 @@ HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12Gr
 	upObj[1]->SetModel(m_spModel);
 
 	upObj[0]->SetRotation(0, XMConvertToRadians(90), 0);
-	upObj[1]->SetPosition(2, 0, 2);
+	upObj[0]->SetPosition(0.0f, m_upTerrainObj->GetHeightAt(0.0f, 0.0f) + 1.0f, 0.0f);
+
+	upObj[1]->SetPosition(10.0f, m_upTerrainObj->GetHeightAt(10.0f, 10.0f) + 1.0f, 10.0f);
 	
 	AddObjects(upObj, 2);
 
 	m_Camera.SetPerspective(90, config::FRAME_BUFFER_W / config::FRAME_BUFFER_H, 0.01f, 100.0f);
-
-	m_upTerrainObj = std::make_unique<CTerrainObject>();
-	std::shared_ptr<CHeightMapImage> heightmap = std::make_shared<CHeightMapImage>(L"../Resources/Cheongsando.raw", 505, 505);
-	m_upTerrainObj->SetHeightMap(heightmap);
-	hr = m_upTerrainObj->GenerateTerrain(cpDevice, cpCommandList);
-	//스케일에 정점 사이간 실제 배율 몇m인지 체크해서 넣으면 됨. '가 원래 소수점
-	m_upTerrainObj->SetScale(1.578'37f, 0.075'39f, 1.578'37f);
 
 	if (FAILED(hr))
 	{

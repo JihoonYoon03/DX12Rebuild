@@ -152,14 +152,14 @@ namespace Vector3
 			xmmtxTransform));
 		return(xmf3Result);
 	}
-	inline XMFLOAT3 TransformCoord(XMFLOAT3& xmf3Vector, const XMMATRIX& xmmtxTransform)
+	inline XMFLOAT3 TransformCoord(const XMFLOAT3& xmf3Vector, const XMMATRIX& xmmtxTransform)
 	{
 		XMFLOAT3 xmf3Result;
 		XMStoreFloat3(&xmf3Result, XMVector3TransformCoord(XMLoadFloat3(&xmf3Vector),
 			xmmtxTransform));
 		return(xmf3Result);
 	}
-	inline XMFLOAT3 TransformCoord(XMFLOAT3& xmf3Vector, XMFLOAT4X4& xmmtx4x4Matrix)
+	inline XMFLOAT3 TransformCoord(const XMFLOAT3& xmf3Vector, const XMFLOAT4X4& xmmtx4x4Matrix)
 	{
 		return(TransformCoord(xmf3Vector, XMLoadFloat4x4(&xmmtx4x4Matrix)));
 	}

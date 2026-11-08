@@ -95,6 +95,8 @@ void CTerrainObject::SetHeightMap(std::shared_ptr<CHeightMapImage>& pHeightMapIm
 
 HRESULT CTerrainObject::GenerateTerrain(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
+	if (m_spHeightMapImage->GetHeightMapPixels().empty()) return E_FAIL;
+
 	MeshData<VertexTexcoord> terrain;
 	float interval = 1.0f;
 	float halfInterval = interval / 2;
@@ -179,7 +181,16 @@ void CTerrainObject::ReleaseUploadBuffer()
 
 float CTerrainObject::GetHeightAt(float x, float z)
 {
-	return m_spHeightMapImage->GetHeight(x, z);
+	//지형 좌표계로 변환
+	XMFLOAT3 local(x, 0.0f, z);
+	local = Vector3::TransformCoord(local, Matrix4x4::Inverse(m_Transform.getMatrix()));
+
+	//지형의 인덱스로 변환
+	float pixelX = local.x + (m_nColSlice - 1) * 0.5f;
+	float pixelZ = local.z + (m_nRowSlice - 1) * 0.5f;
+
+	return m_spHeightMapImage->GetHeight(pixelX, pixelZ)
+		* m_Transform.scale.y + m_Transform.position.y;
 }
 
 float CTerrainObject::GetHeightAt(XMFLOAT3 pos)
