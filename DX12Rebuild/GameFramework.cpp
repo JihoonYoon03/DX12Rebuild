@@ -327,14 +327,14 @@ HRESULT CGameFramework::CreateRootSignature()
 	rootParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
 	rootParams[2].Constants.ShaderRegister = 1;
 	rootParams[2].Constants.RegisterSpace = 0;
-	rootParams[2].Constants.Num32BitValues = 4;
+	rootParams[2].Constants.Num32BitValues = 5;
 	rootParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
 	D3D12_STATIC_SAMPLER_DESC samplerDesc;
 	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
 	samplerDesc.MipLODBias = 0;
 	samplerDesc.MaxAnisotropy = 1;
 	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
@@ -486,6 +486,10 @@ void CGameFramework::FrameAdvance()
 	m_cpCommandList->SetDescriptorHeaps(1, m_SRVDescHeapAllocator->GetDescriptorHeap());
 
 	//Scene Render Here
+	//기본 타일링 수치 설정
+	float defaultTiling = 1.0f;
+	m_cpCommandList->SetGraphicsRoot32BitConstants(2, 1, &defaultTiling, 4);
+	//텍스쳐 설정
 	m_cpCommandList->SetGraphicsRootDescriptorTable(1, tex1->getGPUDescHandle());
 	m_upCurrentScene.lock()->DrawScene(m_cpCommandList);
 

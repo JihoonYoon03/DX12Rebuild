@@ -5,9 +5,10 @@ cbuffer cbGameObjInfo : register(b0)
     matrix gmtxProjection;
 };
 
-cbuffer cbMatBaseColor : register(b1)
+cbuffer cbMaterial : register(b1)
 {
     float4 matBaseColor;
+    float  tiling;
 };
 
 Texture2D tex1 : register(t0);
@@ -45,5 +46,5 @@ float4 PSMain(VS_OUTPUT input) : SV_Target
 
 float4 PSTexMain(VS_OUTPUT input) : SV_Target
 {
-    return tex1.Sample(sample, input.uv);
+    return tex1.Sample(sample, mul(tiling, input.uv));
 }

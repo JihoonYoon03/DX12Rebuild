@@ -81,7 +81,8 @@ void CModelObject::ReleaseModelUploadBuffer()
 // -------------------------------------------
 CTerrainObject::CTerrainObject()
 	: CObjectBase()
-{}
+{
+}
 
 CTerrainObject::~CTerrainObject()
 {}
@@ -91,6 +92,8 @@ void CTerrainObject::SetHeightMap(std::shared_ptr<CHeightMapImage>& pHeightMapIm
 	m_spHeightMapImage = std::move(pHeightMapImage);
 	m_nColSlice = m_spHeightMapImage->GetHeightMapWidth();
 	m_nRowSlice = m_spHeightMapImage->GetHeightMapLength();
+	//나누는 수치는 나중에 머터리얼 도입 시 텍스쳐 사이즈와 연동
+	m_fTiling = m_nColSlice / 10;
 }
 
 HRESULT CTerrainObject::GenerateTerrain(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
@@ -200,6 +203,7 @@ float CTerrainObject::GetHeightAt(const XMFLOAT3& pos) const
 
 void CTerrainObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
+	cpCommandList->SetGraphicsRoot32BitConstants(2, 1, &m_fTiling, 4);
 	XMFLOAT4X4 world = Matrix4x4::Transpose(m_Transform.getMatrix());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
 	m_upTerrain->DrawMesh(cpCommandList);

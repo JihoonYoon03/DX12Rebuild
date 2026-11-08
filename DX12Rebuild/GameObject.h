@@ -44,6 +44,8 @@ public:
 	void SetPosition(const float x, const float y, const float z);
 	void SetPosition(const XMFLOAT3& position);
 
+	XMFLOAT3 GetPosition() { return m_Transform.position; }
+
 	virtual void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) = 0;
 
 protected:
@@ -63,14 +65,11 @@ public:
 
 	void SetModel(std::shared_ptr<CModel>& model) { m_spTankModel = model; }
 
-	XMFLOAT3 GetPosition() { return m_Transform.position; }
-
 	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 
 	void ReleaseModelUploadBuffer();
 
 protected:
-	Transform					m_Transform;
 	std::shared_ptr<CModel>		m_spTankModel;
 };
 
@@ -97,6 +96,7 @@ public:
 private:
 	int									m_nColSlice;
 	int									m_nRowSlice;
+	float								m_fTiling;
 
 	std::shared_ptr<CHeightMapImage>	m_spHeightMapImage;
 	std::unique_ptr<CMesh>				m_upTerrain;
