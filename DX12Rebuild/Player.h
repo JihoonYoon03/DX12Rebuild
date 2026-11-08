@@ -31,4 +31,6 @@ public:
 
 private:
 	float	m_fVelocity = 10.0f;
+	//초당 회전량
+	float	m_fTurnSpeed = XMConvertToRadians(90.0f);
 };

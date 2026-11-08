@@ -59,25 +59,26 @@ CTankPlayer::~CTankPlayer()
 
 void CTankPlayer::ProcessInput(DWORD dwInput, float deltaTime, const CTerrainObject* terrain)
 {
-	XMFLOAT3 Right{ 1.0f, 0.0f, 0.0f };
-	//XMFLOAT3 Up{ 0.0f, 1.0f, 0.0f };
-	XMFLOAT3 Look{ 0.0f, 0.0f, 1.0f };
+	float turn = 0.0f;
+	if (dwInput & DIR_LEFT) turn -= 1.0f;
+	if (dwInput & DIR_RIGHT) turn += 1.0f;
+	
+	float yaw = m_Transform.rotation.y += turn * m_fTurnSpeed * deltaTime;
+	XMFLOAT3 forward{ sinf(yaw), 0.0f, cosf(yaw) };
+
+	float drive = 0.0f;
+	if (dwInput & DIR_FORWARD) drive += 1.0f;
+	if (dwInput & DIR_BACKWARD) drive -= 1.0f;
+
 	XMFLOAT3 xmf3Shift = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	if (dwInput & DIR_FORWARD) xmf3Shift = Vector3::Add(xmf3Shift, Look, 1.0f);
-	if (dwInput & DIR_BACKWARD) xmf3Shift = Vector3::Add(xmf3Shift, Look, -1.0f);
 
-	if (dwInput & DIR_RIGHT) xmf3Shift = Vector3::Add(xmf3Shift, Right, 1.0f);
-	if (dwInput & DIR_LEFT) xmf3Shift = Vector3::Add(xmf3Shift, Right, -1.0f);
-
-	//if (dwInput & DIR_UP) xmf3Shift = Vector3::Add(xmf3Shift, Up, 1.0f);
-	//if (dwInput & DIR_DOWN) xmf3Shift = Vector3::Add(xmf3Shift, Up, -1.0f);
-
-	float moveDistance = m_fVelocity * deltaTime;
+	float moveDistance = drive * m_fVelocity * deltaTime;
 	xmf3Shift = Vector3::Normalize(xmf3Shift);
-	xmf3Shift = Vector3::Multiply(moveDistance, xmf3Shift);
+	xmf3Shift = Vector3::Add(Vector3::Multiply(moveDistance, forward), xmf3Shift);
 	if (terrain)
 	{
 		float terrainHeight = terrain->GetHeightAt(Vector3::Add(m_Transform.position, xmf3Shift)) + 1.0f;
+		//플레이어 위치를 빼줘야 이동량만 나옴
 		xmf3Shift.y = terrainHeight - m_Transform.position.y;
 	}
 
