@@ -10,7 +10,7 @@ struct Transform
 	XMFLOAT3 rotation	{ 0, 0, 0 };
 	XMFLOAT3 position	{ 0, 0, 0 };
 
-	inline XMFLOAT4X4 getMatrix() {
+	inline XMFLOAT4X4 getMatrix() const {
 		XMMATRIX objWorldXM =
 			XMMatrixMultiply(
 				XMMatrixMultiply(
@@ -61,14 +61,17 @@ public:
 	CModelObject();
 	virtual ~CModelObject();
 
-	void SetModel(std::shared_ptr<CModel>& model) { m_spModel = model; }
+	void SetModel(std::shared_ptr<CModel>& model) { m_spTankModel = model; }
+
+	XMFLOAT3 GetPosition() { return m_Transform.position; }
 
 	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 
 	void ReleaseModelUploadBuffer();
 
-private:
-	std::shared_ptr<CModel>		m_spModel;
+protected:
+	Transform					m_Transform;
+	std::shared_ptr<CModel>		m_spTankModel;
 };
 
 // -------------------------------------------
@@ -85,8 +88,8 @@ public:
 	void SetHeightMap(std::shared_ptr<CHeightMapImage>& pHeightMapImage);
 	HRESULT GenerateTerrain(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 
-	float GetHeightAt(float x, float z);
-	float GetHeightAt(XMFLOAT3 pos);
+	float GetHeightAt(float x, float z) const;
+	float GetHeightAt(const XMFLOAT3& pos) const;
 
 	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 

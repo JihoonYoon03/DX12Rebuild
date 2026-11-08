@@ -13,15 +13,13 @@ public:
 	CCamera();
 	~CCamera();
 
-	void SetLookAt(XMFLOAT3 pos, XMFLOAT3 lookAt, XMFLOAT3 up);
+	void Move(const XMFLOAT3& shift);
+	void SetLookAt(const XMFLOAT3& pos, const XMFLOAT3& lookAt, const XMFLOAT3& up);
 	void SetPerspective(float fovAngle, float aspect, float Near, float Far);
 	void SetAspectRatio(float aspect);
 
-	void ProcessInput(DWORD direction, float deltaTime);
-	void Move(XMFLOAT3 dist);
-
-	XMFLOAT4X4 GetView() { return m_xmf4x4View; };
-	XMFLOAT4X4 GetProj() { return m_xmf4x4Proj; };
+	XMFLOAT4X4 GetView() const { return m_xmf4x4View; };
+	XMFLOAT4X4 GetProj() const { return m_xmf4x4Proj; };
 
 private:
 	//View

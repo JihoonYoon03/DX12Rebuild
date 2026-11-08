@@ -10,7 +10,14 @@ CCamera::CCamera()
 CCamera::~CCamera()
 {}
 
-void CCamera::SetLookAt(XMFLOAT3 pos, XMFLOAT3 lookAt, XMFLOAT3 up)
+void CCamera::Move(const XMFLOAT3& shift)
+{
+	m_xmf3Pos = Vector3::Add(m_xmf3Pos, shift);
+	m_xmf3LookAt = Vector3::Add(m_xmf3LookAt, shift);
+	SetView();
+}
+
+void CCamera::SetLookAt(const XMFLOAT3& pos, const XMFLOAT3& lookAt, const XMFLOAT3& up)
 {
 	m_xmf3Pos = pos;
 	m_xmf3LookAt = lookAt;
@@ -31,35 +38,6 @@ void CCamera::SetAspectRatio(float aspect)
 {
 	m_fAspectRatio = aspect;
 	SetProj();
-}
-
-void CCamera::ProcessInput(DWORD direction, float deltaTime)
-{
-	//이동속도
-	float moveDir = 1.0f;
-	XMFLOAT3 xmf3Shift = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	if (direction & DIR_FORWARD) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Look, moveDir);
-	if (direction & DIR_BACKWARD) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Look, -moveDir);
-
-	if (direction & DIR_RIGHT) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Right, moveDir);
-	if (direction & DIR_LEFT) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Right, -moveDir);
-
-	if (direction & DIR_UP) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Up, moveDir);
-	if (direction & DIR_DOWN) xmf3Shift = Vector3::Add(xmf3Shift, m_xmf3Up, -moveDir);
-
-	//상수값은 나중에 카메라 속도로 분리
-	float moveDistance = 10.0f * deltaTime;
-	xmf3Shift = Vector3::Normalize(xmf3Shift);
-	xmf3Shift = Vector3::Multiply(moveDistance, xmf3Shift);
-
-	Move(xmf3Shift);
-}
-
-void CCamera::Move(XMFLOAT3 shift)
-{
-	m_xmf3Pos = Vector3::Add(m_xmf3Pos, shift);
-	m_xmf3LookAt = Vector3::Add(m_xmf3LookAt, shift);
-	SetView();
 }
 
 void CCamera::SetView()

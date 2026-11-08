@@ -4,6 +4,8 @@
 #include "Mesh.h"
 #include "Shader.h"
 #include "Texture.h"
+#include "Player.h"
+#include "Camera.h"
 
 CScene::CScene()
 {
@@ -11,8 +13,9 @@ CScene::CScene()
 	XMFLOAT3 look{ 0, 0, 0 };
 	XMFLOAT3 up{ 0, 1, 0 };
 
-	m_Camera.SetLookAt(eye, look, up);
-	m_Camera.SetPerspective(90, config::FRAME_BUFFER_W / config::FRAME_BUFFER_H, 0.01f, 100.0f);
+	m_spCamera = std::make_shared<CCamera>();
+	m_spCamera->SetLookAt(eye, look, up);
+	m_spCamera->SetPerspective(90, config::FRAME_BUFFER_W / config::FRAME_BUFFER_H, 0.01f, 100.0f);
 }
 
 CScene::~CScene()
@@ -60,55 +63,27 @@ void CScene::AddObjects(std::vector<std::unique_ptr<CModelObject>>& upObjects)
 
 void CScene::WindowResized(int width, int height)
 {
-	if (height != 0) m_Camera.SetAspectRatio((float)width / (float)height);
+	if (height != 0) m_spCamera->SetAspectRatio((float)width / (float)height);
 }
 
 void CScene::ProcessInput(UCHAR* pKeyBuffer, float deltaTime)
 {
-	DWORD dwDirection = 0;
-
-	//키보드 상태 정보를 반환한다.
-	if (::GetKeyboardState(pKeyBuffer))
-	{
-		if (pKeyBuffer[VK_UP] & 0xF0) dwDirection |= DIR_FORWARD;
-		if (pKeyBuffer[VK_DOWN] & 0xF0) dwDirection |= DIR_BACKWARD;
-		if (pKeyBuffer[VK_LEFT] & 0xF0) dwDirection |= DIR_LEFT;
-		if (pKeyBuffer[VK_RIGHT] & 0xF0) dwDirection |= DIR_RIGHT;
-		if (pKeyBuffer[VK_PRIOR] & 0xF0) dwDirection |= DIR_UP;
-		if (pKeyBuffer[VK_NEXT] & 0xF0) dwDirection |= DIR_DOWN;
-	}
-	float cxDelta = 0.0f, cyDelta = 0.0f;
-	POINT ptCursorPos;
-
-	//마우스 또는 키 입력이 있으면 플레이어를 이동하거나 회전함
-	if ((dwDirection != 0) || (cxDelta != 0.0f) || (cyDelta != 0.0f))
-	{
-		if (cxDelta || cyDelta)
-		{
-			//cxDelta = Yaw, cyDelta = Pitch
-
-		}
-		//dwDirection 방향으로 이동(속도 벡터 변경). 이동 속력은 50/sec로 가정
-		if (dwDirection)
-		{
-			m_Camera.ProcessInput(dwDirection, deltaTime);
-		}
-	}
 }
 
-//void CScene::ReleaseObjectsUploadBuffer()
-//{
-//	for (std::unique_ptr<CModelObject>& upObject : m_vObjects)
-//	{
-//		upObject->ReleaseModelUploadBuffer();
-//	}
-//}
+void CScene::ReleaseUploadBuffers()
+{
+}
+
+void CScene::ReleaseObjects()
+{
+	m_vObjects.clear();
+}
 
 void CScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	m_spShader->SetPipelineState(cpCommandList);
-	XMFLOAT4X4 view = Matrix4x4::Transpose(m_Camera.GetView());
-	XMFLOAT4X4 proj = Matrix4x4::Transpose(m_Camera.GetProj());
+	XMFLOAT4X4 view = Matrix4x4::Transpose(m_spCamera->GetView());
+	XMFLOAT4X4 proj = Matrix4x4::Transpose(m_spCamera->GetProj());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &proj, 32);
 
@@ -156,6 +131,11 @@ HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12Gr
 {
 	HRESULT hr;
 
+	//----------------------------------
+	// 
+	// Terrain
+	// 
+	//----------------------------------
 	m_upTerrainObj = std::make_unique<CTerrainObject>();
 	std::shared_ptr<CHeightMapImage> heightmap = std::make_shared<CHeightMapImage>(L"../Resources/Cheongsando.raw", 505, 505);
 	m_upTerrainObj->SetHeightMap(heightmap);
@@ -163,27 +143,67 @@ HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12Gr
 	//스케일에 정점 사이간 실제 배율 몇m인지 체크해서 넣으면 됨. '가 원래 소수점
 	m_upTerrainObj->SetScale(1.578'37f, 0.075'39f, 1.578'37f);
 
-	m_spModel = std::make_shared<CModel>();
+
+	//----------------------------------
+	// 
+	// Model Data
+	// 
+	//----------------------------------
+	m_spTankModel = std::make_shared<CModel>();
 	std::shared_ptr<CMaterial> material = std::make_shared<CMaterial>(m_spShader);
-	if (!m_spModel->LoadModelData(cpDevice, cpCommandList, "../Resources/AbramsTank.txt", material))
+	if (!m_spTankModel->LoadModelData(cpDevice, cpCommandList, "../Resources/AbramsTank.txt", material))
 	{
 		return E_FAIL;
 	}
 
-	std::unique_ptr<CModelObject> upObj[2];
+	//----------------------------------
+	// 
+	// Player
+	// 
+	//----------------------------------
+	std::unique_ptr<CTankPlayer> upPlayer = std::make_unique<CTankPlayer>();
+	upPlayer->SetModel(m_spTankModel);
+	upPlayer->SetCamera(m_spCamera);
+	upPlayer->SetPosition(0.0f, m_upTerrainObj->GetHeightAt(0.0f, 0.0f) + 1.0f, 0.0f);
+
+	m_pPlayer = upPlayer.get();
+
+	//----------------------------------
+	// 
+	// Objs
+	// 
+	//----------------------------------
+	m_vObjects.push_back(std::move(upPlayer));
+
+	std::unique_ptr<CModelObject> upObj[1];
 	upObj[0] = std::make_unique<CModelObject>();
-	upObj[1] = std::make_unique<CModelObject>();
-	upObj[0]->SetModel(m_spModel);
-	upObj[1]->SetModel(m_spModel);
+	upObj[0]->SetModel(m_spTankModel);
 
-	upObj[0]->SetRotation(0, XMConvertToRadians(90), 0);
-	upObj[0]->SetPosition(0.0f, m_upTerrainObj->GetHeightAt(0.0f, 0.0f) + 1.0f, 0.0f);
-
-	upObj[1]->SetPosition(10.0f, m_upTerrainObj->GetHeightAt(10.0f, 10.0f) + 1.0f, 10.0f);
+	upObj[0]->SetPosition(10.0f, m_upTerrainObj->GetHeightAt(10.0f, 10.0f) + 1.0f, 10.0f);
 	
-	AddObjects(upObj, 2);
+	AddObjects(upObj, 1);
 
-	m_Camera.SetPerspective(90, config::FRAME_BUFFER_W / config::FRAME_BUFFER_H, 0.01f, 100.0f);
+	//----------------------------------
+	// 
+	// Camera
+	// 
+	//----------------------------------
+	m_spCamera->SetPerspective(90, config::FRAME_BUFFER_W / config::FRAME_BUFFER_H, 0.01f, 100.0f);
+	XMFLOAT3 playerPos = m_pPlayer->GetPosition();
+
+	XMFLOAT3 eye{
+		playerPos.x,
+		playerPos.y + 1.0f,
+		playerPos.z - 3.5f
+	};
+
+	XMFLOAT3 look{
+		playerPos.x,
+		playerPos.y + 1.0f,
+		playerPos.z
+	};
+
+	m_spCamera->SetLookAt(eye, look, XMFLOAT3{ 0, 1, 0 });
 
 	if (FAILED(hr))
 	{
@@ -194,24 +214,57 @@ HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12Gr
 	return S_OK;
 }
 
+void CGameScene::ProcessInput(UCHAR* pKeyBuffer, float deltaTime)
+{
+	DWORD dwDirection = 0;
+
+	//키보드 상태 정보를 반환한다.
+	if (::GetKeyboardState(pKeyBuffer))
+	{
+		if (pKeyBuffer[VK_UP] & 0xF0) dwDirection |= DIR_FORWARD;
+		if (pKeyBuffer[VK_DOWN] & 0xF0) dwDirection |= DIR_BACKWARD;
+		if (pKeyBuffer[VK_LEFT] & 0xF0) dwDirection |= DIR_LEFT;
+		if (pKeyBuffer[VK_RIGHT] & 0xF0) dwDirection |= DIR_RIGHT;
+		if (pKeyBuffer[VK_PRIOR] & 0xF0) dwDirection |= DIR_UP;
+		if (pKeyBuffer[VK_NEXT] & 0xF0) dwDirection |= DIR_DOWN;
+	}
+	float cxDelta = 0.0f, cyDelta = 0.0f;
+	POINT ptCursorPos;
+
+	//마우스 또는 키 입력이 있으면 플레이어를 이동하거나 회전함
+	if ((dwDirection != 0) || (cxDelta != 0.0f) || (cyDelta != 0.0f))
+	{
+		if (cxDelta || cyDelta)
+		{
+			//cxDelta = Yaw, cyDelta = Pitch
+
+		}
+		//dwDirection 방향으로 이동(속도 벡터 변경). 이동 속력은 50/sec로 가정
+		if (m_pPlayer && dwDirection)
+		{
+			m_pPlayer->ProcessInput(dwDirection, deltaTime, m_upTerrainObj.get());
+		}
+	}
+}
+
 void CGameScene::ReleaseUploadBuffers()
 {
 	m_upTerrainObj->ReleaseUploadBuffer();
-	m_spModel->ReleaseUploadBuffer();
+	m_spTankModel->ReleaseUploadBuffer();
 }
 
 void CGameScene::ReleaseObjects()
 {
 	m_upTerrainObj.reset();
-	m_spModel.reset();
+	m_spTankModel.reset();
 	m_spShader.reset();
 }
 
 void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	m_spShader->SetPipelineState(cpCommandList);
-	XMFLOAT4X4 view = Matrix4x4::Transpose(m_Camera.GetView());
-	XMFLOAT4X4 proj = Matrix4x4::Transpose(m_Camera.GetProj());
+	XMFLOAT4X4 view = Matrix4x4::Transpose(m_spCamera->GetView());
+	XMFLOAT4X4 proj = Matrix4x4::Transpose(m_spCamera->GetProj());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &proj, 32);
 

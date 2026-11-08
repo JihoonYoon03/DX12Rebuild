@@ -58,7 +58,7 @@ void CObjectBase::SetPosition(const XMFLOAT3& position)
 CModelObject::CModelObject()
 	: CObjectBase()
 {
-	m_spModel = std::make_shared<CModel>();
+	m_spTankModel = std::make_shared<CModel>();
 }
 
 CModelObject::~CModelObject()
@@ -66,12 +66,12 @@ CModelObject::~CModelObject()
 
 void CModelObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
-	if (m_spModel) m_spModel->DrawModel(cpCommandList, m_Transform.getMatrix());
+	if (m_spTankModel) m_spTankModel->DrawModel(cpCommandList, m_Transform.getMatrix());
 }
 
 void CModelObject::ReleaseModelUploadBuffer()
 {
-	m_spModel->ReleaseUploadBuffer();
+	m_spTankModel->ReleaseUploadBuffer();
 }
 
 // -------------------------------------------
@@ -179,7 +179,7 @@ void CTerrainObject::ReleaseUploadBuffer()
 	m_upTerrain->ReleaseUploadBuffer();
 }
 
-float CTerrainObject::GetHeightAt(float x, float z)
+float CTerrainObject::GetHeightAt(float x, float z) const
 {
 	//지형 좌표계로 변환
 	XMFLOAT3 local(x, 0.0f, z);
@@ -193,7 +193,7 @@ float CTerrainObject::GetHeightAt(float x, float z)
 		* m_Transform.scale.y + m_Transform.position.y;
 }
 
-float CTerrainObject::GetHeightAt(XMFLOAT3 pos)
+float CTerrainObject::GetHeightAt(const XMFLOAT3& pos) const
 {
 	return GetHeightAt(pos.x, pos.z);
 }

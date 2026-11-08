@@ -1,5 +1,4 @@
 #pragma once
-#include "Camera.h"
 
 class CModelObject;
 class CMesh;
@@ -7,6 +6,8 @@ class CShader;
 class CTextureShader;
 class CModel;
 class CTerrainObject;
+class CCamera;
+class CTankPlayer;
 
 class CScene
 {
@@ -21,17 +22,18 @@ public:
 	void AddObjects(std::unique_ptr<CModelObject>* upObjects, size_t size);
 	void AddObjects(std::vector<std::unique_ptr<CModelObject>>& upObjects);
 
-	CCamera& GetCamera() { return m_Camera; }
+	std::shared_ptr<CCamera> GetCamera() { return m_spCamera; }
 	void WindowResized(int width, int height);
 
 	virtual void ProcessInput(UCHAR* pKeyBuffer, float deltaTime);
 
-	//void ReleaseObjectsUploadBuffer();
+	virtual void ReleaseUploadBuffers();
+	void ReleaseObjects();
 
 	virtual void DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 
 protected:
-	CCamera										m_Camera;
+	std::shared_ptr<CCamera>					m_spCamera;
 	std::shared_ptr<CShader>					m_spShader;
 	std::vector<std::unique_ptr<CModelObject>>	m_vObjects;
 };
@@ -45,12 +47,15 @@ public:
 	
 	HRESULT BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 
-	void ReleaseUploadBuffers();
+	void ProcessInput(UCHAR* pKeyBuffer, float deltaTime);
+
+	void ReleaseUploadBuffers() override;
 	void ReleaseObjects();
 
 	void DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 private:
-	std::shared_ptr<CModel>			m_spModel;
+	CTankPlayer*					m_pPlayer;
+	std::shared_ptr<CModel>			m_spTankModel;
 	std::shared_ptr<CTextureShader> m_spTexShader;
 
 	std::unique_ptr<CTerrainObject>	m_upTerrainObj;

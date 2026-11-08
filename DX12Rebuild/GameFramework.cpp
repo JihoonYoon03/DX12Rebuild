@@ -383,7 +383,7 @@ HRESULT CGameFramework::BuildObjects()
 	HRESULT hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), NULL);
 	if (FAILED(hr)) return hr;
 
-	hr = tex1->CreateTexture(*m_SRVDescHeapAllocator, m_cpDevice, m_cpCommandList, L"../Resources/moon.dds");
+	hr = tex1->CreateTexture(*m_SRVDescHeapAllocator, m_cpDevice, m_cpCommandList, L"../Resources/grass.dds");
 	if (FAILED(hr)) return hr;
 	hr = tex2->CreateTexture(*m_SRVDescHeapAllocator, m_cpDevice, m_cpCommandList, L"../Resources/SkydomeTex.dds");
 	if (FAILED(hr)) return hr;
