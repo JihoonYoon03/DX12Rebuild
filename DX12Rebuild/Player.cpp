@@ -59,17 +59,19 @@ CTankPlayer::~CTankPlayer()
 
 void CTankPlayer::SetModel(std::shared_ptr<CModel>& model)
 {
+	//하드코딩 된 부분은 나중에 string vector 넘겨받는 형태로 처리하게 변경 예정
+
 	m_spModel = model;
 	XMFLOAT4X4 mtxTurret = m_spModel->GetFrameMatrix("Turret");
 
-	//터렛에 파츠 연결
 	//포신의 기존 로컬 행렬 저장
 	XMFLOAT4X4 localOrigin = m_spModel->GetFrameMatrix("maingun");
 
+	//터렛에 파츠 연결 => 파츠의 부모 변환 포함한 기본 모델 행렬 적용하면서,
+	//변환은 새 parent를 따르도록
+	m_spModel->SetFrameParent("maingun", "Turret");
 	//터렛 기본 설정으로 회전이 적용되어 있음. 그걸 빼줘야 함
 	//파츠들의 초기 변환 유지. 터렛의 변환 행렬이 부모행렬로 곱해져 상쇄됨.
-	//하드코딩 된 부분은 나중에 string vector 넘겨받는 형태로 처리하게 변경 예정
-	m_spModel->SetFrameParent("maingun", "Turret");
 	m_spModel->SetFrameLocal("maingun", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
 	localOrigin = m_spModel->GetFrameMatrix("m2");
@@ -169,6 +171,19 @@ void CTankPlayer::ProcessInput(DWORD dwInput, float deltaTime, const CTerrainObj
 	Transform turret;
 	turret.rotation.y = m_fTurretYaw;
 	SetFrameTransform("Turret", turret);
+
+	float cannonTurn = 0.0f;
+	if (dwInput & CANNON_UP) cannonTurn -= 1.0f;
+	if (dwInput & CANNON_DOWN) cannonTurn += 1.0f;
+
+	m_fCannonPitch += cannonTurn * m_fCannonLiftSpeed * deltaTime;
+	//실제 포신 사각 반영. 부호는 위가 -각이므로 반대로 해야 함
+	if (m_fCannonPitch < -config::ABRAMS_CANNON_ELEVATION_RADIAN) m_fCannonPitch = -config::ABRAMS_CANNON_ELEVATION_RADIAN;
+	if (m_fCannonPitch > -config::ABRAMS_CANNON_DEPRESSION_RADIAN) m_fCannonPitch = -config::ABRAMS_CANNON_DEPRESSION_RADIAN;
+
+	turret.rotation.x = m_fCannonPitch;
+	turret.rotation.y = 0.0f;
+	SetFrameTransform("maingun", turret);
 }
 
 void CTankPlayer::Move(XMFLOAT3 shift)

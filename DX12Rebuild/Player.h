@@ -34,9 +34,11 @@ public:
 private:
 	float	m_fVelocity = 10.0f;
 	//초당 회전량
-	float	m_fTurnSpeed = XMConvertToRadians(90.0f);
+	float	m_fTurnSpeed = XMConvertToRadians(60.0f);
 
 	//포탑 회전 관련
 	float	m_fTurretYaw = 0.0f;
 	float	m_fTurretTurnSpeed = XMConvertToRadians(60.0f);
+	float	m_fCannonPitch = 0.0f;
+	float	m_fCannonLiftSpeed = XMConvertToRadians(40.0f);
 };

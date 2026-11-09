@@ -225,10 +225,10 @@ void CGameScene::ProcessInput(UCHAR* pKeyBuffer, float deltaTime)
 		if (pKeyBuffer[VK_DOWN] & 0xF0) dwDirection |= DIR_BACKWARD;
 		if (pKeyBuffer[VK_LEFT] & 0xF0) dwDirection |= DIR_LEFT;
 		if (pKeyBuffer[VK_RIGHT] & 0xF0) dwDirection |= DIR_RIGHT;
-		if (pKeyBuffer[VK_PRIOR] & 0xF0) dwDirection |= DIR_UP;
-		if (pKeyBuffer[VK_NEXT] & 0xF0) dwDirection |= DIR_DOWN;
-		if (pKeyBuffer['Q'] & 0xF0) dwDirection |= TURRET_LEFT;
-		if (pKeyBuffer['E'] & 0xF0) dwDirection |=  TURRET_RIGHT;
+		if (pKeyBuffer['W'] & 0xF0) dwDirection |= CANNON_UP;
+		if (pKeyBuffer['S'] & 0xF0) dwDirection |= CANNON_DOWN;
+		if (pKeyBuffer['A'] & 0xF0) dwDirection |= TURRET_LEFT;
+		if (pKeyBuffer['D'] & 0xF0) dwDirection |=  TURRET_RIGHT;
 	}
 	float cxDelta = 0.0f, cyDelta = 0.0f;
 	POINT ptCursorPos;

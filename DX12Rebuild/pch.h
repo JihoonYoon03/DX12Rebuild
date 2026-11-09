@@ -47,6 +47,21 @@
 #include "DDSTextureLoader12.h"
 #include "Config.h"
 
+//1Byte
+#define DIR_FORWARD		0x01
+#define DIR_BACKWARD	0x02
+#define DIR_LEFT		0x04
+#define DIR_RIGHT		0x08
+#define DIR_UP			0x10
+#define DIR_DOWN		0x20
+#define TURRET_LEFT		0x40
+#define TURRET_RIGHT	0x80
+
+//2Bytes
+#define CANNON_UP		0x100
+#define CANNON_DOWN		0x200
+
+
 using namespace DirectX;
 using namespace DirectX::PackedVector;
 using Microsoft::WRL::ComPtr;
