@@ -58,20 +58,28 @@ void CObjectBase::SetPosition(const XMFLOAT3& position)
 CModelObject::CModelObject()
 	: CObjectBase()
 {
-	m_spTankModel = std::make_shared<CModel>();
+	m_spModel = std::make_shared<CModel>();
 }
 
 CModelObject::~CModelObject()
 {}
 
+void CModelObject::SetFrameTransform(const std::string& name, const Transform& transform)
+{
+	int index = m_spModel->GetFrameIndex(name);
+	if (index == -1) return;
+
+	m_umFrameTransform[index] = transform;
+}
+
 void CModelObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
-	if (m_spTankModel) m_spTankModel->DrawModel(cpCommandList, m_Transform.getMatrix());
+	if (m_spModel) m_spModel->DrawModel(cpCommandList, m_umFrameTransform, m_Transform.getMatrix());
 }
 
 void CModelObject::ReleaseModelUploadBuffer()
 {
-	m_spTankModel->ReleaseUploadBuffer();
+	m_spModel->ReleaseUploadBuffer();
 }
 
 // -------------------------------------------

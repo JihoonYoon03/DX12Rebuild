@@ -170,13 +170,28 @@ public:
 		std::ifstream& file, std::istringstream& iss, std::string& buffer,
 		const std::optional<unsigned int> parent = std::nullopt);
 
+
 	void ReleaseUploadBuffer();
 
-	XMFLOAT4X4 GetWorldMatrix(unsigned int index);
+	void SetFrameParent(const std::string& targetFrame, const std::string& parentFrame);
+	void SetFrameLocal(const std::string& targetFrame, const Transform& transform);
+	void SetFrameLocal(const std::string& targetFrame, const XMFLOAT4X4& mtx);
+
+	//FrameData* GetFrame(const std::string& frameName);
+	int GetFrameIndex(const std::string& frameName);
+	XMFLOAT4X4 GetFrameMatrix(const std::string& frameName);
+	XMFLOAT4X4 GetFrameMatrix(unsigned int index);
+	//프레임 별 변환이 적용된 것 까지 포함하여 Get
+	XMFLOAT4X4 GetFrameMatrix(unsigned int index, std::unordered_map<int, Transform>& umFrameTransform);
 
 	const std::vector<FrameData>& getData() { return m_vFrameData; }
 
-	virtual void DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, XMFLOAT4X4 objWorld = Matrix4x4::Identity());
+	virtual void DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+		const XMFLOAT4X4 objWorld = Matrix4x4::Identity());
+	//프레임 별 변환 적용
+	virtual void DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+		std::unordered_map<int, Transform>& umFrameTransform,
+		const XMFLOAT4X4 objWorld = Matrix4x4::Identity());
 
 private:
 	std::vector<FrameData>					m_vFrameData;

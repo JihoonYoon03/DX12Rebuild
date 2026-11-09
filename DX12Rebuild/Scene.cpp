@@ -149,9 +149,9 @@ HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12Gr
 	// Model Data
 	// 
 	//----------------------------------
-	m_spTankModel = std::make_shared<CModel>();
+	m_spModel = std::make_shared<CModel>();
 	std::shared_ptr<CMaterial> material = std::make_shared<CMaterial>(m_spShader);
-	if (!m_spTankModel->LoadModelData(cpDevice, cpCommandList, "../Resources/AbramsTank.txt", material))
+	if (!m_spModel->LoadModelData(cpDevice, cpCommandList, "../Resources/AbramsTank.txt", material))
 	{
 		return E_FAIL;
 	}
@@ -162,7 +162,7 @@ HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12Gr
 	// 
 	//----------------------------------
 	std::unique_ptr<CTankPlayer> upPlayer = std::make_unique<CTankPlayer>();
-	upPlayer->SetModel(m_spTankModel);
+	upPlayer->SetModel(m_spModel);
 	upPlayer->SetCamera(m_spCamera);
 	upPlayer->SetPosition(0.0f, m_upTerrainObj->GetHeightAt(0.0f, 0.0f) + 1.0f, 0.0f);
 
@@ -177,7 +177,7 @@ HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12Gr
 
 	std::unique_ptr<CModelObject> upObj[1];
 	upObj[0] = std::make_unique<CModelObject>();
-	upObj[0]->SetModel(m_spTankModel);
+	upObj[0]->SetModel(m_spModel);
 
 	upObj[0]->SetPosition(10.0f, m_upTerrainObj->GetHeightAt(10.0f, 10.0f) + 1.0f, 10.0f);
 	
@@ -227,6 +227,8 @@ void CGameScene::ProcessInput(UCHAR* pKeyBuffer, float deltaTime)
 		if (pKeyBuffer[VK_RIGHT] & 0xF0) dwDirection |= DIR_RIGHT;
 		if (pKeyBuffer[VK_PRIOR] & 0xF0) dwDirection |= DIR_UP;
 		if (pKeyBuffer[VK_NEXT] & 0xF0) dwDirection |= DIR_DOWN;
+		if (pKeyBuffer['Q'] & 0xF0) dwDirection |= TURRET_LEFT;
+		if (pKeyBuffer['E'] & 0xF0) dwDirection |=  TURRET_RIGHT;
 	}
 	float cxDelta = 0.0f, cyDelta = 0.0f;
 	POINT ptCursorPos;
@@ -250,13 +252,13 @@ void CGameScene::ProcessInput(UCHAR* pKeyBuffer, float deltaTime)
 void CGameScene::ReleaseUploadBuffers()
 {
 	m_upTerrainObj->ReleaseUploadBuffer();
-	m_spTankModel->ReleaseUploadBuffer();
+	m_spModel->ReleaseUploadBuffer();
 }
 
 void CGameScene::ReleaseObjects()
 {
 	m_upTerrainObj.reset();
-	m_spTankModel.reset();
+	m_spModel.reset();
 	m_spShader.reset();
 }
 

@@ -434,7 +434,78 @@ void CModel::ReleaseUploadBuffer()
 	if (m_upLandscape) m_upLandscape->ReleaseUploadBuffer();
 }
 
-XMFLOAT4X4 CModel::GetWorldMatrix(unsigned int index)
+void CModel::SetFrameParent(const std::string& targetFrame, const std::string& parentFrame)
+{
+	auto target = std::find_if(m_vFrameData.begin(), m_vFrameData.end(),
+		[targetFrame](FrameData& frame) {
+			return frame.name == targetFrame;
+		});
+
+	auto parent = std::find_if(m_vFrameData.begin(), m_vFrameData.end(),
+		[parentFrame](FrameData& frame) {
+			return frame.name == parentFrame;
+		});
+
+	if (target != m_vFrameData.end() && parent != m_vFrameData.end())
+		target->parent = parent->index;
+}
+
+void CModel::SetFrameLocal(const std::string& targetFrame, const Transform& transform)
+{
+	SetFrameLocal(targetFrame, transform.getMatrix());
+}
+
+void CModel::SetFrameLocal(const std::string& targetFrame, const XMFLOAT4X4& mtx)
+{
+	auto target = std::find_if(m_vFrameData.begin(), m_vFrameData.end(),
+		[targetFrame](FrameData& frame) {
+			return frame.name == targetFrame;
+		});
+
+	if (target != m_vFrameData.end())
+	{
+		target->mtxModel = mtx;
+	}
+}
+
+//FrameData* CModel::GetFrame(const std::string& frameName)
+//{
+//	auto target = std::find_if(m_vFrameData.begin(), m_vFrameData.end(),
+//		[frameName](FrameData& frame) {
+//			return frame.name == frameName;
+//		});
+//
+//	if (target != m_vFrameData.end())
+//		return &(*target);
+//	else
+//		return nullptr;
+//}
+
+int CModel::GetFrameIndex(const std::string& frameName)
+{
+	auto target = std::find_if(m_vFrameData.begin(), m_vFrameData.end(),
+		[frameName](FrameData& frame) {
+			return frame.name == frameName;
+		});
+
+	if (target != m_vFrameData.end())
+		return target->index;
+	
+	//실패
+	return -1;
+}
+
+XMFLOAT4X4 CModel::GetFrameMatrix(const std::string& frameName)
+{
+	int index = GetFrameIndex(frameName);
+
+	if (index != -1)
+		return GetFrameMatrix(index);
+	else
+		return Matrix4x4::Identity();
+}
+
+XMFLOAT4X4 CModel::GetFrameMatrix(unsigned int index)
 {
 	XMFLOAT4X4 retValue;
 
@@ -446,12 +517,43 @@ XMFLOAT4X4 CModel::GetWorldMatrix(unsigned int index)
 	//부모 인덱스 정보가 있는 경우
 	if (current.parent.has_value())
 	{
-		XMFLOAT4X4 mtxParent = GetWorldMatrix(current.parent.value());
+		XMFLOAT4X4 mtxParent = GetFrameMatrix(current.parent.value());
 		//재귀호출
 		retValue = Matrix4x4::Multiply(retValue, mtxParent);
 	}
 
 	return retValue;
+}
+
+XMFLOAT4X4 CModel::GetFrameMatrix(unsigned int index, std::unordered_map<int, Transform>& umFrameTransform)
+{
+	if (index >= m_vFrameData.size()) return Matrix4x4::Identity();
+
+	//프레임에 적용되는 행렬 있는지 확인
+	FrameData& current = m_vFrameData[index];
+	auto iter = umFrameTransform.find(m_vFrameData[index].index);
+	XMFLOAT4X4 retval = current.mtxModel;
+
+	if (iter != umFrameTransform.end())
+	{
+		Transform pivot;
+		pivot.position = XMFLOAT3{ retval._41, retval._42, retval._43 };
+		//프레임별 변환 적용
+		XMFLOAT4X4 frame = Matrix4x4::Multiply(
+			Matrix4x4::Multiply(Matrix4x4::Inverse(pivot.getMatrix()), iter->second.getMatrix()),
+			pivot.getMatrix());
+		retval = Matrix4x4::Multiply(retval, frame);
+	}
+
+	//부모 인덱스 정보가 있는 경우
+	if (current.parent.has_value())
+	{
+		XMFLOAT4X4 mtxParent = GetFrameMatrix(current.parent.value(), umFrameTransform);
+		//재귀호출
+		retval = Matrix4x4::Multiply(retval, mtxParent);
+	}
+
+	return retval;
 }
 
 //아직 미사용
@@ -462,7 +564,7 @@ XMFLOAT4X4 CModel::GetWorldMatrix(unsigned int index)
 //		m_modelData.frames[index].meshData->indices.size() == 0)
 //		return;
 //
-//	XMFLOAT4X4 world = GetWorldMatrix(index);
+//	XMFLOAT4X4 world = GetFrameMatrix(index);
 //	world = Matrix4x4::Transpose(world);
 //	//root constant 256바이트 정렬. 나중에 최적화 필요
 //	::memcpy(m_MappedFrameMatrixBuffer + index * 256, &world, sizeof(XMFLOAT4X4));
@@ -478,7 +580,45 @@ void CModel::DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, c
 	for (int i = 0; i < m_vFrameData.size(); ++i)
 	{
 
-		XMFLOAT4X4 world = Matrix4x4::Transpose(Matrix4x4::Multiply(GetWorldMatrix(i), objWorld));
+		XMFLOAT4X4 world = Matrix4x4::Transpose(Matrix4x4::Multiply(GetFrameMatrix(i), objWorld));
+		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
+
+		for (auto& subMesh : m_vFrameData[i].subMeshes)
+		{
+			//현재 프레임의 머터리얼 데이터에서 선택 후 적용
+			MaterialData materialData{};
+			if (subMesh.materialIndex < m_vFrameData[i].materialDatas.size())
+				materialData = m_vFrameData[i].materialDatas[subMesh.materialIndex];
+			else
+				materialData.albedoColor = XMFLOAT4(1, 1, 1, 1);
+			m_spMaterial->SetMaterialData(cpCommandList, materialData);
+			m_upLandscape->DrawMesh(cpCommandList, m_vFrameData[i].baseVertex, subMesh);
+		}
+	}
+}
+
+void CModel::DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, std::unordered_map<int, Transform>& umFrameTransform, const XMFLOAT4X4 objWorld)
+{
+	if (!m_upLandscape) return;
+
+	//비효율적 렌더링 구조 개선 필요
+	m_spMaterial->BindMaterial(cpCommandList);
+
+	for (int i = 0; i < m_vFrameData.size(); ++i)
+	{
+		XMFLOAT4X4 model;
+		if (umFrameTransform.empty())
+		{
+			//기본 로컬 행렬
+			model = GetFrameMatrix(i);
+		}
+		else
+		{
+			//프레임 별 변환까지 적용
+			model = GetFrameMatrix(i, umFrameTransform);
+		}
+
+		XMFLOAT4X4 world = Matrix4x4::Transpose(Matrix4x4::Multiply(model, objWorld));
 		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
 
 		for (auto& subMesh : m_vFrameData[i].subMeshes)

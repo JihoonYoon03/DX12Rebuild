@@ -64,6 +64,27 @@ HRESULT CreateBufferResource(
 	ComPtr<ID3D12Resource>* pUploadBuffer = nullptr
 );
 
+struct Transform
+{
+	XMFLOAT3 scale{ 1, 1, 1 };
+	XMFLOAT3 rotation{ 0, 0, 0 };
+	XMFLOAT3 position{ 0, 0, 0 };
+
+	inline XMFLOAT4X4 getMatrix() const {
+		XMMATRIX objWorldXM =
+			XMMatrixMultiply(
+				XMMatrixMultiply(
+					XMMatrixScaling(scale.x, scale.y, scale.z),
+					XMMatrixRotationRollPitchYaw(rotation.x, rotation.y, rotation.z)),
+				XMMatrixTranslation(position.x, position.y, position.z));
+
+		XMFLOAT4X4 objWorld;
+		XMStoreFloat4x4(&objWorld, objWorldXM);
+
+		return objWorld;
+	}
+};
+
 //3차원 벡터의 연산
 namespace Vector3
 {
@@ -203,6 +224,12 @@ namespace Vector4
 //행렬의 연산
 namespace Matrix4x4
 {
+	inline XMFLOAT4X4 XMMatrixToFloat4x4(const XMMATRIX& xmmtx)
+	{
+		XMFLOAT4X4 xmmtx4x4;
+		XMStoreFloat4x4(&xmmtx4x4, xmmtx);
+		return xmmtx4x4;
+	}
 	inline XMFLOAT4X4 Identity()
 	{
 		XMFLOAT4X4 xmmtx4x4Result;

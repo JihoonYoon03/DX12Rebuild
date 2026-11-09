@@ -55,7 +55,7 @@ public:
 	void DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 private:
 	CTankPlayer*					m_pPlayer;
-	std::shared_ptr<CModel>			m_spTankModel;
+	std::shared_ptr<CModel>			m_spModel;
 	std::shared_ptr<CTextureShader> m_spTexShader;
 
 	std::unique_ptr<CTerrainObject>	m_upTerrainObj;

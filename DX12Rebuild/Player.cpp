@@ -2,7 +2,7 @@
 #include "Player.h"
 #include "Camera.h"
 #include "GameObject.h"
-
+#include "Mesh.h"
 
 CPlayer::CPlayer()
 {}
@@ -57,6 +57,82 @@ CTankPlayer::~CTankPlayer()
 {
 }
 
+void CTankPlayer::SetModel(std::shared_ptr<CModel>& model)
+{
+	m_spModel = model;
+	XMFLOAT4X4 mtxTurret = m_spModel->GetFrameMatrix("Turret");
+
+	//터렛에 파츠 연결
+	//포신의 기존 로컬 행렬 저장
+	XMFLOAT4X4 localOrigin = m_spModel->GetFrameMatrix("maingun");
+
+	//터렛 기본 설정으로 회전이 적용되어 있음. 그걸 빼줘야 함
+	//파츠들의 초기 변환 유지. 터렛의 변환 행렬이 부모행렬로 곱해져 상쇄됨.
+	//하드코딩 된 부분은 나중에 string vector 넘겨받는 형태로 처리하게 변경 예정
+	m_spModel->SetFrameParent("maingun", "Turret");
+	m_spModel->SetFrameLocal("maingun", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("m2");
+	m_spModel->SetFrameParent("m2", "Turret");
+	m_spModel->SetFrameLocal("m2", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("comhatch");
+	m_spModel->SetFrameParent("comhatch", "Turret");
+	m_spModel->SetFrameLocal("comhatch", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("ChamferCyl");
+	m_spModel->SetFrameParent("ChamferCyl", "Turret");
+	m_spModel->SetFrameLocal("ChamferCyl", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("Tube01");
+	m_spModel->SetFrameParent("Tube01", "Turret");
+	m_spModel->SetFrameLocal("Tube01", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("Cylinder01");
+	m_spModel->SetFrameParent("Cylinder01", "Turret");
+	m_spModel->SetFrameLocal("Cylinder01", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("Cylinder00");
+	m_spModel->SetFrameParent("Cylinder00", "Turret");
+	m_spModel->SetFrameLocal("Cylinder00", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("Rectangle6");
+	m_spModel->SetFrameParent("Rectangle6", "Turret");
+	m_spModel->SetFrameLocal("Rectangle6", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("ldoor");
+	m_spModel->SetFrameParent("ldoor", "Turret");
+	m_spModel->SetFrameLocal("ldoor", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("rdoor");
+	m_spModel->SetFrameParent("rdoor", "Turret");
+	m_spModel->SetFrameLocal("rdoor", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("Rectangle2");
+	m_spModel->SetFrameParent("Rectangle2", "Turret");
+	m_spModel->SetFrameLocal("Rectangle2", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("Rectangle3");
+	m_spModel->SetFrameParent("Rectangle3", "Turret");
+	m_spModel->SetFrameLocal("Rectangle3", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("Rectangle4");
+	m_spModel->SetFrameParent("Rectangle4", "Turret");
+	m_spModel->SetFrameLocal("Rectangle4", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("Rectangle5");
+	m_spModel->SetFrameParent("Rectangle5", "Turret");
+	m_spModel->SetFrameLocal("Rectangle5", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("grille");
+	m_spModel->SetFrameParent("grille", "Turret");
+	m_spModel->SetFrameLocal("grille", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+
+	localOrigin = m_spModel->GetFrameMatrix("tray");
+	m_spModel->SetFrameParent("tray", "Turret");
+	m_spModel->SetFrameLocal("tray", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+}
+
 void CTankPlayer::ProcessInput(DWORD dwInput, float deltaTime, const CTerrainObject* terrain)
 {
 	float turn = 0.0f;
@@ -84,6 +160,15 @@ void CTankPlayer::ProcessInput(DWORD dwInput, float deltaTime, const CTerrainObj
 
 	Move(xmf3Shift);
 	m_spCamera->Move(xmf3Shift);
+
+	float turretTurn = 0.0f;
+	if (dwInput & TURRET_LEFT) turretTurn -= 1.0f;
+	if (dwInput & TURRET_RIGHT) turretTurn += 1.0f;
+
+	m_fTurretYaw += turretTurn * m_fTurretTurnSpeed * deltaTime;
+	Transform turret;
+	turret.rotation.y = m_fTurretYaw;
+	SetFrameTransform("Turret", turret);
 }
 
 void CTankPlayer::Move(XMFLOAT3 shift)
