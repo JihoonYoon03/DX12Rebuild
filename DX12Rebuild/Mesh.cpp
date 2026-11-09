@@ -525,6 +525,11 @@ XMFLOAT4X4 CModel::GetFrameMatrix(unsigned int index)
 	return retValue;
 }
 
+XMFLOAT4X4 CModel::GetFrameMatrix(const std::string& frameName, std::unordered_map<int, Transform>& umFrameTransform)
+{
+	return GetFrameMatrix(GetFrameIndex(frameName), umFrameTransform);
+}
+
 XMFLOAT4X4 CModel::GetFrameMatrix(unsigned int index, std::unordered_map<int, Transform>& umFrameTransform)
 {
 	if (index >= m_vFrameData.size()) return Matrix4x4::Identity();

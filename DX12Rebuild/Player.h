@@ -31,7 +31,15 @@ public:
 	void ProcessInput(DWORD dwInput, float deltaTime, const CTerrainObject* terrain = nullptr);
 	void Move(XMFLOAT3 shift);
 
+	HRESULT CreateCannonTestMesh(const ComPtr<ID3D12Device>& cpDevice,
+		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	void ReleaseCannonTestUploadBuffer();
+	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+
 private:
+	void CannonTestDraw(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	std::unique_ptr<CMesh> m_upCannonTestMesh;
+
 	float	m_fVelocity = 10.0f;
 	//초당 회전량
 	float	m_fTurnSpeed = XMConvertToRadians(60.0f);

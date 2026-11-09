@@ -166,6 +166,9 @@ HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12Gr
 	upPlayer->SetCamera(m_spCamera);
 	upPlayer->SetPosition(0.0f, m_upTerrainObj->GetHeightAt(0.0f, 0.0f) + 1.0f, 0.0f);
 
+	const HRESULT cannonTestResult = upPlayer->CreateCannonTestMesh(cpDevice, cpCommandList);
+	if (FAILED(cannonTestResult)) return cannonTestResult;
+
 	m_pPlayer = upPlayer.get();
 
 	//----------------------------------
@@ -253,6 +256,7 @@ void CGameScene::ReleaseUploadBuffers()
 {
 	m_upTerrainObj->ReleaseUploadBuffer();
 	m_spModel->ReleaseUploadBuffer();
+	if (m_pPlayer) m_pPlayer->ReleaseCannonTestUploadBuffer();
 }
 
 void CGameScene::ReleaseObjects()

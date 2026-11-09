@@ -190,3 +190,70 @@ void CTankPlayer::Move(XMFLOAT3 shift)
 {
 	m_Transform.position = Vector3::Add(m_Transform.position, shift);
 }
+
+HRESULT CTankPlayer::CreateCannonTestMesh(const ComPtr<ID3D12Device>& cpDevice,
+	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	const XMFLOAT3 corners[] = {
+		{ -0.5f, -0.5f, -0.5f }, { -0.5f, 0.5f, -0.5f },
+		{ 0.5f, 0.5f, -0.5f }, { 0.5f, -0.5f, -0.5f },
+		{ -0.5f, -0.5f, 0.5f }, { -0.5f, 0.5f, 0.5f },
+		{ 0.5f, 0.5f, 0.5f }, { 0.5f, -0.5f, 0.5f }
+	};
+
+	MeshData<VertexTexcoord> cube;
+	for (const auto& corner : corners)
+		cube.vertices.push_back({ corner, { 1, 1, 1, 1 }, { 0, 0 } });
+	cube.indices = {
+		0, 1, 2, 0, 2, 3,
+		4, 7, 6, 4, 6, 5,
+		0, 4, 5, 0, 5, 1,
+		3, 2, 6, 3, 6, 7,
+		1, 5, 6, 1, 6, 2,
+		0, 3, 7, 0, 7, 4
+	};
+
+	m_upCannonTestMesh = std::make_unique<CMesh>();
+	return m_upCannonTestMesh->CreateBuffer(cpDevice, cpCommandList, cube);
+}
+
+void CTankPlayer::ReleaseCannonTestUploadBuffer()
+{
+	if (m_upCannonTestMesh) m_upCannonTestMesh->ReleaseUploadBuffer();
+}
+
+void CTankPlayer::CannonTestDraw(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	if (!m_upCannonTestMesh || m_spModel->GetFrameIndex("maingun") == -1) return;
+
+	const XMFLOAT4X4 cannonWorld = Matrix4x4::Multiply(
+		m_spModel->GetFrameMatrix("maingun", m_umFrameTransform), m_Transform.getMatrix());
+	const XMMATRIX world = XMLoadFloat4x4(&cannonWorld);
+
+	// AbramsTank.txt places the muzzle ring at local Y = -1.368214.
+	const XMVECTOR muzzle = XMVector3TransformCoord(XMVectorSet(0, -1.368214f, 0, 1), world);
+	const XMVECTOR forward = XMVector3Normalize(
+		XMVector3TransformNormal(XMVectorSet(0, -1, 0, 0), world));
+
+	const XMVECTOR positions[] = { muzzle, XMVectorMultiplyAdd(forward, XMVectorReplicate(0.5f), muzzle) };
+	const XMFLOAT4 colors[] = { { 1, 0, 0, 1 }, { 1, 1, 0, 1 } };
+
+	for (int i = 0; i < 2; ++i)
+	{
+		Transform marker;
+		marker.scale = { 0.08f, 0.08f, 0.08f };
+		XMStoreFloat3(&marker.position, positions[i]);
+		const XMFLOAT4X4 markerWorld = Matrix4x4::Transpose(marker.getMatrix());
+		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &markerWorld, 0);
+		cpCommandList->SetGraphicsRoot32BitConstants(2, 4, &colors[i], 0);
+		m_upCannonTestMesh->DrawMesh(cpCommandList);
+	}
+}
+
+void CTankPlayer::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	if (!m_spModel) return;
+
+	m_spModel->DrawModel(cpCommandList, m_umFrameTransform, m_Transform.getMatrix());
+	CannonTestDraw(cpCommandList);
+}

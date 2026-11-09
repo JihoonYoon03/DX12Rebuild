@@ -182,6 +182,7 @@ public:
 	XMFLOAT4X4 GetFrameMatrix(const std::string& frameName);
 	XMFLOAT4X4 GetFrameMatrix(unsigned int index);
 	//프레임 별 변환이 적용된 것 까지 포함하여 Get
+	XMFLOAT4X4 GetFrameMatrix(const std::string& frameName, std::unordered_map<int, Transform>& umFrameTransform);
 	XMFLOAT4X4 GetFrameMatrix(unsigned int index, std::unordered_map<int, Transform>& umFrameTransform);
 
 	const std::vector<FrameData>& getData() { return m_vFrameData; }
