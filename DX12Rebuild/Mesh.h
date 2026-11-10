@@ -52,6 +52,10 @@ struct FrameData
 	std::vector<MaterialData>				materialDatas;
 
 	XMFLOAT4X4								mtxModel;
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	std::optional<BoundingBox> localBounds;
+	//-----------------------------------
 };
 
 class CMesh {
@@ -186,6 +190,10 @@ public:
 	XMFLOAT4X4 GetFrameMatrix(unsigned int index, std::unordered_map<int, Transform>& umFrameTransform);
 
 	const std::vector<FrameData>& getData() { return m_vFrameData; }
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	std::optional<BoundingBox> GetModelBounds();
+	//-----------------------------------
 
 	virtual void DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
 		const XMFLOAT4X4 objWorld = Matrix4x4::Identity());
@@ -196,7 +204,7 @@ public:
 
 private:
 	std::vector<FrameData>					m_vFrameData;
-	std::unique_ptr<CMesh>					m_upLandscape;
+	std::unique_ptr<CMesh>					m_upMesh;
 	std::shared_ptr<CMaterial>				m_spMaterial;
 
 	//아직 미사용

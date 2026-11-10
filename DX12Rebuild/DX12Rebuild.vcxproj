@@ -158,6 +158,10 @@
     <ClInclude Include="GameObject.h" />
     <ClInclude Include="Material.h" />
     <ClInclude Include="Mesh.h" />
+    <!-- =================================== -->
+    <!-- [아래 코드는 AI로 구현됨] -->
+    <ClInclude Include="UiScene.h" />
+    <!-- =================================== -->
     <ClInclude Include="Player.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="Shader.h" />
@@ -177,6 +181,10 @@
     <ClCompile Include="GameObject.cpp" />
     <ClCompile Include="Material.cpp" />
     <ClCompile Include="Mesh.cpp" />
+    <!-- =================================== -->
+    <!-- [아래 코드는 AI로 구현됨] -->
+    <ClCompile Include="UiScene.cpp" />
+    <!-- =================================== -->
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="Shader.cpp" />

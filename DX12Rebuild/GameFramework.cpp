@@ -5,6 +5,11 @@
 #include "Texture.h"
 #include "Scene.h"
 #include "GameObject.h"
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+#include "UiScene.h"
+#include <windowsx.h>
+//-----------------------------------
 
 CGameFramework::CGameFramework()
 {
@@ -25,7 +30,11 @@ CGameFramework::CGameFramework()
 	tex1 = std::make_unique<CTexture>();
 	tex2 = std::make_unique<CTexture>();
 
-	m_spGameScene = std::make_shared<CGameScene>();
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	m_spTankScene = std::make_shared<CTankGameScene>();
+	m_spHelicopterScene = std::make_shared<CHelicopterGameScene>();
+	//-----------------------------------
 
 	m_wsTitle = L"DX12 Base Framework (";
 }
@@ -47,7 +56,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 	if (FAILED(CreateDSV()))				return false;
 	if (FAILED(CreateRootSignature()))		return false;
 
-	if (FAILED(m_spGameScene->InitScene(m_cpDevice, m_cpRootSignature)))	return false;
+	if (FAILED(m_spTankScene->InitScene(m_cpDevice, m_cpRootSignature)))	return false;
 
 	if (FAILED(m_SRVDescHeapAllocator->CreateSRVDescHeap(m_cpDevice)))		return false;
 
@@ -388,8 +397,12 @@ HRESULT CGameFramework::BuildObjects()
 	hr = tex2->CreateTexture(*m_SRVDescHeapAllocator, m_cpDevice, m_cpCommandList, L"../Resources/SkydomeTex.dds");
 	if (FAILED(hr)) return hr;
 
-	hr = m_spGameScene->BuildObjects(m_cpDevice, m_cpCommandList);
+	hr = m_spTankScene->BuildObjects(m_cpDevice, m_cpCommandList);
 	if (FAILED(hr)) return hr;
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	m_spHelicopterScene->ShareStageResources(*m_spTankScene);
+	//-----------------------------------
 
 	//행렬 버퍼 생성
 	hr = CreateBufferResource(
@@ -404,6 +417,11 @@ HRESULT CGameFramework::BuildObjects()
 	D3D12_RANGE range = { 0, 0 };
 	hr = m_cpMtxBuffer->Map(0, &range, (void**)&m_mappedMtxBuffer);
 	if (FAILED(hr)) return hr;
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	hr = BuildPortingUi();
+	if (FAILED(hr)) return hr;
+	//-----------------------------------
 
 	hr = m_cpCommandList->Close();
 	if (FAILED(hr)) return hr;
@@ -415,7 +433,10 @@ HRESULT CGameFramework::BuildObjects()
 
 	ReleaseUploadBuffers();
 
-	m_upCurrentScene = m_spGameScene;
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	m_upCurrentScene = m_spMainMenuScene;
+	//-----------------------------------
 
 	return S_OK;
 }
@@ -425,13 +446,26 @@ void CGameFramework::ReleaseUploadBuffers()
 	//m_upCurrentScene->ReleaseObjectsUploadBuffer();
 	tex1->ReleaseUploadBuffer();
 	tex2->ReleaseUploadBuffer();
-	m_spGameScene->ReleaseUploadBuffers();
+	m_spTankScene->ReleaseUploadBuffers();
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	m_spMainMenuScene->ReleaseUploadBuffers();
+	m_spStageSelectScene->ReleaseUploadBuffers();
+	m_spTutorialScene->ReleaseUploadBuffers();
+	//-----------------------------------
 }
 
 void CGameFramework::ReleaseObjects()
 {
 	m_cpMtxBuffer->Unmap(0, nullptr);
 	m_upCurrentScene.reset();
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	m_spHelicopterScene.reset();
+	m_spMainMenuScene.reset();
+	m_spStageSelectScene.reset();
+	m_spTutorialScene.reset();
+	//-----------------------------------
 }
 
 void CGameFramework::ProcessInput()
@@ -441,6 +475,14 @@ void CGameFramework::ProcessInput()
 	DWORD dwDirection = 0;
 
 	m_upCurrentScene.lock()->ProcessInput(pKeyBuffer, m_timer.GetTimeElapsed());
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	if (const auto spGame = std::dynamic_pointer_cast<CGameScene>(m_upCurrentScene.lock()); spGame && spGame->StageFinished())
+	{
+		if (spGame->GetStage() == EGameStage::HelicopterTargets) EnterStage(EGameStage::TankBattle);
+		else m_upCurrentScene = m_spStageSelectScene;
+	}
+	//-----------------------------------
 }
 
 void CGameFramework::AnimateObjects()
@@ -590,6 +632,10 @@ HRESULT CGameFramework::ResizeBackBuffers(WPARAM wParam)
 		if (FAILED(hr)) { OutputDebugString(L"ResizeBackBuffers(): CreateDSV() Failed\n"); return hr; }
 
 		m_upCurrentScene.lock()->WindowResized(m_nClientW, m_nClientH);
+		//-----------------------------------
+		//[아래 코드는 AI로 구현됨]
+		ResizePortingUi();
+		//-----------------------------------
 
 		m_timer.Reset();
 
@@ -625,6 +671,104 @@ void CGameFramework::OnProcessingKeyboardMessage(HWND hWnd, UINT nMessageID, WPA
 
 LRESULT CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
 {
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	ProcessPortingUiMessage(hWnd, nMessageID, wParam, lParam);
+	//-----------------------------------
 	return LRESULT();
 }
 
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CGameFramework::EnterStage(EGameStage stage)
+{
+	const auto& spScene = stage == EGameStage::TankBattle ? m_spTankScene : m_spHelicopterScene;
+	spScene->WindowResized(m_nClientW, m_nClientH);
+	spScene->BeginStage(stage);
+	m_upCurrentScene = spScene;
+}
+
+HRESULT CGameFramework::BuildPortingUi()
+{
+	auto spUiShader = std::make_shared<CShader>();
+	HRESULT hr = spUiShader->CreateShader(m_cpDevice, m_cpRootSignature);
+	if (FAILED(hr)) return hr;
+
+	m_spMainMenuScene = std::make_shared<CMainMenuScene>(spUiShader);
+	m_spStageSelectScene = std::make_shared<CStageSelectScene>(spUiShader);
+	m_spTutorialScene = std::make_shared<CPortingTutorialScene>(spUiShader);
+	ResizePortingUi();
+
+	for (const auto& spUiScene : { m_spMainMenuScene, m_spStageSelectScene, m_spTutorialScene })
+	{
+		hr = spUiScene->BuildObjects(m_cpDevice, m_cpCommandList);
+		if (FAILED(hr)) return hr;
+	}
+	return S_OK;
+}
+
+void CGameFramework::ResizePortingUi()
+{
+	m_spMainMenuScene->ResizeUi(m_nClientW, m_nClientH);
+	m_spStageSelectScene->ResizeUi(m_nClientW, m_nClientH);
+	m_spTutorialScene->ResizeUi(m_nClientW, m_nClientH);
+}
+
+void CGameFramework::ProcessPortingUiMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+{
+	const auto spActiveScene = m_upCurrentScene.lock();
+	if (!spActiveScene || hWnd != m_hWnd) return;
+	const auto spGame = std::dynamic_pointer_cast<CGameScene>(spActiveScene);
+
+	if (nMessageID == WM_KEYDOWN && wParam == VK_ESCAPE &&
+		(spGame || spActiveScene == m_spTutorialScene))
+	{
+		m_upCurrentScene = m_spStageSelectScene;
+		return;
+	}
+	if (nMessageID == WM_KEYDOWN && spGame &&
+		(static_cast<ULONG_PTR>(lParam) & (1u << 30)) == 0)
+	{
+		spGame->StageKeyPressed(wParam);
+	}
+	if (nMessageID != WM_LBUTTONDOWN) return;
+
+	if (spActiveScene == m_spTutorialScene)
+	{
+		m_upCurrentScene = m_spStageSelectScene;
+		return;
+	}
+
+	std::shared_ptr<CUiScene> spMenu;
+	if (spActiveScene == m_spMainMenuScene) spMenu = m_spMainMenuScene;
+	if (spActiveScene == m_spStageSelectScene) spMenu = m_spStageSelectScene;
+	if (!spMenu) return;
+
+	const EUiAction menuAction = spMenu->HitTest(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+	switch (menuAction)
+	{
+	case EUiAction::OpenStageSelect:
+		m_upCurrentScene = m_spStageSelectScene;
+		break;
+	case EUiAction::OpenTutorial:
+		m_upCurrentScene = m_spTutorialScene;
+		break;
+	case EUiAction::Level1:
+	case EUiAction::Level2:
+	case EUiAction::Level3:
+	{
+		EGameStage stage = EGameStage::HelicopterTargets;
+		if (menuAction == EUiAction::Level2) stage = EGameStage::TankBattle;
+		if (menuAction == EUiAction::Level3) stage = EGameStage::HelicopterBattle;
+		EnterStage(stage);
+		break;
+	}
+	case EUiAction::Exit:
+		PostMessageW(hWnd, WM_CLOSE, 0, 0);
+		break;
+	default:
+		break;
+	}
+}
+//-----------------------------------

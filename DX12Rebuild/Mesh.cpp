@@ -82,10 +82,23 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	//Mesh 속성 파싱 관련
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
 	{ "<Bounds>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>&) {
+		BoundingBox bounds;
+		auto& center = bounds.Center;
+		auto& extents = bounds.Extents;
+		if (iss >> center.x >> center.y >> center.z >> extents.x >> extents.y >> extents.z &&
+			std::isfinite(center.x) && std::isfinite(center.y) && std::isfinite(center.z) &&
+			std::isfinite(extents.x) && std::isfinite(extents.y) && std::isfinite(extents.z) &&
+			extents.x >= 0.0f && extents.y >= 0.0f && extents.z >= 0.0f)
+		{
+			frame.localBounds = bounds;
+		}
 		return false;
 	}},
+	//-----------------------------------
 
 	{ "<Positions>:",
 	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
@@ -326,6 +339,16 @@ bool CModel::LoadModelData(
 			}
 			if (!model.meshData[i].vertices.empty())
 			{
+				//-----------------------------------
+				//[아래 코드는 AI로 구현됨]
+				auto& bounds = model.frames[i].localBounds;
+				const auto& vertices = model.meshData[i].vertices;
+				if (!bounds || Vector3::LengthSquared(bounds->Extents) == 0.0f)
+				{
+					bounds.emplace();
+					BoundingBox::CreateFromPoints(*bounds, vertices.size(), &vertices.front().pos, sizeof(VertexTexcoord));
+				}
+				//-----------------------------------
 				combinedMesh.vertices.insert(combinedMesh.vertices.end(), model.meshData[i].vertices.begin(), model.meshData[i].vertices.end());
 				combinedMesh.indices.insert(combinedMesh.indices.end(), model.meshData[i].indices.begin(), model.meshData[i].indices.end());
 				combinedMesh.normals.insert(combinedMesh.normals.end(), model.meshData[i].normals.begin(), model.meshData[i].normals.end());
@@ -337,7 +360,7 @@ bool CModel::LoadModelData(
 		std::unique_ptr<CMesh> upMesh = std::make_unique<CMesh>();
 		if (FAILED(upMesh->CreateBuffer(cpDevice, cpCommandList, combinedMesh))) return false;
 		m_spMaterial = std::move(material);
-		m_upLandscape = std::move(upMesh);
+		m_upMesh = std::move(upMesh);
 		m_vFrameData = std::move(model.frames);
 
 		//행렬 업로드용 버퍼 생성
@@ -429,9 +452,28 @@ bool CModel::ReadFrameData(
 	return false;
 }
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+std::optional<BoundingBox> CModel::GetModelBounds()
+{
+	std::optional<BoundingBox> result;
+	for (unsigned int i = 0; i < m_vFrameData.size(); ++i)
+	{
+		const auto& frame = m_vFrameData[i];
+		if (!frame.localBounds || std::none_of(frame.subMeshes.begin(), frame.subMeshes.end(),
+			[](const SubMeshData& subMesh) { return subMesh.indexAmount > 0; })) continue;
+
+		const BoundingBox bounds = Collision::TransformBox(*frame.localBounds, GetFrameMatrix(i));
+		if (result) BoundingBox::CreateMerged(*result, *result, bounds);
+		else result = bounds;
+	}
+	return result;
+}
+//-----------------------------------
+
 void CModel::ReleaseUploadBuffer()
 {
-	if (m_upLandscape) m_upLandscape->ReleaseUploadBuffer();
+	if (m_upMesh) m_upMesh->ReleaseUploadBuffer();
 }
 
 void CModel::SetFrameParent(const std::string& targetFrame, const std::string& parentFrame)
@@ -577,7 +619,7 @@ XMFLOAT4X4 CModel::GetFrameMatrix(unsigned int index, std::unordered_map<int, Tr
 
 void CModel::DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const XMFLOAT4X4 objWorld)
 {
-	if (!m_upLandscape) return;
+	if (!m_upMesh) return;
 
 	//비효율적 렌더링 구조 개선 필요
 	m_spMaterial->BindMaterial(cpCommandList);
@@ -597,14 +639,14 @@ void CModel::DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, c
 			else
 				materialData.albedoColor = XMFLOAT4(1, 1, 1, 1);
 			m_spMaterial->SetMaterialData(cpCommandList, materialData);
-			m_upLandscape->DrawMesh(cpCommandList, m_vFrameData[i].baseVertex, subMesh);
+			m_upMesh->DrawMesh(cpCommandList, m_vFrameData[i].baseVertex, subMesh);
 		}
 	}
 }
 
 void CModel::DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, std::unordered_map<int, Transform>& umFrameTransform, const XMFLOAT4X4 objWorld)
 {
-	if (!m_upLandscape) return;
+	if (!m_upMesh) return;
 
 	//비효율적 렌더링 구조 개선 필요
 	m_spMaterial->BindMaterial(cpCommandList);
@@ -635,7 +677,7 @@ void CModel::DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, s
 			else
 				materialData.albedoColor = XMFLOAT4(1, 1, 1, 1);
 			m_spMaterial->SetMaterialData(cpCommandList, materialData);
-			m_upLandscape->DrawMesh(cpCommandList, m_vFrameData[i].baseVertex, subMesh);
+			m_upMesh->DrawMesh(cpCommandList, m_vFrameData[i].baseVertex, subMesh);
 		}
 	}
 }

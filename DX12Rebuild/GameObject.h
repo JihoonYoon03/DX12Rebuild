@@ -9,6 +9,8 @@ class CHeightMapImage;
 // ObjectBase
 // 
 // -------------------------------------------
+//-----------------------------------
+//[직접 작성한 코드]
 class CObjectBase
 {
 public:
@@ -24,7 +26,15 @@ public:
 	void SetPosition(const XMFLOAT3& position);
 
 	XMFLOAT3 GetPosition() { return m_Transform.position; }
+//-----------------------------------
 
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	const Transform& GetTransform() const { return m_Transform; }
+	//-----------------------------------
+
+//-----------------------------------
+//[직접 작성한 코드]
 	virtual void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) = 0;
 
 protected:
@@ -84,3 +94,4 @@ private:
 	std::shared_ptr<CHeightMapImage>	m_spHeightMapImage;
 	std::unique_ptr<CMesh>				m_upTerrain;
 };
+//-----------------------------------

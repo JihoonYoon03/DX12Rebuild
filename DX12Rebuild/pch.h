@@ -24,6 +24,11 @@
 #include <unordered_map>
 #include <functional>
 #include <ranges>
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+#include <algorithm>
+#include <cmath>
+//-----------------------------------
 
 #include <wrl.h>
 #include <shellapi.h>
@@ -79,6 +84,8 @@ HRESULT CreateBufferResource(
 	ComPtr<ID3D12Resource>* pUploadBuffer = nullptr
 );
 
+//-----------------------------------
+//[직접 작성한 코드]
 struct Transform
 {
 	XMFLOAT3 scale{ 1, 1, 1 };
@@ -127,20 +134,20 @@ namespace Vector3
 			XMLoadFloat3(&xmf3Vector2));
 		return(xmf3Result);
 	}
-	inline XMFLOAT3 Add(XMFLOAT3& xmf3Vector1, XMFLOAT3& xmf3Vector2, float fScalar)
+	inline XMFLOAT3 Add(const XMFLOAT3& xmf3Vector1, const XMFLOAT3& xmf3Vector2, float fScalar)
 	{
 		XMFLOAT3 xmf3Result;
 		XMStoreFloat3(&xmf3Result, XMLoadFloat3(&xmf3Vector1) + (XMLoadFloat3(&xmf3Vector2) * fScalar));
 		return(xmf3Result);
 	}
-	inline XMFLOAT3 Subtract(XMFLOAT3& xmf3Vector1, XMFLOAT3& xmf3Vector2)
+	inline XMFLOAT3 Subtract(const XMFLOAT3& xmf3Vector1, const XMFLOAT3& xmf3Vector2)
 	{
 		XMFLOAT3 xmf3Result;
 		XMStoreFloat3(&xmf3Result, XMLoadFloat3(&xmf3Vector1) -
 			XMLoadFloat3(&xmf3Vector2));
 		return(xmf3Result);
 	}
-	inline float DotProduct(XMFLOAT3& xmf3Vector1, XMFLOAT3& xmf3Vector2)
+	inline float DotProduct(const XMFLOAT3& xmf3Vector1, const XMFLOAT3& xmf3Vector2)
 	{
 		XMFLOAT3 xmf3Result;
 		XMStoreFloat3(&xmf3Result, XMVector3Dot(XMLoadFloat3(&xmf3Vector1),
@@ -160,13 +167,13 @@ namespace Vector3
 				XMLoadFloat3(&xmf3Vector2)));
 		return(xmf3Result);
 	}
-	inline XMFLOAT3 Normalize(XMFLOAT3& xmf3Vector)
+	inline XMFLOAT3 Normalize(const XMFLOAT3& xmf3Vector)
 	{
 		XMFLOAT3 m_xmf3Normal;
 		XMStoreFloat3(&m_xmf3Normal, XMVector3Normalize(XMLoadFloat3(&xmf3Vector)));
 		return(m_xmf3Normal);
 	}
-	inline float Length(XMFLOAT3& xmf3Vector)
+	inline float Length(const XMFLOAT3& xmf3Vector)
 	{
 		XMFLOAT3 xmf3Result;
 		XMStoreFloat3(&xmf3Result, XMVector3Length(XMLoadFloat3(&xmf3Vector)));
@@ -301,3 +308,107 @@ namespace Matrix4x4
 		return(xmmtx4x4Result);
 	}
 }
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+namespace Vector3
+{
+	inline float LengthSquared(const XMFLOAT3& value)
+	{
+		return XMVectorGetX(XMVector3LengthSq(XMLoadFloat3(&value)));
+	}
+
+	inline XMFLOAT3 Lerp(const XMFLOAT3& from, const XMFLOAT3& to, float amount)
+	{
+		XMFLOAT3 result;
+		XMStoreFloat3(&result, XMVectorLerp(XMLoadFloat3(&from), XMLoadFloat3(&to), amount));
+		return result;
+	}
+
+	inline XMFLOAT3 Forward(float yaw, float elevation = 0.0f)
+	{
+		const float horizontal = std::cos(elevation);
+		return { std::sin(yaw) * horizontal, std::sin(elevation), std::cos(yaw) * horizontal };
+	}
+
+	inline XMFLOAT3 TransformNormal(const XMFLOAT3& normal, const XMFLOAT4X4& matrix)
+	{
+		XMFLOAT3 result;
+		XMStoreFloat3(&result, XMVector3TransformNormal(XMLoadFloat3(&normal), XMLoadFloat4x4(&matrix)));
+		return result;
+	}
+
+	inline XMFLOAT3 RotateTowards(const XMFLOAT3& direction, const XMFLOAT3& desired, float maxAngle)
+	{
+		const XMVECTOR from = XMLoadFloat3(&direction);
+		const XMVECTOR to = XMVector3Normalize(XMLoadFloat3(&desired));
+		const float dot = std::clamp(XMVectorGetX(XMVector3Dot(from, to)), -1.0f, 1.0f);
+		const float angle = std::acos(dot);
+		XMFLOAT3 result;
+		if (angle <= maxAngle)
+		{
+			XMStoreFloat3(&result, to);
+			return result;
+		}
+		XMVECTOR axis = XMVector3Cross(from, to);
+		if (XMVectorGetX(XMVector3LengthSq(axis)) < 0.000001f) axis = XMVector3Orthogonal(from);
+		XMStoreFloat3(&result, XMVector3Rotate(from, XMQuaternionRotationAxis(axis, maxAngle)));
+		return result;
+	}
+}
+
+namespace Matrix4x4
+{
+	inline XMFLOAT4X4 Translation(const XMFLOAT3& offset)
+	{
+		return XMMatrixToFloat4x4(XMMatrixTranslation(offset.x, offset.y, offset.z));
+	}
+
+	inline XMFLOAT4X4 OrthographicLH(float width, float height, float nearZ, float farZ)
+	{
+		return XMMatrixToFloat4x4(XMMatrixOrthographicLH(width, height, nearZ, farZ));
+	}
+}
+
+namespace Collision
+{
+	inline BoundingBox TransformBox(const BoundingBox& box, const XMFLOAT4X4& matrix)
+	{
+		BoundingBox result;
+		box.Transform(result, XMLoadFloat4x4(&matrix));
+		return result;
+	}
+
+	inline BoundingOrientedBox MakeFootprint(const BoundingBox& box, const Transform& pose)
+	{
+		const BoundingOrientedBox local(
+			{ box.Center.x, 0.0f, box.Center.z },
+			{ box.Extents.x, 1.0f, box.Extents.z },
+			{ 0.0f, 0.0f, 0.0f, 1.0f });
+		Transform planarPose = pose;
+		planarPose.position.y = 0.0f;
+		planarPose.rotation.x = planarPose.rotation.z = 0.0f;
+		planarPose.scale.y = 1.0f;
+		const XMFLOAT4X4 matrix = planarPose.getMatrix();
+		BoundingOrientedBox result;
+		local.Transform(result, XMLoadFloat4x4(&matrix));
+		return result;
+	}
+
+	// A result in [0, 1] gives the hit position along the segment.
+	inline float SegmentSphereFraction(const XMFLOAT3& start, const XMFLOAT3& end, const XMFLOAT3& center, float radius)
+	{
+		const XMFLOAT3 offset = Vector3::Subtract(start, center);
+		const XMFLOAT3 step = Vector3::Subtract(end, start);
+		const float c = Vector3::LengthSquared(offset) - radius * radius;
+		if (c <= 0.0f) return 0.0f;
+
+		const float a = Vector3::LengthSquared(step);
+		const float b = Vector3::DotProduct(step, offset);
+		const float discriminant = b * b - a * c;
+		if (a <= 0.000001f || b >= 0.0f || discriminant < 0.0f) return 2.0f;
+		return (-b - std::sqrt(discriminant)) / a;
+	}
+}
+//-----------------------------------

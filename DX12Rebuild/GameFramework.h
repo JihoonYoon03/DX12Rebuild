@@ -9,7 +9,17 @@ class CTexture;
 class CModel;
 class CScene;
 class CGameScene;
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+enum class EGameStage;
+//-----------------------------------
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+class CUiScene;
+//-----------------------------------
 
+//-----------------------------------
+//[직접 작성한 코드]
 class CGameFramework
 {
 public:
@@ -104,8 +114,24 @@ private:
 	//Scene
 	ComPtr<ID3D12RootSignature>			m_cpRootSignature;
 	std::weak_ptr<CScene>				m_upCurrentScene;
-	std::shared_ptr<CGameScene>			m_spGameScene;
+	std::shared_ptr<CGameScene>			m_spTankScene;
+//-----------------------------------
 
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	void EnterStage(EGameStage stage);
+	HRESULT BuildPortingUi();
+	void ResizePortingUi();
+	void ProcessPortingUiMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+
+	std::shared_ptr<CGameScene> m_spHelicopterScene;
+	std::shared_ptr<CUiScene> m_spMainMenuScene;
+	std::shared_ptr<CUiScene> m_spStageSelectScene;
+	std::shared_ptr<CUiScene> m_spTutorialScene;
+	//-----------------------------------
+
+//-----------------------------------
+//[직접 작성한 코드]
 	//Texture
 	std::unique_ptr<CSRVDescHeapAllocator>	m_SRVDescHeapAllocator;
 	std::unique_ptr<CTexture>	tex1;
@@ -119,4 +145,5 @@ private:
 	ComPtr<ID3D12Resource>				m_cpMtxBuffer;
 	UINT8*								m_mappedMtxBuffer;
 };
+//-----------------------------------
 
