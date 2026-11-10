@@ -64,13 +64,21 @@ CModelObject::CModelObject()
 CModelObject::~CModelObject()
 {}
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CModelObject::SetFrameTransform(const std::string& name, const Transform& transform)
+{
+	SetFrameTransform(name, transform.getMatrix());
+}
+
+void CModelObject::SetFrameTransform(const std::string& name, const XMFLOAT4X4& transform)
 {
 	int index = m_spModel->GetFrameIndex(name);
 	if (index == -1) return;
 
 	m_umFrameTransform[index] = transform;
 }
+//-----------------------------------
 
 void CModelObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {

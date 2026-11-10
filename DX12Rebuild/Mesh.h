@@ -186,8 +186,11 @@ public:
 	XMFLOAT4X4 GetFrameMatrix(const std::string& frameName);
 	XMFLOAT4X4 GetFrameMatrix(unsigned int index);
 	//프레임 별 변환이 적용된 것 까지 포함하여 Get
-	XMFLOAT4X4 GetFrameMatrix(const std::string& frameName, std::unordered_map<int, Transform>& umFrameTransform);
-	XMFLOAT4X4 GetFrameMatrix(unsigned int index, std::unordered_map<int, Transform>& umFrameTransform);
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	XMFLOAT4X4 GetFrameMatrix(const std::string& frameName, const std::unordered_map<int, XMFLOAT4X4>& umFrameTransform);
+	XMFLOAT4X4 GetFrameMatrix(unsigned int index, const std::unordered_map<int, XMFLOAT4X4>& umFrameTransform);
+	//-----------------------------------
 
 	const std::vector<FrameData>& getData() { return m_vFrameData; }
 	//-----------------------------------
@@ -198,9 +201,12 @@ public:
 	virtual void DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
 		const XMFLOAT4X4 objWorld = Matrix4x4::Identity());
 	//프레임 별 변환 적용
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
 	virtual void DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		std::unordered_map<int, Transform>& umFrameTransform,
+		const std::unordered_map<int, XMFLOAT4X4>& umFrameTransform,
 		const XMFLOAT4X4 objWorld = Matrix4x4::Identity());
+	//-----------------------------------
 
 private:
 	std::vector<FrameData>					m_vFrameData;

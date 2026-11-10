@@ -298,8 +298,6 @@ void CTankPlayer::ResetStagePose(const XMFLOAT3& position, float yaw)
 
 void CTankPlayer::FollowStageSlope(const CTerrainObject& terrain)
 {
-	//-----------------------------------
-	//[流立 累己茄 内靛]
 	constexpr float halfWidth = config::stage::TankFootprintHalfWidth;
 	constexpr float halfLength = config::stage::TankFootprintHalfLength;
 	const auto& position = m_Transform.position;
@@ -319,7 +317,6 @@ void CTankPlayer::FollowStageSlope(const CTerrainObject& terrain)
 	const float rightMinusLeft = (frontRight + backRight - frontLeft - backLeft) * 0.5f;
 	m_Transform.rotation.x = -std::atan2(frontMinusBack, 2.0f * halfLength);
 	m_Transform.rotation.z = std::atan2(rightMinusLeft, 2.0f * halfWidth);
-	//-----------------------------------
 }
 
 XMFLOAT3 CTankPlayer::GetTurretHeading()
@@ -342,8 +339,6 @@ void CTankPlayer::GetStageCannonRay(XMFLOAT3& origin, XMFLOAT3& direction)
 	//-----------------------------------
 }
 
-//-----------------------------------
-//[流立 累己茄 内靛]
 bool CTankPlayer::AimStageCannon(const XMFLOAT3& target, float dt)
 {
 	XMFLOAT3 origin, direction;
@@ -370,5 +365,4 @@ bool CTankPlayer::AimStageCannon(const XMFLOAT3& target, float dt)
 	const XMFLOAT3 finalTarget = Vector3::Normalize(Vector3::Subtract(target, origin));
 	return Vector3::DotProduct(finalTarget, direction) >= config::stage::CannonFireMinDot;
 }
-//-----------------------------------
 //-----------------------------------

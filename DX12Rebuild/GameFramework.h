@@ -63,6 +63,14 @@ public:
 
 	POINT m_ptOldCursorPos;
 
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	void OpenStageSelect();
+	void OpenTutorial();
+	void EnterStage(EGameStage stage);
+	void RequestExit();
+	//-----------------------------------
+
 private:
 	HINSTANCE	m_hInstance = NULL;
 	HWND		m_hWnd		= NULL;
@@ -119,7 +127,6 @@ private:
 
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	void EnterStage(EGameStage stage);
 	HRESULT BuildPortingUi();
 	void ResizePortingUi();
 	void ProcessPortingUiMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);

@@ -3,17 +3,26 @@
 #pragma once
 
 #include "Scene.h"
+#include "GameObject.h"
 #include "Mesh.h"
 
-enum class EUiAction
+class CGameFramework;
+
+class CUI : public CObjectBase
 {
-	None,
-	OpenStageSelect,
-	OpenTutorial,
-	Level1,
-	Level2,
-	Level3,
-	Exit
+public:
+	CUI(const XMFLOAT4& bounds, const XMFLOAT4& color);
+
+	HRESULT BuildMesh(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	void ReleaseUploadBuffer();
+	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+
+	virtual bool HitTest(float x, float y) const;
+	virtual bool OnClick(CGameFramework&) { return false; }
+
+private:
+	CMesh m_mesh;
+	XMFLOAT4 m_color;
 };
 
 class CUiScene : public CScene
@@ -26,28 +35,18 @@ public:
 	void DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 
 	void ResizeUi(int width, int height);
-	EUiAction HitTest(int x, int y) const;
+	void Click(int x, int y, CGameFramework& framework);
 
 protected:
-	virtual void BuildUi(MeshData<VertexTexcoord>& meshData) = 0;
-	void AddPanel(MeshData<VertexTexcoord>& meshData, float left, float top, float right, float bottom,
-		const XMFLOAT4& color, EUiAction action = EUiAction::None);
+	virtual void BuildUi() = 0;
+	void AddUi(std::unique_ptr<CUI> upUi);
 
 private:
-	struct UiPanel
-	{
-		float left;
-		float top;
-		float right;
-		float bottom;
-		EUiAction action;
-	};
+	std::vector<std::unique_ptr<CUI>> m_vUiObjects;
 
-	CMesh					m_uiMesh;
-	std::vector<UiPanel>	m_vPanels;
-	float					m_fCanvasPixels = 1.0f;
-	float					m_fViewWidth = 1.0f;
-	float					m_fViewHeight = 1.0f;
+	float m_fCanvasPixels = 1.0f;
+	float m_fViewWidth = 1.0f;
+	float m_fViewHeight = 1.0f;
 };
 
 class CMainMenuScene : public CUiScene
@@ -56,7 +55,7 @@ public:
 	using CUiScene::CUiScene;
 
 private:
-	void BuildUi(MeshData<VertexTexcoord>& meshData) override;
+	void BuildUi() override;
 };
 
 class CStageSelectScene : public CUiScene
@@ -65,7 +64,7 @@ public:
 	using CUiScene::CUiScene;
 
 private:
-	void BuildUi(MeshData<VertexTexcoord>& meshData) override;
+	void BuildUi() override;
 };
 
 class CPortingTutorialScene : public CUiScene
@@ -74,6 +73,6 @@ public:
 	using CUiScene::CUiScene;
 
 private:
-	void BuildUi(MeshData<VertexTexcoord>& meshData) override;
+	void BuildUi() override;
 };
 //-----------------------------------

@@ -365,6 +365,14 @@ namespace Matrix4x4
 		return XMMatrixToFloat4x4(XMMatrixTranslation(offset.x, offset.y, offset.z));
 	}
 
+	inline XMFLOAT4X4 RotationAroundAxis(const XMFLOAT3& axis, float angle, const XMFLOAT3& pivot = {})
+	{
+		return XMMatrixToFloat4x4(
+			XMMatrixTranslation(-pivot.x, -pivot.y, -pivot.z) *
+			XMMatrixRotationAxis(XMLoadFloat3(&axis), angle) *
+			XMMatrixTranslation(pivot.x, pivot.y, pivot.z));
+	}
+
 	inline XMFLOAT4X4 OrthographicLH(float width, float height, float nearZ, float farZ)
 	{
 		return XMMatrixToFloat4x4(XMMatrixOrthographicLH(width, height, nearZ, farZ));

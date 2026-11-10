@@ -57,12 +57,9 @@ namespace config::stage
 		float spreadSpan;
 	};
 
-	//-----------------------------------
-	//[流立 累己茄 内靛]
 	constexpr SpawnPattern Level1Spawn{ .45f, 0.0f, -.04f, .78f, .07f, .72f, .28f, .60f };
 	constexpr SpawnPattern Level2Spawn{ .55f, 0.0f, -.08f, .82f, .08f, .28f, 0.0f, 0.0f };
 	constexpr SpawnPattern Level3Spawn{ .48f, .35f, -.02f, .80f, .08f, .70f, .32f, .56f };
-	//-----------------------------------
 	constexpr int Level2TankLanes = 4;
 	constexpr float Level2TankSideScatter = .08f;
 	constexpr float ExitDepth = .82f;

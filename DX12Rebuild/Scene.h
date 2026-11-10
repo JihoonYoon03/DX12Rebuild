@@ -239,6 +239,11 @@ private:
 	std::unique_ptr<CModelObject> m_upStageHelicopter;
 	Transform m_helicopterPose;
 	XMFLOAT3 m_exitPosition{};
+	XMFLOAT3 m_mainRotorAxis{ 0.0f, 1.0f, 0.0f };
+	XMFLOAT3 m_mainRotorOffset{};
+	XMFLOAT3 m_mainHubOffset{};
+	XMFLOAT3 m_tailRotorAxis{ 1.0f, 0.0f, 0.0f };
+	XMFLOAT3 m_tailRotorOffset{};
 	float m_fRotorTime = 0.0f;
 	bool m_bStageFirstPerson = false;
 };

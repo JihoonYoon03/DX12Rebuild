@@ -681,6 +681,21 @@ LRESULT CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WP
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
+void CGameFramework::OpenStageSelect()
+{
+	m_upCurrentScene = m_spStageSelectScene;
+}
+
+void CGameFramework::OpenTutorial()
+{
+	m_upCurrentScene = m_spTutorialScene;
+}
+
+void CGameFramework::RequestExit()
+{
+	PostMessageW(m_hWnd, WM_CLOSE, 0, 0);
+}
+
 void CGameFramework::EnterStage(EGameStage stage)
 {
 	const auto& spScene = stage == EGameStage::TankBattle ? m_spTankScene : m_spHelicopterScene;
@@ -734,41 +749,9 @@ void CGameFramework::ProcessPortingUiMessage(HWND hWnd, UINT nMessageID, WPARAM 
 	}
 	if (nMessageID != WM_LBUTTONDOWN) return;
 
-	if (spActiveScene == m_spTutorialScene)
+	if (auto* pUiScene = dynamic_cast<CUiScene*>(spActiveScene.get()))
 	{
-		m_upCurrentScene = m_spStageSelectScene;
-		return;
-	}
-
-	std::shared_ptr<CUiScene> spMenu;
-	if (spActiveScene == m_spMainMenuScene) spMenu = m_spMainMenuScene;
-	if (spActiveScene == m_spStageSelectScene) spMenu = m_spStageSelectScene;
-	if (!spMenu) return;
-
-	const EUiAction menuAction = spMenu->HitTest(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
-	switch (menuAction)
-	{
-	case EUiAction::OpenStageSelect:
-		m_upCurrentScene = m_spStageSelectScene;
-		break;
-	case EUiAction::OpenTutorial:
-		m_upCurrentScene = m_spTutorialScene;
-		break;
-	case EUiAction::Level1:
-	case EUiAction::Level2:
-	case EUiAction::Level3:
-	{
-		EGameStage stage = EGameStage::HelicopterTargets;
-		if (menuAction == EUiAction::Level2) stage = EGameStage::TankBattle;
-		if (menuAction == EUiAction::Level3) stage = EGameStage::HelicopterBattle;
-		EnterStage(stage);
-		break;
-	}
-	case EUiAction::Exit:
-		PostMessageW(hWnd, WM_CLOSE, 0, 0);
-		break;
-	default:
-		break;
+		pUiScene->Click(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam), *this);
 	}
 }
 //-----------------------------------

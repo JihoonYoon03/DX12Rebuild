@@ -567,12 +567,12 @@ XMFLOAT4X4 CModel::GetFrameMatrix(unsigned int index)
 	return retValue;
 }
 
-XMFLOAT4X4 CModel::GetFrameMatrix(const std::string& frameName, std::unordered_map<int, Transform>& umFrameTransform)
+XMFLOAT4X4 CModel::GetFrameMatrix(const std::string& frameName, const std::unordered_map<int, XMFLOAT4X4>& umFrameTransform)
 {
 	return GetFrameMatrix(GetFrameIndex(frameName), umFrameTransform);
 }
 
-XMFLOAT4X4 CModel::GetFrameMatrix(unsigned int index, std::unordered_map<int, Transform>& umFrameTransform)
+XMFLOAT4X4 CModel::GetFrameMatrix(unsigned int index, const std::unordered_map<int, XMFLOAT4X4>& umFrameTransform)
 {
 	if (index >= m_vFrameData.size()) return Matrix4x4::Identity();
 
@@ -587,7 +587,7 @@ XMFLOAT4X4 CModel::GetFrameMatrix(unsigned int index, std::unordered_map<int, Tr
 		pivot.position = XMFLOAT3{ retval._41, retval._42, retval._43 };
 		//프레임별 변환 적용
 		XMFLOAT4X4 frame = Matrix4x4::Multiply(
-			Matrix4x4::Multiply(Matrix4x4::Inverse(pivot.getMatrix()), iter->second.getMatrix()),
+			Matrix4x4::Multiply(Matrix4x4::Inverse(pivot.getMatrix()), iter->second),
 			pivot.getMatrix());
 		retval = Matrix4x4::Multiply(retval, frame);
 	}
@@ -644,7 +644,7 @@ void CModel::DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, c
 	}
 }
 
-void CModel::DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, std::unordered_map<int, Transform>& umFrameTransform, const XMFLOAT4X4 objWorld)
+void CModel::DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const std::unordered_map<int, XMFLOAT4X4>& umFrameTransform, const XMFLOAT4X4 objWorld)
 {
 	if (!m_upMesh) return;
 

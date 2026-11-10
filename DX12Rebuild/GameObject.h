@@ -55,6 +55,10 @@ public:
 	virtual void SetModel(std::shared_ptr<CModel>& model) { m_spModel = model; }
 
 	void SetFrameTransform(const std::string& name, const Transform& transform);
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	void SetFrameTransform(const std::string& name, const XMFLOAT4X4& transform);
+	//-----------------------------------
 
 	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 
@@ -63,7 +67,10 @@ public:
 protected:
 	std::shared_ptr<CModel>				m_spModel;
 	//프레임 별로 적용되는 변환
-	std::unordered_map<int, Transform>	m_umFrameTransform;
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	std::unordered_map<int, XMFLOAT4X4>	m_umFrameTransform;
+	//-----------------------------------
 };
 
 // -------------------------------------------

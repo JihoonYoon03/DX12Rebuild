@@ -107,8 +107,6 @@ namespace
 
 	DWORD ReadTankControls(const UCHAR* keys)
 	{
-		//-----------------------------------
-		//[직접 작성한 코드]
 		DWORD input = 0;
 		if (Down(keys, 'W')) input |= DIR_FORWARD;
 		if (Down(keys, 'S')) input |= DIR_BACKWARD;
@@ -118,7 +116,6 @@ namespace
 		if (Down(keys, VK_DOWN)) input |= CANNON_DOWN;
 		if (Down(keys, VK_LEFT)) input |= TURRET_LEFT;
 		if (Down(keys, VK_RIGHT)) input |= TURRET_RIGHT;
-		//-----------------------------------
 		return input;
 	}
 }
@@ -690,8 +687,6 @@ void CTankGameScene::ResetStage()
 	m_vObstacles.clear();
 	SetLockSettings(TankLockMinDot, TankHitRadius);
 
-	//-----------------------------------
-	//[직접 작성한 코드]
 	const auto& spawn = Level2Spawn;
 	const float startZ = -UsableHalf * spawn.startDepth;
 	m_upPlayer->ResetStagePose(OnTerrain(0.0f, startZ, TankGroundOffset), 0.0f);
@@ -727,7 +722,6 @@ void CTankGameScene::ResetStage()
 		m_vObstacles.push_back({ pose, variant, Collision::MakeFootprint(m_rockBounds[variant], pose) });
 		//-----------------------------------
 	}
-	//-----------------------------------
 }
 
 void CTankGameScene::OnStageKeyPressed(WPARAM key)
@@ -812,11 +806,8 @@ void CTankGameScene::UpdateStageCamera(const XMFLOAT3& aimPoint)
 {
 	const Transform& tank = m_upPlayer->GetTransform();
 	const XMFLOAT3 forward = m_upPlayer->GetTurretHeading();
-	//-----------------------------------
-	//[직접 작성한 코드]
 	XMFLOAT3 eye = Vector3::Add(tank.position, forward, -TankCameraDistance);
 	eye.y += TankCameraHeight;
-	//-----------------------------------
 	eye.y = (std::max)(eye.y, m_spStageResources->upTerrain->GetHeightAt(eye) + CameraGroundClearance);
 	m_spCamera->SetLookAt(eye, aimPoint, { 0, 1, 0 });
 }
@@ -844,8 +835,22 @@ void CHelicopterGameScene::ShareStageResources(const CGameScene& source)
 {
 	CGameScene::ShareStageResources(source);
 	m_upStageHelicopter = std::make_unique<CModelObject>();
-	m_upStageHelicopter->SetModel(m_spStageResources->spApache);
+	auto& model = m_spStageResources->spApache;
+	m_upStageHelicopter->SetModel(model);
 	m_upStageHelicopter->SetScale(ApacheScale);
+
+	const XMFLOAT4X4 mainRotor = model->GetFrameMatrix("rotor");
+	const XMFLOAT4X4 mainHub = model->GetFrameMatrix("black_m_6");
+	m_mainRotorAxis = Vector3::TransformNormal({ 0.0f, 1.0f, 0.0f }, mainRotor);
+	// 날개 프레임 좌표로 환산한 허브 회전축의 중심.
+	m_mainRotorOffset = Vector3::TransformNormal({ 0.115010f, 0.0f, -0.696087f }, mainRotor);
+	const XMFLOAT3 hubToBladeOrigin{ mainRotor._41 - mainHub._41, mainRotor._42 - mainHub._42, mainRotor._43 - mainHub._43 };
+	m_mainHubOffset = Vector3::Add(hubToBladeOrigin, m_mainRotorOffset);
+
+	const XMFLOAT4X4 tailRotor = model->GetFrameMatrix("black_m_7");
+	m_tailRotorAxis = Vector3::TransformNormal({ 0.0f, -1.0f, 0.0f }, tailRotor);
+	// black_m_7 허브 단면의 중심. 로컬 Y 방향이 회전축이다.
+	m_tailRotorOffset = Vector3::TransformNormal({ -0.758458f, 0.0f, -0.058565f }, tailRotor);
 }
 
 void CHelicopterGameScene::ReleaseObjects()
@@ -861,8 +866,6 @@ void CHelicopterGameScene::ResetStage()
 	const bool targetStage = IsTargetStage();
 	SetLockSettings(targetStage ? Level1LockMinDot : Level3LockMinDot, targetStage ? TargetLockRadius : Level3LockHitRadius);
 
-	//-----------------------------------
-	//[직접 작성한 코드]
 	const auto& spawn = targetStage ? Level1Spawn : Level3Spawn;
 	const float startZ = -UsableHalf * spawn.startDepth;
 	m_helicopterPose.position = OnTerrain(0.0f, startZ, HelicopterMinClearance);
@@ -879,11 +882,8 @@ void CHelicopterGameScene::ResetStage()
 		if (targetStage) AddTarget(OnTerrain(x, z, TargetHeight));
 		else AddEnemyTank(x, z, startZ);
 	}
-	//-----------------------------------
 }
 
-//-----------------------------------
-//[직접 작성한 코드]
 void CHelicopterGameScene::OnStageKeyPressed(WPARAM key)
 {
 	if (GetStage() != EGameStage::HelicopterBattle) return;
@@ -894,7 +894,6 @@ void CHelicopterGameScene::OnStageKeyPressed(WPARAM key)
 	else if (key == '3') m_bStageFirstPerson = false;
 	if (wasFirstPerson != m_bStageFirstPerson) UpdateStageView();
 }
-//-----------------------------------
 
 XMFLOAT3 CHelicopterGameScene::HelicopterForward() const
 {
@@ -912,8 +911,6 @@ void CHelicopterGameScene::GetAimRay(XMFLOAT3& origin, XMFLOAT3& direction) cons
 	direction = HelicopterForward();
 }
 
-//-----------------------------------
-//[직접 작성한 코드]
 bool CHelicopterGameScene::HasReachedExit() const
 {
 	if (!IsTargetStage()) return false;
@@ -921,7 +918,6 @@ bool CHelicopterGameScene::HasReachedExit() const
 	const float z = m_helicopterPose.position.z - m_exitPosition.z;
 	return x * x + z * z <= ExitRadius * ExitRadius;
 }
-//-----------------------------------
 
 float CHelicopterGameScene::VictoryHoldTime() const
 {
@@ -948,21 +944,18 @@ void CHelicopterGameScene::DrawStageObjects(const ComPtr<ID3D12GraphicsCommandLi
 void CHelicopterGameScene::UpdatePlayer(const UCHAR* keys, float dt)
 {
 	m_fRotorTime += dt;
-	const int turn = Down(keys, VK_RIGHT) - Down(keys, VK_LEFT);
-	const int lift = Down(keys, VK_UP) - Down(keys, VK_DOWN);
-	const int drive = Down(keys, 'W') - Down(keys, 'S');
+	const int turn = Down(keys, 'D') - Down(keys, 'A');
+	const int lift = Down(keys, 'W') - Down(keys, 'S');
+	const int drive = Down(keys, VK_UP) - Down(keys, VK_DOWN);
 	const float yaw = XMScalarModAngle(m_helicopterPose.rotation.y + turn * HelicopterYawSpeed * dt);
 	const float wantedPitch = -drive * HelicopterPitchLimit;
 	const float pitchStep = HelicopterPitchSpeed * dt;
 	m_helicopterPose.rotation.x += std::clamp(wantedPitch - m_helicopterPose.rotation.x, -pitchStep, pitchStep);
 	XMFLOAT3 position = Vector3::Add(m_helicopterPose.position, Vector3::Forward(yaw), drive * HelicopterDriveSpeed * dt);
-	//-----------------------------------
-	//[직접 작성한 코드]
 	position.x = std::clamp(position.x, -MovementLimit, MovementLimit);
 	position.z = std::clamp(position.z, -MovementLimit, MovementLimit);
 	const float minimum = m_spStageResources->upTerrain->GetHeightAt(position) + HelicopterMinClearance;
 	position.y = std::clamp(position.y + lift * HelicopterLiftSpeed * dt, minimum, minimum + HelicopterAltitudeRange);
-	//-----------------------------------
 	m_helicopterPose.position = position;
 	m_helicopterPose.rotation.y = yaw;
 }
@@ -972,23 +965,17 @@ void CHelicopterGameScene::UpdateStageCamera(const XMFLOAT3&)
 	m_upStageHelicopter->SetPosition(m_helicopterPose.position);
 	m_upStageHelicopter->SetRotation(m_helicopterPose.rotation.x * HelicopterBodyPitchFactor, m_helicopterPose.rotation.y, 0.0f);
 
-	//-----------------------------------
-	//[직접 작성한 코드]
 	const float rotorAngle = m_fRotorTime * HelicopterRotorSpeed;
-	Transform rotor;
-	rotor.rotation.y = XMScalarModAngle(rotorAngle * MainRotorSpeedFactor);
-	m_upStageHelicopter->SetFrameTransform("rotor", rotor);
+	const float mainAngle = XMScalarModAngle(rotorAngle * MainRotorSpeedFactor);
+	m_upStageHelicopter->SetFrameTransform("rotor", Matrix4x4::RotationAroundAxis(m_mainRotorAxis, mainAngle, m_mainRotorOffset));
+	m_upStageHelicopter->SetFrameTransform("black_m_6", Matrix4x4::RotationAroundAxis(m_mainRotorAxis, mainAngle, m_mainHubOffset));
 
-	Transform tailRotor;
-	tailRotor.rotation.x = XMScalarModAngle(rotorAngle * TailRotorSpeedFactor);
-	m_upStageHelicopter->SetFrameTransform("black_m_7", tailRotor);
-	//-----------------------------------
+	const float tailAngle = XMScalarModAngle(rotorAngle * TailRotorSpeedFactor);
+	m_upStageHelicopter->SetFrameTransform("black_m_7", Matrix4x4::RotationAroundAxis(m_tailRotorAxis, tailAngle, m_tailRotorOffset));
 
 	const XMFLOAT3 position = m_helicopterPose.position;
 	XMFLOAT3 eye;
 	XMFLOAT3 target;
-	//-----------------------------------
-	//[직접 작성한 코드]
 	if (m_bStageFirstPerson)
 	{
 		const XMFLOAT3 apacheCockpit{ 0.0f, 1.7f, 34.0f };
@@ -1005,6 +992,5 @@ void CHelicopterGameScene::UpdateStageCamera(const XMFLOAT3&)
 	}
 	eye.y = (std::max)(eye.y, m_spStageResources->upTerrain->GetHeightAt(eye) + CameraGroundClearance);
 	m_spCamera->SetLookAt(eye, target, { 0, 1, 0 });
-	//-----------------------------------
 }
 //-----------------------------------
