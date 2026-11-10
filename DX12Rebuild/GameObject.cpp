@@ -112,9 +112,24 @@ void CTerrainObject::SetHeightMap(std::shared_ptr<CHeightMapImage>& pHeightMapIm
 	m_fTiling = m_nColSlice / 10;
 }
 
-HRESULT CTerrainObject::GenerateTerrain(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+HRESULT CTerrainObject::GenerateTerrain(
+	ComPtr<ID3D12Device>& cpDevice,
+	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+	CSRVDescHeapAllocator* SRVDescHeapAllocator)
 {
 	if (m_spHeightMapImage->GetHeightMapPixels().empty()) return E_FAIL;
+
+	HRESULT hr;
+	if (SRVDescHeapAllocator)
+	{
+		m_upTerrainTex = std::make_unique<CTexture>();
+		hr = m_upTerrainTex->CreateTexture(*SRVDescHeapAllocator, cpDevice, cpCommandList, L"../Resources/grass.dds");
+		if (FAILED(hr))
+		{
+			m_upTerrainTex.reset();
+			return hr;
+		}
+	}
 
 	MeshData<VertexTexcoord> terrain;
 	float interval = 1.0f;
@@ -184,10 +199,11 @@ HRESULT CTerrainObject::GenerateTerrain(ComPtr<ID3D12Device>& cpDevice, ComPtr<I
 
 	m_upTerrain = std::make_unique<CMesh>();
 	m_upTerrain->SetTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-	if (FAILED(m_upTerrain->CreateBuffer<VertexTexcoord>(cpDevice, cpCommandList, terrain)))
+	hr = m_upTerrain->CreateBuffer<VertexTexcoord>(cpDevice, cpCommandList, terrain);
+	if (FAILED(hr))
 	{
 		OutputDebugString(L"CTerrainObject::GenerateTerrain() Failed to create Buffer\n");
-		return E_FAIL;
+		return hr;
 	}
 
 	return S_OK;
@@ -196,6 +212,7 @@ HRESULT CTerrainObject::GenerateTerrain(ComPtr<ID3D12Device>& cpDevice, ComPtr<I
 void CTerrainObject::ReleaseUploadBuffer()
 {
 	m_upTerrain->ReleaseUploadBuffer();
+	if (m_upTerrainTex) m_upTerrainTex->ReleaseUploadBuffer();
 }
 
 float CTerrainObject::GetHeightAt(float x, float z) const
@@ -222,5 +239,105 @@ void CTerrainObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpComma
 	cpCommandList->SetGraphicsRoot32BitConstants(2, 1, &m_fTiling, 4);
 	XMFLOAT4X4 world = Matrix4x4::Transpose(m_Transform.getMatrix());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
+
+	//텍스쳐 설정
+	if (m_upTerrainTex)
+		cpCommandList->SetGraphicsRootDescriptorTable(1, m_upTerrainTex->getGPUDescHandle());
+
 	m_upTerrain->DrawMesh(cpCommandList);
+}
+
+
+// -------------------------------------------
+//
+// SkyboxObject
+//
+// -------------------------------------------
+CSkyboxObject::CSkyboxObject() = default;
+CSkyboxObject::~CSkyboxObject() = default;
+
+HRESULT CSkyboxObject::GenerateSkyBox(
+	const ComPtr<ID3D12Device>& cpDevice,
+	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+	CSRVDescHeapAllocator& allocator)
+{
+	const wchar_t* filenames[] =
+	{
+		L"../Resources/SkyBox_Front_0.dds",
+		L"../Resources/SkyBox_Back_0.dds",
+		L"../Resources/SkyBox_Left_0.dds",
+		L"../Resources/SkyBox_Right_0.dds",
+		L"../Resources/SkyBox_Top_0.dds",
+		L"../Resources/SkyBox_Bottom_0.dds"
+	};
+	const XMFLOAT2 uv[] = { { 0, 0 }, { 1, 0 }, { 1, 1 }, { 0, 1 } };
+	const XMFLOAT4 white{ 1, 1, 1, 1 };
+	const float extent = config::stage::SkyboxExtent;
+
+	m_vSkyTextures.resize(std::size(filenames));
+	m_vPlane.resize(std::size(filenames));
+	for (size_t i = 0; i < std::size(filenames); ++i)
+	{
+		m_vSkyTextures[i] = std::make_unique<CTexture>();
+		HRESULT hr = m_vSkyTextures[i]->CreateTexture(allocator, cpDevice, cpCommandList, filenames[i]);
+		if (FAILED(hr))
+		{
+			OutputDebugStringW(L"Skybox texture load failed: ");
+			OutputDebugStringW(filenames[i]);
+			OutputDebugStringW(L"\n");
+			return hr;
+		}
+
+		//-----------------------------------
+		//[아래 코드는 AI로 구현됨]
+		//평면 데이터 생성
+		MeshData<VertexTexcoord> plane;
+		const float sign = i % 2 == 0 ? 1.0f : -1.0f;
+		for (const auto& texcoord : uv)
+		{
+			const float u = texcoord.x == 0.0f ? -extent : extent;
+			const float v = texcoord.y == 0.0f ? extent : -extent;
+			const XMFLOAT3 pos[] =
+			{
+				{ sign * u, v, sign * extent },
+				{ -sign * extent, v, sign * u },
+				{ u, sign * extent, -sign * v }
+			};
+			plane.vertices.push_back({ pos[i / 2], white, texcoord });
+		}
+		plane.indices = { 0, 1, 2, 0, 2, 3 };
+		//-----------------------------------
+
+		m_vPlane[i] = std::make_unique<CMesh>();
+		hr = m_vPlane[i]->CreateBuffer(cpDevice, cpCommandList, plane);
+		if (FAILED(hr)) return hr;
+	}
+
+	return S_OK;
+}
+
+void CSkyboxObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	const XMFLOAT4X4 world = Matrix4x4::Transpose(m_Transform.getMatrix());
+	const float tiling = 1.0f;
+	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
+	cpCommandList->SetGraphicsRoot32BitConstants(2, 1, &tiling, 4);
+
+	for (size_t i = 0; i < m_vPlane.size(); ++i)
+	{
+		cpCommandList->SetGraphicsRootDescriptorTable(1, m_vSkyTextures[i]->getGPUDescHandle());
+		m_vPlane[i]->DrawMesh(cpCommandList);
+	}
+}
+
+void CSkyboxObject::ReleaseUploadBuffer()
+{
+	for (auto& plane : m_vPlane)
+	{
+		plane->ReleaseUploadBuffer();
+	}
+	for (auto& texture : m_vSkyTextures)
+	{
+		texture->ReleaseUploadBuffer();
+	}
 }

@@ -1,5 +1,5 @@
-ï»¿//-----------------------------------
-//[ì•„ë˜ ì½”ë“œëŠ” AIë¡œ êµ¬í˜„ë¨]
+//-----------------------------------
+//[¾Æ·¡ ÄÚµå´Â AI·Î ±¸ÇöµÊ]
 #pragma once
 
 #include "Scene.h"
@@ -30,7 +30,10 @@ class CUiScene : public CScene
 public:
 	explicit CUiScene(const std::shared_ptr<CShader>& spShader);
 
-	HRESULT BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+	HRESULT BuildObjects(
+		ComPtr<ID3D12Device>& cpDevice,
+		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+		CSRVDescHeapAllocator* SRVDescHeapAllocator = nullptr) override;
 	void ReleaseUploadBuffers() override;
 	void DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 

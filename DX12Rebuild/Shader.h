@@ -9,10 +9,13 @@ public:
 	HRESULT CreateShader(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12RootSignature>& cpRootSignature);
 
 	void SetPipelineState(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	void SetPipelineStateSky(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 
 protected:
 	//PSO
 	ComPtr<ID3D12PipelineState>			m_cpPipelineState;
+	//юс╫ц
+	ComPtr<ID3D12PipelineState>			m_cpPipelineStateSky;
 
 	//Shaders
 	ComPtr<ID3DBlob>					m_cpVS;
@@ -22,5 +25,5 @@ protected:
 
 class CTextureShader : public CShader
 {
-	HRESULT CompileShader();
+	HRESULT CompileShader() override;
 };

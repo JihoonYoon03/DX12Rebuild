@@ -8,6 +8,8 @@ class CModel;
 class CTerrainObject;
 class CCamera;
 class CTankPlayer;
+class CSRVDescHeapAllocator;
+
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
 enum class EGameStage
@@ -28,7 +30,11 @@ public:
 
 	virtual HRESULT InitScene(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12RootSignature>& cpRootSignature);
 
-	virtual HRESULT BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	virtual HRESULT BuildObjects(
+		ComPtr<ID3D12Device>& cpDevice,
+		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+		CSRVDescHeapAllocator* SRVDespHeapAllocator = nullptr
+	);
 	void AddObject(std::unique_ptr<CModelObject>& upObject);
 	void AddObjects(std::unique_ptr<CModelObject>* upObjects, size_t size);
 	void AddObjects(std::vector<std::unique_ptr<CModelObject>>& upObjects);
@@ -58,11 +64,20 @@ public:
 	//-----------------------------------
 	//[직접 작성한 코드]
 	~CGameScene() override;
+
 	HRESULT InitScene(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12RootSignature>& cpRootSignature) override;
-	HRESULT BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+
+	HRESULT BuildObjects(
+		ComPtr<ID3D12Device>& cpDevice,
+		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+		CSRVDescHeapAllocator* SRVDespHeapAllocator = nullptr
+	) override;
+
 	void ReleaseUploadBuffers() override;
 	virtual void ReleaseObjects();
+
 	void ProcessInput(UCHAR* pKeyBuffer, float deltaTime) override;
+
 	void DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 	//-----------------------------------
 	virtual void ShareStageResources(const CGameScene& source);
@@ -182,7 +197,11 @@ class CTankGameScene final : public CGameScene
 public:
 	CTankGameScene();
 	~CTankGameScene() override;
-	HRESULT BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+	HRESULT BuildObjects(
+		ComPtr<ID3D12Device>& cpDevice,
+		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+		CSRVDescHeapAllocator* SRVDespHeapAllocator = nullptr
+	) override;
 	void ReleaseUploadBuffers() override;
 	void ReleaseObjects() override;
 
@@ -208,6 +227,9 @@ private:
 
 	std::unique_ptr<CTankPlayer> m_upPlayer;
 	std::vector<Obstacle> m_vObstacles;
+	//--------------------------
+	//[직접 작성한 코드]
+	//--------------------------
 	BoundingBox m_tankBounds;
 	BoundingBox m_rockBounds[2];
 	bool m_bAutoAttack = config::stage::TankAutoAttackAtStart;
@@ -237,6 +259,9 @@ private:
 	XMFLOAT3 HelicopterForward() const;
 
 	std::unique_ptr<CModelObject> m_upStageHelicopter;
+	//--------------------------
+	//[직접 작성한 코드]
+	//--------------------------
 	Transform m_helicopterPose;
 	XMFLOAT3 m_exitPosition{};
 	XMFLOAT3 m_mainRotorAxis{ 0.0f, 1.0f, 0.0f };

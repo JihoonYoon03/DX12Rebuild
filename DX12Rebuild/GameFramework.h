@@ -10,16 +10,16 @@ class CModel;
 class CScene;
 class CGameScene;
 //-----------------------------------
-//[ì•„ë˜ ì½”ë“œëŠ” AIë¡œ êµ¬í˜„ë¨]
+//[¾Æ·¡ ÄÚµå´Â AI·Î ±¸ÇöµÊ]
 enum class EGameStage;
 //-----------------------------------
 //-----------------------------------
-//[ì•„ë˜ ì½”ë“œëŠ” AIë¡œ êµ¬í˜„ë¨]
+//[¾Æ·¡ ÄÚµå´Â AI·Î ±¸ÇöµÊ]
 class CUiScene;
 //-----------------------------------
 
 //-----------------------------------
-//[ì§ì ‘ ì‘ì„±í•œ ì½”ë“œ]
+//[Á÷Á¢ ÀÛ¼ºÇÑ ÄÚµå]
 class CGameFramework
 {
 public:
@@ -64,7 +64,7 @@ public:
 	POINT m_ptOldCursorPos;
 
 	//-----------------------------------
-	//[ì•„ë˜ ì½”ë“œëŠ” AIë¡œ êµ¬í˜„ë¨]
+	//[¾Æ·¡ ÄÚµå´Â AI·Î ±¸ÇöµÊ]
 	void OpenStageSelect();
 	void OpenTutorial();
 	void EnterStage(EGameStage stage);
@@ -126,7 +126,7 @@ private:
 //-----------------------------------
 
 	//-----------------------------------
-	//[ì•„ë˜ ì½”ë“œëŠ” AIë¡œ êµ¬í˜„ë¨]
+	//[¾Æ·¡ ÄÚµå´Â AI·Î ±¸ÇöµÊ]
 	HRESULT BuildPortingUi();
 	void ResizePortingUi();
 	void ProcessPortingUiMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
@@ -138,11 +138,9 @@ private:
 	//-----------------------------------
 
 //-----------------------------------
-//[ì§ì ‘ ì‘ì„±í•œ ì½”ë“œ]
+//[Á÷Á¢ ÀÛ¼ºÇÑ ÄÚµå]
 	//Texture
-	std::unique_ptr<CSRVDescHeapAllocator>	m_SRVDescHeapAllocator;
-	std::unique_ptr<CTexture>	tex1;
-	std::unique_ptr<CTexture>	tex2;
+	std::unique_ptr<CSRVDescHeapAllocator>	m_upSRVDescHeapAllocator;
 
 	//Debug
 

@@ -136,12 +136,23 @@ HRESULT CShader::CreateShader(const ComPtr<ID3D12Device>& cpDevice, const ComPtr
 	hr = cpDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(m_cpPipelineState.ReleaseAndGetAddressOf()));
 	if (FAILED(hr)) { OutputDebugString(L"PSO Creation Failed\n"); return hr; }
 
+	//Skybox¿ë PSO
+	psoDesc.DepthStencilState.DepthEnable = FALSE;
+	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	hr = cpDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(m_cpPipelineStateSky.ReleaseAndGetAddressOf()));
+	if (FAILED(hr)) { OutputDebugString(L"Sky PSO Creation Failed\n"); return hr; }
+
 	return S_OK;
 }
 
 void CShader::SetPipelineState(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	cpCommandList->SetPipelineState(m_cpPipelineState.Get());
+}
+
+void CShader::SetPipelineStateSky(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	cpCommandList->SetPipelineState(m_cpPipelineStateSky.Get());
 }
 
 

@@ -38,6 +38,12 @@ namespace config::stage
 	constexpr float VictoryDelay = 2.0f;
 	constexpr float TerrainRaySampleSpacing = 1.0f;
 
+	//스카이박스
+	//-----------------------------------
+	//[직접 작성한 코드]
+	constexpr float SkyboxExtent = 100.0f;
+	//-----------------------------------
+
 	// Stage population and placement
 	constexpr int Level1TargetCount = 12;
 	constexpr int Level2TankCount = 6;
@@ -90,14 +96,11 @@ namespace config::stage
 	constexpr int EnemyTankHealth = 2;
 	constexpr int TargetHealth = 1;
 	constexpr bool TankAutoAttackAtStart = true;
-	//-----------------------------------
-	//[직접 작성한 코드]
 	constexpr float TankDriveSpeed = 10.0f;
 	constexpr float TankTurnSpeedDegrees = 60.0f;
 	constexpr float TurretManualSpeedDegrees = 60.0f;
 	constexpr float CannonManualSpeedDegrees = 40.0f;
 	constexpr float TankGroundOffset = 1.0f;
-	//-----------------------------------
 	constexpr float TankFootprintHalfWidth = 3.4f;
 	constexpr float TankFootprintHalfLength = 5.4f;
 	constexpr float ApacheScale = .09f;

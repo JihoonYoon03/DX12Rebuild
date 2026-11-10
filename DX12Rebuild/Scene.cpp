@@ -35,7 +35,10 @@ HRESULT CScene::InitScene(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12RootSigna
 	return S_OK;
 }
 
-HRESULT CScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+HRESULT CScene::BuildObjects(
+	ComPtr<ID3D12Device>& cpDevice,
+	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+	CSRVDescHeapAllocator* SRVDespHeapAllocator)
 {
 	return S_OK;
 }
@@ -128,6 +131,10 @@ struct CGameScene::StageResources
 	std::shared_ptr<CModel> spTank;
 	std::shared_ptr<CModel> spApache;
 	std::shared_ptr<CModel> spRocks[2];
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	std::unique_ptr<CSkyboxObject> upSkybox;
+	//-----------------------------------
 	CMesh box;
 };
 
@@ -164,8 +171,16 @@ HRESULT CGameScene::InitScene(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12RootS
 }
 //-----------------------------------
 
-HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+HRESULT CGameScene::BuildObjects(
+	ComPtr<ID3D12Device>& cpDevice,
+	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+	CSRVDescHeapAllocator* SRVDespHeapAllocator)
 {
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	if (!SRVDespHeapAllocator) return E_INVALIDARG;
+	//-----------------------------------
+
 	m_spStageResources = std::make_shared<StageResources>();
 	auto& resources = *m_spStageResources;
 
@@ -174,7 +189,7 @@ HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12Gr
 	resources.upTerrain = std::make_unique<CTerrainObject>();
 	auto spHeightmap = std::make_shared<CHeightMapImage>(L"../Resources/Cheongsando.raw", TerrainSamples, TerrainSamples);
 	resources.upTerrain->SetHeightMap(spHeightmap);
-	HRESULT hr = resources.upTerrain->GenerateTerrain(cpDevice, cpCommandList);
+	HRESULT hr = resources.upTerrain->GenerateTerrain(cpDevice, cpCommandList, SRVDespHeapAllocator);
 	if (FAILED(hr)) return hr;
 	resources.upTerrain->SetScale(TerrainHorizontalScale, TerrainVerticalScale, TerrainHorizontalScale);
 
@@ -182,6 +197,10 @@ HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12Gr
 	auto spMaterial = std::make_shared<CMaterial>(m_spShader);
 	if (!resources.spTank->LoadModelData(cpDevice, cpCommandList, "../Resources/AbramsTank.txt", spMaterial))
 		return E_FAIL;
+
+	resources.upSkybox = std::make_unique<CSkyboxObject>();
+	hr = resources.upSkybox->GenerateSkyBox(cpDevice, cpCommandList, *SRVDespHeapAllocator);
+	if (FAILED(hr)) return hr;
 	//-----------------------------------
 
 	return BuildStageVisuals(cpDevice, cpCommandList);
@@ -203,6 +222,7 @@ void CGameScene::ReleaseUploadBuffers()
 	resources.spApache->ReleaseUploadBuffer();
 	for (auto& model : resources.spRocks) model->ReleaseUploadBuffer();
 	resources.box.ReleaseUploadBuffer();
+	resources.upSkybox->ReleaseUploadBuffer();
 }
 
 void CGameScene::ReleaseObjects()
@@ -220,8 +240,22 @@ void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	m_spShader->SetPipelineState(cpCommandList);
 	XMFLOAT4X4 view = Matrix4x4::Transpose(m_spCamera->GetView());
 	XMFLOAT4X4 proj = Matrix4x4::Transpose(m_spCamera->GetProj());
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &proj, 32);
+	//-----------------------------------
+
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	XMFLOAT4X4 skyView = m_spCamera->GetView();
+	skyView._41 = skyView._42 = skyView._43 = 0.0f;
+	skyView = Matrix4x4::Transpose(skyView);
+	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &skyView, 16);
+	m_spTexShader->SetPipelineStateSky(cpCommandList);
+	m_spStageResources->upSkybox->DrawObject(cpCommandList);
+	//-----------------------------------
+
+	//-----------------------------------
+	//[직접 작성한 코드]
+	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
 
 	//Terrain
 	m_spTexShader->SetPipelineState(cpCommandList);
@@ -230,6 +264,7 @@ void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	XMFLOAT4 color{ 1, 1, 1, 1 };
 	cpCommandList->SetGraphicsRoot32BitConstants(2, 4, &color, 0);
 	m_spStageResources->upTerrain->DrawObject(cpCommandList);
+
 	//-----------------------------------
 	DrawStage(cpCommandList);
 }
@@ -643,9 +678,12 @@ CTankGameScene::CTankGameScene()
 
 CTankGameScene::~CTankGameScene() = default;
 
-HRESULT CTankGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+HRESULT CTankGameScene::BuildObjects(
+	ComPtr<ID3D12Device>& cpDevice,
+	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+	CSRVDescHeapAllocator* SRVDespHeapAllocator)
 {
-	const HRESULT hr = CGameScene::BuildObjects(cpDevice, cpCommandList);
+	const HRESULT hr = CGameScene::BuildObjects(cpDevice, cpCommandList, SRVDespHeapAllocator);
 	if (FAILED(hr)) return hr;
 
 	//-----------------------------------

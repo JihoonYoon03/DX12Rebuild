@@ -3,14 +3,14 @@
 class CModel;
 class CMesh;
 class CHeightMapImage;
+class CTexture;
+class CSRVDescHeapAllocator;
 
 // -------------------------------------------
 // 
 // ObjectBase
 // 
 // -------------------------------------------
-//-----------------------------------
-//[직접 작성한 코드]
 class CObjectBase
 {
 public:
@@ -26,15 +26,12 @@ public:
 	void SetPosition(const XMFLOAT3& position);
 
 	XMFLOAT3 GetPosition() { return m_Transform.position; }
-//-----------------------------------
 
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
 	const Transform& GetTransform() const { return m_Transform; }
 	//-----------------------------------
 
-//-----------------------------------
-//[직접 작성한 코드]
 	virtual void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) = 0;
 
 protected:
@@ -67,10 +64,7 @@ public:
 protected:
 	std::shared_ptr<CModel>				m_spModel;
 	//프레임 별로 적용되는 변환
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
 	std::unordered_map<int, XMFLOAT4X4>	m_umFrameTransform;
-	//-----------------------------------
 };
 
 // -------------------------------------------
@@ -85,7 +79,11 @@ public:
 	~CTerrainObject();
 
 	void SetHeightMap(std::shared_ptr<CHeightMapImage>& pHeightMapImage);
-	HRESULT GenerateTerrain(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	HRESULT GenerateTerrain(
+		ComPtr<ID3D12Device>& cpDevice,
+		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+		CSRVDescHeapAllocator* SRVDespHeapAllocator = nullptr
+	);
 
 	float GetHeightAt(float x, float z) const;
 	float GetHeightAt(const XMFLOAT3& pos) const;
@@ -100,15 +98,32 @@ private:
 
 	std::shared_ptr<CHeightMapImage>	m_spHeightMapImage;
 	std::unique_ptr<CMesh>				m_upTerrain;
+	std::unique_ptr<CTexture>			m_upTerrainTex;
 };
-//-----------------------------------
 
 // -------------------------------------------
 // 
 // SkyboxObject
 // 
 // -------------------------------------------
-class SkyboxObject : public CObjectBase
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+class CSkyboxObject : public CObjectBase
 {
+public:
+	CSkyboxObject();
+	~CSkyboxObject() override;
 
+	HRESULT GenerateSkyBox(
+		const ComPtr<ID3D12Device>& cpDevice,
+		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+		CSRVDescHeapAllocator& allocator);
+
+	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+	void ReleaseUploadBuffer();
+
+private:
+	std::vector<std::unique_ptr<CMesh>> m_vPlane;
+	std::vector<std::unique_ptr<CTexture>> m_vSkyTextures;
 };
+//-----------------------------------

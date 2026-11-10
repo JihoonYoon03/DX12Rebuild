@@ -25,10 +25,7 @@ CGameFramework::CGameFramework()
 
 	m_ptOldCursorPos = { 0, 0 };
 
-	m_SRVDescHeapAllocator = std::make_unique<CSRVDescHeapAllocator>();
-	
-	tex1 = std::make_unique<CTexture>();
-	tex2 = std::make_unique<CTexture>();
+	m_upSRVDescHeapAllocator = std::make_unique<CSRVDescHeapAllocator>();
 
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
@@ -58,7 +55,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 
 	if (FAILED(m_spTankScene->InitScene(m_cpDevice, m_cpRootSignature)))	return false;
 
-	if (FAILED(m_SRVDescHeapAllocator->CreateSRVDescHeap(m_cpDevice)))		return false;
+	if (FAILED(m_upSRVDescHeapAllocator->CreateSRVDescHeap(m_cpDevice)))		return false;
 
 	if (FAILED(BuildObjects()))				return false;
 	m_timer.Reset();
@@ -392,12 +389,7 @@ HRESULT CGameFramework::BuildObjects()
 	HRESULT hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), NULL);
 	if (FAILED(hr)) return hr;
 
-	hr = tex1->CreateTexture(*m_SRVDescHeapAllocator, m_cpDevice, m_cpCommandList, L"../Resources/grass.dds");
-	if (FAILED(hr)) return hr;
-	hr = tex2->CreateTexture(*m_SRVDescHeapAllocator, m_cpDevice, m_cpCommandList, L"../Resources/SkydomeTex.dds");
-	if (FAILED(hr)) return hr;
-
-	hr = m_spTankScene->BuildObjects(m_cpDevice, m_cpCommandList);
+	hr = m_spTankScene->BuildObjects(m_cpDevice, m_cpCommandList, m_upSRVDescHeapAllocator.get());
 	if (FAILED(hr)) return hr;
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
@@ -444,8 +436,6 @@ HRESULT CGameFramework::BuildObjects()
 void CGameFramework::ReleaseUploadBuffers()
 {
 	//m_upCurrentScene->ReleaseObjectsUploadBuffer();
-	tex1->ReleaseUploadBuffer();
-	tex2->ReleaseUploadBuffer();
 	m_spTankScene->ReleaseUploadBuffers();
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
@@ -525,14 +515,13 @@ void CGameFramework::FrameAdvance()
 	m_cpCommandList->ClearRenderTargetView(RTVDescHandle, Colors::CadetBlue, 0, NULL);
 	m_cpCommandList->ClearDepthStencilView(DSVDescHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
-	m_cpCommandList->SetDescriptorHeaps(1, m_SRVDescHeapAllocator->GetDescriptorHeap());
+	m_cpCommandList->SetDescriptorHeaps(1, m_upSRVDescHeapAllocator->GetDescriptorHeap());
 
 	//Scene Render Here
 	//기본 타일링 수치 설정
 	float defaultTiling = 1.0f;
 	m_cpCommandList->SetGraphicsRoot32BitConstants(2, 1, &defaultTiling, 4);
 	//텍스쳐 설정
-	m_cpCommandList->SetGraphicsRootDescriptorTable(1, tex1->getGPUDescHandle());
 	m_upCurrentScene.lock()->DrawScene(m_cpCommandList);
 
 	//Player Render Here

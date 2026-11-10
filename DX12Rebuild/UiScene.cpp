@@ -1,5 +1,5 @@
-ï»¿//-----------------------------------
-//[ì•„ë˜ ì½”ë“œëŠ” AIë¡œ êµ¬í˜„ë¨]
+//-----------------------------------
+//[¾Æ·¡ ÄÚµå´Â AI·Î ±¸ÇöµÊ]
 #include "pch.h"
 #include "UiScene.h"
 #include "GameFramework.h"
@@ -115,7 +115,10 @@ CUiScene::CUiScene(const std::shared_ptr<CShader>& spShader)
 	m_spShader = spShader;
 }
 
-HRESULT CUiScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+HRESULT CUiScene::BuildObjects(
+	ComPtr<ID3D12Device>& cpDevice,
+	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+	CSRVDescHeapAllocator* SRVDescHeapAllocator)
 {
 	m_vUiObjects.clear();
 	BuildUi();
