@@ -102,3 +102,13 @@ private:
 	std::unique_ptr<CMesh>				m_upTerrain;
 };
 //-----------------------------------
+
+// -------------------------------------------
+// 
+// SkyboxObject
+// 
+// -------------------------------------------
+class SkyboxObject : public CObjectBase
+{
+
+};
