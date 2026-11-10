@@ -100,7 +100,7 @@ namespace config::stage
 	constexpr float TankTurnSpeedDegrees = 60.0f;
 	constexpr float TurretManualSpeedDegrees = 60.0f;
 	constexpr float CannonManualSpeedDegrees = 40.0f;
-	constexpr float TankGroundOffset = 1.0f;
+	constexpr float TankGroundOffset = 1.1f;
 	constexpr float TankFootprintHalfWidth = 3.4f;
 	constexpr float TankFootprintHalfLength = 5.4f;
 	constexpr float ApacheScale = .09f;
