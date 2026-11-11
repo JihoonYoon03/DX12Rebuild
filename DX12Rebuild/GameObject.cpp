@@ -115,7 +115,8 @@ void CTerrainObject::SetHeightMap(std::shared_ptr<CHeightMapImage>& pHeightMapIm
 HRESULT CTerrainObject::GenerateTerrain(
 	ComPtr<ID3D12Device>& cpDevice,
 	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	CSRVDescHeapAllocator* SRVDescHeapAllocator)
+	CSRVDescHeapAllocator* SRVDescHeapAllocator,
+	bool normalMapping)
 {
 	if (m_spHeightMapImage->GetHeightMapPixels().empty()) return E_FAIL;
 
@@ -129,9 +130,20 @@ HRESULT CTerrainObject::GenerateTerrain(
 			m_upTerrainTex.reset();
 			return hr;
 		}
+
+		if (normalMapping)
+		{
+			m_upNormalMap = std::make_unique<CTexture>();
+			HRESULT hr = m_upNormalMap->CreateTexture(*SRVDescHeapAllocator, cpDevice, cpCommandList, L"../Resources/TerrainNormal.dds");
+			if (FAILED(hr))
+			{
+				m_upNormalMap.reset();
+				return hr;
+			}
+		}
 	}
 
-	MeshData<VertexTexcoord> terrain;
+	MeshData<VertexTexNormal> terrain;
 	float interval = 1.0f;
 	float halfInterval = interval / 2;
 
@@ -157,7 +169,10 @@ HRESULT CTerrainObject::GenerateTerrain(
 					(1.0f, 1.0f, 1.0f, 1.0f),
 
 					XMFLOAT2
-					(float(x) / (m_nColSlice - 1), float(z) / (m_nRowSlice - 1))
+					(float(x) / (m_nColSlice - 1), float(z) / (m_nRowSlice - 1)),
+
+					XMFLOAT3
+					(0.0f, 1.0f, 0.0f)
 				}
 			);
 		}
@@ -199,7 +214,7 @@ HRESULT CTerrainObject::GenerateTerrain(
 
 	m_upTerrain = std::make_unique<CMesh>();
 	m_upTerrain->SetTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-	hr = m_upTerrain->CreateBuffer<VertexTexcoord>(cpDevice, cpCommandList, terrain);
+	hr = m_upTerrain->CreateBuffer<VertexTexNormal>(cpDevice, cpCommandList, terrain);
 	if (FAILED(hr))
 	{
 		OutputDebugString(L"CTerrainObject::GenerateTerrain() Failed to create Buffer\n");
@@ -243,6 +258,10 @@ void CTerrainObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpComma
 	//텍스쳐 설정
 	if (m_upTerrainTex)
 		cpCommandList->SetGraphicsRootDescriptorTable(1, m_upTerrainTex->getGPUDescHandle());
+
+	//노멀맵 설정
+	if (m_upNormalMap)
+		cpCommandList->SetGraphicsRootDescriptorTable(3, m_upNormalMap->getGPUDescHandle());
 
 	m_upTerrain->DrawMesh(cpCommandList);
 }

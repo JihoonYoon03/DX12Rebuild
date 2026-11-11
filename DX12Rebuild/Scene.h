@@ -28,7 +28,7 @@ public:
 	CScene();
 	virtual ~CScene();
 
-	virtual HRESULT InitScene(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12RootSignature>& cpRootSignature);
+	virtual HRESULT InitScene(ComPtr<ID3D12Device>& cpDevice);
 
 	virtual HRESULT BuildObjects(
 		ComPtr<ID3D12Device>& cpDevice,
@@ -65,7 +65,7 @@ public:
 	//[流立 累己茄 内靛]
 	~CGameScene() override;
 
-	HRESULT InitScene(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12RootSignature>& cpRootSignature) override;
+	HRESULT InitScene(ComPtr<ID3D12Device>& cpDevice) override;
 
 	HRESULT BuildObjects(
 		ComPtr<ID3D12Device>& cpDevice,
@@ -170,10 +170,6 @@ private:
 	float TerrainHitFraction(const XMFLOAT3& start, const XMFLOAT3& end, float clearance) const;
 	void Win();
 
-	//-----------------------------------
-	//[流立 累己茄 内靛]
-	std::shared_ptr<CTextureShader> m_spTexShader;
-	//-----------------------------------
 	std::vector<Enemy> m_vEnemies;
 	std::vector<Projectile> m_vProjectiles;
 	const PlayerRules m_rules;
@@ -225,11 +221,11 @@ private:
 	void DrawStageHudExtras(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
 		float aspectScale, const XMFLOAT4& lockColor) override;
 
-	std::unique_ptr<CTankPlayer> m_upPlayer;
-	std::vector<Obstacle> m_vObstacles;
-	//--------------------------
+	//---------------------------------------
 	//[流立 累己茄 内靛]
-	//--------------------------
+	std::unique_ptr<CTankPlayer> m_upPlayer;
+	//---------------------------------------
+	std::vector<Obstacle> m_vObstacles;
 	BoundingBox m_tankBounds;
 	BoundingBox m_rockBounds[2];
 	bool m_bAutoAttack = config::stage::TankAutoAttackAtStart;
@@ -259,9 +255,6 @@ private:
 	XMFLOAT3 HelicopterForward() const;
 
 	std::unique_ptr<CModelObject> m_upStageHelicopter;
-	//--------------------------
-	//[流立 累己茄 内靛]
-	//--------------------------
 	Transform m_helicopterPose;
 	XMFLOAT3 m_exitPosition{};
 	XMFLOAT3 m_mainRotorAxis{ 0.0f, 1.0f, 0.0f };

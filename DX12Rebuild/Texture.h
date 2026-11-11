@@ -38,7 +38,8 @@ public:
 		CSRVDescHeapAllocator& allocator,
 		const ComPtr<ID3D12Device>& cpDevice,
 		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		const wchar_t* fileName);
+		const wchar_t* fileName,
+		bool isWIC = false);
 
 	const SRVDescHeapInfo getDescHeapInfo() { return m_SRVDescHeapInfo; }
 	D3D12_CPU_DESCRIPTOR_HANDLE getCPUDescHandle() { return m_SRVDescHeapInfo.cpuHandle; }
@@ -64,7 +65,6 @@ public:
 	~CHeightMapImage();
 
 	float GetHeight(float fx, float fz);
-	XMFLOAT3 GetHeightMapNormal(int x, int z);
 
 	const std::vector<BYTE>& GetHeightMapPixels() { return m_pHeightMapPixels; }
 

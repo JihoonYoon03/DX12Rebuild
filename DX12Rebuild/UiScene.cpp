@@ -156,7 +156,11 @@ void CUiScene::Click(int x, int y, CGameFramework& framework)
 
 void CUiScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
-	m_spShader->SetPipelineState(cpCommandList, ERenderState::Default);
+	//---------------------------------------
+	//[流立 累己茄 内靛]
+	m_spShader->SetGraphicsRootSignature(cpCommandList);
+	m_spShader->SetPipelineState(cpCommandList, ERenderState::Unlit);
+	//---------------------------------------
 	const XMFLOAT4X4 view = Matrix4x4::Identity();
 	const XMFLOAT4X4 projection = Matrix4x4::Transpose(Matrix4x4::OrthographicLH(m_fViewWidth, m_fViewHeight, 0.0f, 1.0f));
 	const XMFLOAT4 color{ 1.0f, 1.0f, 1.0f, 1.0f };

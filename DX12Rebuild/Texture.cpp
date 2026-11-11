@@ -53,31 +53,55 @@ HRESULT CTexture::CreateTexture(
 	CSRVDescHeapAllocator& allocator,
 	const ComPtr<ID3D12Device>& cpDevice,
 	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	const wchar_t* fileName)
+	const wchar_t* fileName,
+	bool isWIC
+)
 {
-	std::unique_ptr<uint8_t[]> ddsData;
+	std::unique_ptr<uint8_t[]> pixelData;
 	std::vector<D3D12_SUBRESOURCE_DATA> subData;
 	DDS_ALPHA_MODE ddsAlpha = DDS_ALPHA_MODE_UNKNOWN;
 	bool bIsCubeMap = false;
 
 	//m_cpBuffer에 디폴트 텍스처 리소스 생성
 	//DDS 이미지 데이터를 GPU에 복사한 상태는 아님
-	HRESULT hr = LoadDDSTextureFromFileEx(
-		cpDevice.Get(),
-		fileName,
-		0,
-		D3D12_RESOURCE_FLAG_NONE,
-		DDS_LOADER_DEFAULT,
-		m_cpBuffer.GetAddressOf(),
-		ddsData,
-		subData,
-		&ddsAlpha,
-		&bIsCubeMap);
-	if (FAILED(hr)) return hr;
+	HRESULT hr;
+	if (isWIC)
+	{
+		//dds 아닌 파일은 밉맵 없음
+		subData.resize(1);
+		hr = LoadWICTextureFromFileEx(
+			cpDevice.Get(),
+			fileName,
+			0,
+			D3D12_RESOURCE_FLAG_NONE,
+			DDS_LOADER_DEFAULT,
+			m_cpBuffer.GetAddressOf(),
+			pixelData,
+			subData[0]
+		);
+		if (FAILED(hr)) return hr;
+	}
+	else
+	{
+		hr = LoadDDSTextureFromFileEx(
+			cpDevice.Get(),
+			fileName,
+			0,
+			D3D12_RESOURCE_FLAG_NONE,
+			DDS_LOADER_DEFAULT,
+			m_cpBuffer.GetAddressOf(),
+			pixelData,
+			subData,
+			&ddsAlpha,
+			&bIsCubeMap
+		);
+		if (FAILED(hr)) return hr;
+	}
 
 	if (subData.empty()) return E_FAIL;
+
 	//GPU 복사용 배치를 고려한 UPLOAD 버퍼 크기 계산
-	//밉맵, 압축 등 요소 때문에 API 사용
+	//밉맵, 압축 등 요소 때문에 API 사용하여 정확히 계산
 	UINT64 reqSize = GetRequiredIntermediateSize(m_cpBuffer.Get(), 0, subData.size());
 
 	//UPLOAD BUFFER
@@ -194,9 +218,4 @@ float CHeightMapImage::GetHeight(float fx, float fz)
 	float fHeight = fBottomHeight * (1 - fzPercent) + fTopHeight * fzPercent;
 
 	return fHeight;
-}
-
-XMFLOAT3 CHeightMapImage::GetHeightMapNormal(int x, int z)
-{
-	return XMFLOAT3();
 }

@@ -21,11 +21,11 @@ CScene::CScene()
 CScene::~CScene()
 {}
 
-HRESULT CScene::InitScene(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12RootSignature>& cpRootSignature)
+HRESULT CScene::InitScene(ComPtr<ID3D12Device>& cpDevice)
 {
 	HRESULT hr;
 	m_spShader = std::make_shared<CShader>();
-	hr = m_spShader->CreateShader(cpDevice, cpRootSignature);
+	hr = m_spShader->CreateShader(cpDevice);
 	if (FAILED(hr))
 	{
 		OutputDebugString(L"CScene::InitScene() Failed to create Shader\n");
@@ -84,7 +84,13 @@ void CScene::ReleaseObjects()
 
 void CScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
+	m_spShader->SetGraphicsRootSignature(cpCommandList);
 	m_spShader->SetPipelineState(cpCommandList, ERenderState::Default);
+	
+	//기본 타일링 수치 설정
+	float defaultTiling = 1.0f;
+	cpCommandList->SetGraphicsRoot32BitConstants(2, 1, &defaultTiling, 4);
+
 	XMFLOAT4X4 view = Matrix4x4::Transpose(m_spCamera->GetView());
 	XMFLOAT4X4 proj = Matrix4x4::Transpose(m_spCamera->GetProj());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
@@ -129,12 +135,12 @@ struct CGameScene::StageResources
 {
 	std::unique_ptr<CTerrainObject> upTerrain;
 	std::shared_ptr<CModel> spTank;
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
 	std::shared_ptr<CModel> spApache;
 	std::shared_ptr<CModel> spRocks[2];
 	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
 	std::unique_ptr<CSkyboxObject> upSkybox;
-	//-----------------------------------
 	CMesh box;
 };
 
@@ -148,19 +154,11 @@ CGameScene::CGameScene(const PlayerRules& rules)
 CGameScene::~CGameScene()
 {}
 
-HRESULT CGameScene::InitScene(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12RootSignature>& cpRootSignature)
+HRESULT CGameScene::InitScene(ComPtr<ID3D12Device>& cpDevice)
 {
 	HRESULT hr;
 	m_spShader = std::make_shared<CShader>();
-	hr = m_spShader->CreateShader(cpDevice, cpRootSignature);
-	if (FAILED(hr))
-	{
-		OutputDebugString(L"CScene::InitScene() Failed to create Shader\n");
-		return hr;
-	}
-
-	m_spTexShader = std::make_shared<CTextureShader>();
-	hr = m_spTexShader->CreateShader(cpDevice, cpRootSignature);
+	hr = m_spShader->CreateShader(cpDevice);
 	if (FAILED(hr))
 	{
 		OutputDebugString(L"CScene::InitScene() Failed to create Shader\n");
@@ -191,6 +189,9 @@ HRESULT CGameScene::BuildObjects(
 	resources.upTerrain->SetHeightMap(spHeightmap);
 	HRESULT hr = resources.upTerrain->GenerateTerrain(cpDevice, cpCommandList, SRVDespHeapAllocator);
 	if (FAILED(hr)) return hr;
+
+	//auto spNormalmap = std::make_shared<CNormalMapImage>(L"../Resources/Cheongsando.raw", TerrainSamples, TerrainSamples);
+
 	resources.upTerrain->SetScale(TerrainHorizontalScale, TerrainVerticalScale, TerrainHorizontalScale);
 
 	resources.spTank = std::make_shared<CModel>();
@@ -210,7 +211,6 @@ void CGameScene::ShareStageResources(const CGameScene& source)
 {
 	m_spStageResources = source.m_spStageResources;
 	m_spShader = source.m_spShader;
-	m_spTexShader = source.m_spTexShader;
 }
 
 void CGameScene::ReleaseUploadBuffers()
@@ -229,7 +229,6 @@ void CGameScene::ReleaseObjects()
 {
 	m_vEnemies.clear();
 	m_spStageResources.reset();
-	m_spTexShader.reset();
 	m_spShader.reset();
 }
 
@@ -237,6 +236,7 @@ void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	//-----------------------------------
 	//[직접 작성한 코드]
+	m_spShader->SetGraphicsRootSignature(cpCommandList);
 	m_spShader->SetPipelineState(cpCommandList, ERenderState::Default);
 	XMFLOAT4X4 view = Matrix4x4::Transpose(m_spCamera->GetView());
 	XMFLOAT4X4 proj = Matrix4x4::Transpose(m_spCamera->GetProj());
@@ -249,7 +249,7 @@ void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	skyView._41 = skyView._42 = skyView._43 = 0.0f;
 	skyView = Matrix4x4::Transpose(skyView);
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &skyView, 16);
-	m_spTexShader->SetPipelineState(cpCommandList, ERenderState::Skybox);
+	m_spShader->SetPipelineState(cpCommandList, ERenderState::Skybox);
 	m_spStageResources->upSkybox->DrawObject(cpCommandList);
 	//-----------------------------------
 
@@ -258,7 +258,7 @@ void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
 
 	//Terrain
-	m_spTexShader->SetPipelineState(cpCommandList, ERenderState::Default);
+	m_spShader->SetPipelineState(cpCommandList, ERenderState::Texture);
 	XMFLOAT4X4 temp = Matrix4x4::Transpose(Matrix4x4::Identity());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &temp, 0);
 	XMFLOAT4 color{ 1, 1, 1, 1 };
@@ -331,6 +331,10 @@ void CGameScene::UpdateStageView()
 
 void CGameScene::DrawStageHud(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
+	//---------------------------------------
+	//[직접 작성한 코드]
+	m_spShader->SetPipelineState(cpCommandList, ERenderState::Unlit);
+	//---------------------------------------
 	const XMFLOAT4X4 view = m_spCamera->GetView();
 	const XMFLOAT4X4 projection = m_spCamera->GetProj();
 	const XMFLOAT3 aimNdc = Vector3::TransformCoord(m_reticleAimPoint, Matrix4x4::Multiply(view, projection));

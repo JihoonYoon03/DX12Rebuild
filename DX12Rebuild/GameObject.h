@@ -82,7 +82,8 @@ public:
 	HRESULT GenerateTerrain(
 		ComPtr<ID3D12Device>& cpDevice,
 		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CSRVDescHeapAllocator* SRVDespHeapAllocator = nullptr
+		CSRVDescHeapAllocator* SRVDescHeapAllocator = nullptr,
+		bool normalMapping = false
 	);
 
 	float GetHeightAt(float x, float z) const;
@@ -99,6 +100,7 @@ private:
 	std::shared_ptr<CHeightMapImage>	m_spHeightMapImage;
 	std::unique_ptr<CMesh>				m_upTerrain;
 	std::unique_ptr<CTexture>			m_upTerrainTex;
+	std::unique_ptr<CTexture>			m_upNormalMap;
 };
 
 // -------------------------------------------

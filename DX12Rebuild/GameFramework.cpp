@@ -51,9 +51,8 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 	if (FAILED(CreateSwapChain()))			return false;
 	//CreateRTV();
 	if (FAILED(CreateDSV()))				return false;
-	if (FAILED(CreateRootSignature()))		return false;
 
-	if (FAILED(m_spTankScene->InitScene(m_cpDevice, m_cpRootSignature)))	return false;
+	if (FAILED(m_spTankScene->InitScene(m_cpDevice)))	return false;
 
 	if (FAILED(m_upSRVDescHeapAllocator->CreateSRVDescHeap(m_cpDevice)))		return false;
 
@@ -303,87 +302,6 @@ HRESULT CGameFramework::CreateDSV()
 	return S_OK;
 }
 
-HRESULT CGameFramework::CreateRootSignature()
-{
-	D3D12_DESCRIPTOR_RANGE descRange;
-	descRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-	descRange.NumDescriptors = 1;
-	descRange.BaseShaderRegister = 0;
-	descRange.RegisterSpace = 0;
-	descRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-	D3D12_ROOT_PARAMETER rootParams[3];
-
-	//rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-	//rootParams[0].Descriptor.ShaderRegister = 0;
-	//rootParams[0].Descriptor.RegisterSpace = 0;
-	//rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-
-	rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-	rootParams[0].Constants.ShaderRegister = 0;
-	rootParams[0].Constants.RegisterSpace = 0;
-	rootParams[0].Constants.Num32BitValues = 48;
-	rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-
-	rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootParams[1].DescriptorTable.NumDescriptorRanges = 1;
-	rootParams[1].DescriptorTable.pDescriptorRanges = &descRange;
-	rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	rootParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-	rootParams[2].Constants.ShaderRegister = 1;
-	rootParams[2].Constants.RegisterSpace = 0;
-	rootParams[2].Constants.Num32BitValues = 5;
-	rootParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	D3D12_STATIC_SAMPLER_DESC samplerDesc;
-	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	samplerDesc.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	samplerDesc.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-	samplerDesc.MipLODBias = 0;
-	samplerDesc.MaxAnisotropy = 1;
-	samplerDesc.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-	samplerDesc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-	samplerDesc.MinLOD = 0;
-	samplerDesc.MaxLOD = D3D12_FLOAT32_MAX;
-	samplerDesc.ShaderRegister = 0;
-	samplerDesc.RegisterSpace = 0;
-	samplerDesc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	D3D12_ROOT_SIGNATURE_DESC rootSigDesc;
-	::ZeroMemory(&rootSigDesc, sizeof(D3D12_ROOT_SIGNATURE_DESC));
-	rootSigDesc.NumParameters = 3;
-	rootSigDesc.pParameters = rootParams;
-	rootSigDesc.NumStaticSamplers = 1;
-	rootSigDesc.pStaticSamplers = &samplerDesc;
-	rootSigDesc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-
-	ComPtr<ID3DBlob> cpd3dBlob, cpd3dErrBlob;
-	HRESULT hr = D3D12SerializeRootSignature(
-		&rootSigDesc,
-		D3D_ROOT_SIGNATURE_VERSION_1_0,
-		cpd3dBlob.GetAddressOf(),
-		cpd3dErrBlob.GetAddressOf()
-	);
-	if (FAILED(hr))
-	{
-		if (cpd3dErrBlob)
-			OutputDebugStringA((char*)cpd3dErrBlob->GetBufferPointer());
-		return hr;
-	}
-	
-	hr = m_cpDevice->CreateRootSignature(
-		0,
-		cpd3dBlob->GetBufferPointer(),
-		cpd3dBlob->GetBufferSize(),
-		IID_PPV_ARGS(m_cpRootSignature.GetAddressOf())
-		);
-	if (FAILED(hr)) { OutputDebugString(L"CreateRootSignature(): CreateRootSignature() Failed\n"); return hr; }
-
-	return S_OK;
-}
-
 HRESULT CGameFramework::BuildObjects()
 {
 	HRESULT hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), NULL);
@@ -494,8 +412,6 @@ void CGameFramework::FrameAdvance()
 	hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), nullptr);
 	if (FAILED(hr)) { OutputDebugString(L"CommandListResetFailed\n"); return; }
 
-	m_cpCommandList->SetGraphicsRootSignature(m_cpRootSignature.Get());
-
 	m_cpCommandList->RSSetViewports(1, &m_viewport);
 	m_cpCommandList->RSSetScissorRects(1, &m_scissorRect);
 
@@ -515,17 +431,11 @@ void CGameFramework::FrameAdvance()
 	m_cpCommandList->ClearRenderTargetView(RTVDescHandle, Colors::CadetBlue, 0, NULL);
 	m_cpCommandList->ClearDepthStencilView(DSVDescHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
+	//SRV Desc Heap 설정(모든 텍스쳐 통합)
 	m_cpCommandList->SetDescriptorHeaps(1, m_upSRVDescHeapAllocator->GetDescriptorHeap());
 
 	//Scene Render Here
-	//기본 타일링 수치 설정
-	float defaultTiling = 1.0f;
-	m_cpCommandList->SetGraphicsRoot32BitConstants(2, 1, &defaultTiling, 4);
-	//텍스쳐 설정
 	m_upCurrentScene.lock()->DrawScene(m_cpCommandList);
-
-	//Player Render Here
-	//
 
 	ResourceBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
 	ResourceBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
@@ -696,7 +606,7 @@ void CGameFramework::EnterStage(EGameStage stage)
 HRESULT CGameFramework::BuildPortingUi()
 {
 	auto spUiShader = std::make_shared<CShader>();
-	HRESULT hr = spUiShader->CreateShader(m_cpDevice, m_cpRootSignature);
+	HRESULT hr = spUiShader->CreateShader(m_cpDevice);
 	if (FAILED(hr)) return hr;
 
 	m_spMainMenuScene = std::make_shared<CMainMenuScene>(spUiShader);

@@ -15,12 +15,19 @@ struct VertexTexcoord
 	XMFLOAT2 uv;
 };
 
+struct VertexTexNormal
+{
+	XMFLOAT3 pos;
+	XMFLOAT4 color;
+	XMFLOAT2 uv;
+	XMFLOAT3 normal;
+};
+
 template <class VERTEXDATA>
 struct MeshData
 {
 	std::vector<VERTEXDATA>		vertices;
 	std::vector<uint32_t>		indices;
-	std::vector<XMFLOAT3>		normals;
 };
 
 //매쉬에 대한 인덱스, 머터리얼 등 부가정보
@@ -153,7 +160,7 @@ private:
 	struct ModelData
 	{
 		std::vector<FrameData>					frames;
-		std::vector<MeshData<VertexTexcoord>>	meshData;
+		std::vector<MeshData<VertexTexNormal>>	meshData;
 	};
 
 public:

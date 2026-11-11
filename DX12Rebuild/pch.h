@@ -50,6 +50,7 @@
 
 #include "d3dx12.h"
 #include "DDSTextureLoader12.h"
+#include "WICTextureLoader12.h"
 #include "Config.h"
 
 //1Byte

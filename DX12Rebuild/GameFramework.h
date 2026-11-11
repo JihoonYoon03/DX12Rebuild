@@ -38,9 +38,6 @@ public:
 	HRESULT CreateRTV();
 	HRESULT CreateDSV();
 
-	HRESULT CreateRootSignature();
-
-	HRESULT CreateTexture();
 	HRESULT BuildObjects();
 	void ReleaseUploadBuffers();
 	void ReleaseObjects();

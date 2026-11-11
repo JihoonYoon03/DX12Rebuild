@@ -39,11 +39,11 @@ void CMesh::DrawMesh(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, con
 //=======================================================================================
 //=======================================================================================
 //map으로 태그 별 데이터 저장하는 람다 함수 지정해주기. 파싱 편의성을 위해
-std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameData&, MeshData<VertexTexcoord>&)>> parseByTag
+std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameData&, MeshData<VertexTexNormal>&)>> parseByTag
 = {
 	//Frame 속성 파싱 관련. Children의 재귀호출 제외
 	{ "<Frame>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		if (iss >> frame.index && iss >> frame.name)
 			return false;
 		else
@@ -51,7 +51,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<TransformMatrix>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		float n;
 			for (int i = 0; i < 16; ++i) {
 				if (iss >> n)
@@ -63,12 +63,12 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<Mesh>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		return false;
 	}},
 
 	{ "<Materials>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		int numMaterial;
 		if (iss >> numMaterial)
 		{
@@ -85,7 +85,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
 	{ "<Bounds>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>&) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>&) {
 		BoundingBox bounds;
 		auto& center = bounds.Center;
 		auto& extents = bounds.Extents;
@@ -101,7 +101,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	//-----------------------------------
 
 	{ "<Positions>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		int numVertex;
 		if (iss >> numVertex)
 		{
@@ -127,7 +127,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<Colors>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		int numColors;
 		bool colored = false;
 		if (iss >> numColors)
@@ -137,7 +137,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 			else if (numColors < 0)
 				return true;
 
-			for (VertexTexcoord& vtx : meshData.vertices)
+			for (VertexTexNormal& vtx : meshData.vertices)
 			{
 				XMFLOAT4 color;
 				if (colored)
@@ -158,20 +158,18 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<Normals>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		int numVertex;
 		if (iss >> numVertex)
 		{
 			if (numVertex < 0)
 				return true;
 
-			meshData.normals.reserve(numVertex);
-
 			XMFLOAT3 normal;
 			for (int i = 0; i < numVertex; ++i)
 			{
 				if (iss >> normal.x >> normal.y >> normal.z)
-					meshData.normals.push_back({ normal });
+					meshData.vertices[i].normal = normal;
 				else
 					return true;
 			}
@@ -181,7 +179,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<SubMeshes>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		int numSubMesh;
 		if (iss >> numSubMesh)
 		{
@@ -196,7 +194,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<SubMesh>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		SubMeshData sMesh;
 		if (iss >> sMesh.materialIndex >> sMesh.indexAmount)
 		{
@@ -230,13 +228,13 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 
 	//Material 속성 파싱 관련
 	{ "<Material>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		frame.materialDatas.push_back({});
 		return false;
 	}},
 
 	{ "<AlbedoColor>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		MaterialData& mat = frame.materialDatas.back();
 		if (iss >> mat.albedoColor.x >> mat.albedoColor.y >> mat.albedoColor.z >> mat.albedoColor.w)
 			return false;
@@ -245,7 +243,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<EmissiveColor>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		MaterialData& mat = frame.materialDatas.back();
 		if (iss >> mat.emissiveColor.x >> mat.emissiveColor.y >> mat.emissiveColor.z >> mat.emissiveColor.w)
 			return false;
@@ -254,7 +252,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<Glossiness>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		MaterialData& mat = frame.materialDatas.back();
 		if (iss >> mat.glossiness)
 			return false;
@@ -263,7 +261,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<Metallic>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		MaterialData& mat = frame.materialDatas.back();
 		if (iss >> mat.metallic)
 			return false;
@@ -272,7 +270,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<SpecularHighlight>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		MaterialData& mat = frame.materialDatas.back();
 		if (iss >> mat.SpecularHighlight)
 			return false;
@@ -281,7 +279,7 @@ std::unordered_map<std::string, std::function<bool(std::istringstream&, FrameDat
 	}},
 
 	{ "<GlossyReflection>:",
-	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexcoord>& meshData) {
+	[](std::istringstream& iss, FrameData& frame, MeshData<VertexTexNormal>& meshData) {
 		MaterialData& mat = frame.materialDatas.back();
 		if (iss >> mat.GlossyReflection)
 			return false;
@@ -326,7 +324,7 @@ bool CModel::LoadModelData(
 	if (ReadFrameData(model, file, iss, buffer))
 	{
 		//읽은 데이터 하나로 붙이기.
-		MeshData<VertexTexcoord> combinedMesh;
+		MeshData<VertexTexNormal> combinedMesh;
 		
 		for (int i = 0; i < model.frames.size(); ++i)
 		{
@@ -351,7 +349,6 @@ bool CModel::LoadModelData(
 				//-----------------------------------
 				combinedMesh.vertices.insert(combinedMesh.vertices.end(), model.meshData[i].vertices.begin(), model.meshData[i].vertices.end());
 				combinedMesh.indices.insert(combinedMesh.indices.end(), model.meshData[i].indices.begin(), model.meshData[i].indices.end());
-				combinedMesh.normals.insert(combinedMesh.normals.end(), model.meshData[i].normals.begin(), model.meshData[i].normals.end());
 			}
 		}
 
