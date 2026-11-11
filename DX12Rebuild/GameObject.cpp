@@ -115,16 +115,16 @@ void CTerrainObject::SetHeightMap(std::shared_ptr<CHeightMapImage>& pHeightMapIm
 HRESULT CTerrainObject::GenerateTerrain(
 	ComPtr<ID3D12Device>& cpDevice,
 	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	CSRVDescHeapAllocator* SRVDescHeapAllocator,
+	CDescHeapAllocator* DescHeapAllocator,
 	bool normalMapping)
 {
 	if (m_spHeightMapImage->GetHeightMapPixels().empty()) return E_FAIL;
 
 	HRESULT hr;
-	if (SRVDescHeapAllocator)
+	if (DescHeapAllocator)
 	{
 		m_upTerrainTex = std::make_unique<CTexture>();
-		hr = m_upTerrainTex->CreateTexture(*SRVDescHeapAllocator, cpDevice, cpCommandList, L"../Resources/grass.dds");
+		hr = m_upTerrainTex->CreateTexture(*DescHeapAllocator, cpDevice, cpCommandList, L"../Resources/grass.dds");
 		if (FAILED(hr))
 		{
 			m_upTerrainTex.reset();
@@ -134,7 +134,7 @@ HRESULT CTerrainObject::GenerateTerrain(
 		if (normalMapping)
 		{
 			m_upNormalMap = std::make_unique<CTexture>();
-			HRESULT hr = m_upNormalMap->CreateTexture(*SRVDescHeapAllocator, cpDevice, cpCommandList, L"../Resources/TerrainNormal.dds");
+			HRESULT hr = m_upNormalMap->CreateTexture(*DescHeapAllocator, cpDevice, cpCommandList, L"../Resources/TerrainNormal.dds");
 			if (FAILED(hr))
 			{
 				m_upNormalMap.reset();
@@ -251,17 +251,19 @@ float CTerrainObject::GetHeightAt(const XMFLOAT3& pos) const
 
 void CTerrainObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
-	cpCommandList->SetGraphicsRoot32BitConstants(2, 1, &m_fTiling, 4);
+	cpCommandList->SetGraphicsRoot32BitConstants(1, 1, &m_fTiling, 4);
 	XMFLOAT4X4 world = Matrix4x4::Transpose(m_Transform.getMatrix());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
+	XMFLOAT4X4 worldInv = Matrix4x4::Inverse(world);
+	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
 
 	//텍스쳐 설정
 	if (m_upTerrainTex)
-		cpCommandList->SetGraphicsRootDescriptorTable(1, m_upTerrainTex->getGPUDescHandle());
+		cpCommandList->SetGraphicsRootDescriptorTable(3, m_upTerrainTex->getGPUDescHandle());
 
 	//노멀맵 설정
 	if (m_upNormalMap)
-		cpCommandList->SetGraphicsRootDescriptorTable(3, m_upNormalMap->getGPUDescHandle());
+		cpCommandList->SetGraphicsRootDescriptorTable(4, m_upNormalMap->getGPUDescHandle());
 
 	m_upTerrain->DrawMesh(cpCommandList);
 }
@@ -278,7 +280,7 @@ CSkyboxObject::~CSkyboxObject() = default;
 HRESULT CSkyboxObject::GenerateSkyBox(
 	const ComPtr<ID3D12Device>& cpDevice,
 	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	CSRVDescHeapAllocator& allocator)
+	CDescHeapAllocator& allocator)
 {
 	const wchar_t* filenames[] =
 	{
@@ -340,11 +342,13 @@ void CSkyboxObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpComman
 	const XMFLOAT4X4 world = Matrix4x4::Transpose(m_Transform.getMatrix());
 	const float tiling = 1.0f;
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
-	cpCommandList->SetGraphicsRoot32BitConstants(2, 1, &tiling, 4);
+	const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(world);
+	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
+	cpCommandList->SetGraphicsRoot32BitConstants(1, 1, &tiling, 4);
 
 	for (size_t i = 0; i < m_vPlane.size(); ++i)
 	{
-		cpCommandList->SetGraphicsRootDescriptorTable(1, m_vSkyTextures[i]->getGPUDescHandle());
+		cpCommandList->SetGraphicsRootDescriptorTable(3, m_vSkyTextures[i]->getGPUDescHandle());
 		m_vPlane[i]->DrawMesh(cpCommandList);
 	}
 }

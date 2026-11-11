@@ -4,7 +4,7 @@
 
 class CMesh;
 class CShader;
-class CSRVDescHeapAllocator;
+class CDescHeapAllocator;
 class CTexture;
 class CModel;
 class CScene;
@@ -137,7 +137,7 @@ private:
 //-----------------------------------
 //[流立 累己茄 内靛]
 	//Texture
-	std::unique_ptr<CSRVDescHeapAllocator>	m_upSRVDescHeapAllocator;
+	std::unique_ptr<CDescHeapAllocator>	m_upDescHeapAllocator;
 
 	//Debug
 

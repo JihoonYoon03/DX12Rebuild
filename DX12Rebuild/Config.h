@@ -98,7 +98,7 @@ namespace config::stage
 	constexpr bool TankAutoAttackAtStart = true;
 	constexpr float TankDriveSpeed = 10.0f;
 	constexpr float TankTurnSpeedDegrees = 60.0f;
-	constexpr float TurretManualSpeedDegrees = 60.0f;
+	constexpr float TurretManualSpeedDegrees = 70.0f;
 	constexpr float CannonManualSpeedDegrees = 40.0f;
 	constexpr float TankGroundOffset = 1.1f;
 	constexpr float TankFootprintHalfWidth = 3.4f;
@@ -139,7 +139,7 @@ namespace config::stage
 	constexpr float TankShellClearance = .28f;
 	constexpr float TankHitRadius = 4.25f;
 	constexpr float TankAimHeight = 1.0f;
-	constexpr float EnemyTankAimHeight = 1.35f;
+	constexpr float EnemyTankAimHeight = -0.5f;
 	constexpr float TankLockMinDot = .925f;
 	constexpr float TurretAimSpeed = 2.65f;
 	constexpr float CannonAimSpeed = 1.85f;

@@ -626,6 +626,8 @@ void CModel::DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, c
 
 		XMFLOAT4X4 world = Matrix4x4::Transpose(Matrix4x4::Multiply(GetFrameMatrix(i), objWorld));
 		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
+		const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(world);
+		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
 
 		for (auto& subMesh : m_vFrameData[i].subMeshes)
 		{
@@ -664,6 +666,8 @@ void CModel::DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, c
 
 		XMFLOAT4X4 world = Matrix4x4::Transpose(Matrix4x4::Multiply(model, objWorld));
 		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
+		const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(world);
+		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
 
 		for (auto& subMesh : m_vFrameData[i].subMeshes)
 		{

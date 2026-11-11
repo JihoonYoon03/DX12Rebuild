@@ -33,7 +33,7 @@ public:
 	HRESULT BuildObjects(
 		ComPtr<ID3D12Device>& cpDevice,
 		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CSRVDescHeapAllocator* SRVDescHeapAllocator = nullptr) override;
+		CDescHeapAllocator* DescHeapAllocator = nullptr) override;
 	void ReleaseUploadBuffers() override;
 	void DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 

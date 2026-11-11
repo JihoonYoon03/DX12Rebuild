@@ -8,7 +8,7 @@ class CModel;
 class CTerrainObject;
 class CCamera;
 class CTankPlayer;
-class CSRVDescHeapAllocator;
+class CDescHeapAllocator;
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
@@ -28,12 +28,13 @@ public:
 	CScene();
 	virtual ~CScene();
 
-	virtual HRESULT InitScene(ComPtr<ID3D12Device>& cpDevice);
+	virtual HRESULT InitScene(ComPtr<ID3D12Device>& cpDevice,
+		ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator& descHeapAllocator);
 
 	virtual HRESULT BuildObjects(
 		ComPtr<ID3D12Device>& cpDevice,
 		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CSRVDescHeapAllocator* SRVDespHeapAllocator = nullptr
+		CDescHeapAllocator* DescHeapAllocator = nullptr
 	);
 	void AddObject(std::unique_ptr<CModelObject>& upObject);
 	void AddObjects(std::unique_ptr<CModelObject>* upObjects, size_t size);
@@ -65,12 +66,13 @@ public:
 	//[직접 작성한 코드]
 	~CGameScene() override;
 
-	HRESULT InitScene(ComPtr<ID3D12Device>& cpDevice) override;
+	HRESULT InitScene(ComPtr<ID3D12Device>& cpDevice,
+		ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator& descHeapAllocator) override;
 
 	HRESULT BuildObjects(
 		ComPtr<ID3D12Device>& cpDevice,
 		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CSRVDescHeapAllocator* SRVDespHeapAllocator = nullptr
+		CDescHeapAllocator* DescHeapAllocator = nullptr
 	) override;
 
 	void ReleaseUploadBuffers() override;
@@ -196,7 +198,7 @@ public:
 	HRESULT BuildObjects(
 		ComPtr<ID3D12Device>& cpDevice,
 		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CSRVDescHeapAllocator* SRVDespHeapAllocator = nullptr
+		CDescHeapAllocator* DescHeapAllocator = nullptr
 	) override;
 	void ReleaseUploadBuffers() override;
 	void ReleaseObjects() override;

@@ -267,7 +267,9 @@ void CTankPlayer::CannonTestDraw(const ComPtr<ID3D12GraphicsCommandList>& cpComm
 		//-----------------------------------
 		const XMFLOAT4X4 markerWorld = Matrix4x4::Transpose(marker.getMatrix());
 		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &markerWorld, 0);
-		cpCommandList->SetGraphicsRoot32BitConstants(2, 4, &colors[i], 0);
+		const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(markerWorld);
+		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
+		cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &colors[i], 0);
 		m_upCannonTestMesh->DrawMesh(cpCommandList);
 	}
 }

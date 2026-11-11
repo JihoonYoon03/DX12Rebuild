@@ -18,7 +18,7 @@ void CMaterial::SetDefaultMaterialData(const MaterialData& mData)
 
 void CMaterial::SetMaterialData(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const MaterialData& mData)
 {
-	cpCommandList->SetGraphicsRoot32BitConstants(2, 4, &mData.albedoColor, 0);
+	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &mData.albedoColor, 0);
 }
 
 void CMaterial::BindMaterial(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)

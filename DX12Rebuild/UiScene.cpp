@@ -100,6 +100,8 @@ void CUI::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	const XMFLOAT4X4 world = Matrix4x4::Transpose(m_Transform.getMatrix());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
+	const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(world);
+	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
 	m_mesh.DrawMesh(cpCommandList);
 }
 
@@ -118,7 +120,7 @@ CUiScene::CUiScene(const std::shared_ptr<CShader>& spShader)
 HRESULT CUiScene::BuildObjects(
 	ComPtr<ID3D12Device>& cpDevice,
 	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	CSRVDescHeapAllocator* SRVDescHeapAllocator)
+	CDescHeapAllocator* DescHeapAllocator)
 {
 	m_vUiObjects.clear();
 	BuildUi();
@@ -165,9 +167,11 @@ void CUiScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	const XMFLOAT4X4 projection = Matrix4x4::Transpose(Matrix4x4::OrthographicLH(m_fViewWidth, m_fViewHeight, 0.0f, 1.0f));
 	const XMFLOAT4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
 
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &projection, 32);
-	cpCommandList->SetGraphicsRoot32BitConstants(2, 4, &color, 0);
+	const CB_SceneInfo sceneInfo{ view, projection, view };
+	m_spShader->SetSceneMatrix(cpCommandList, sceneInfo);
+	const float tiling = 1.0f;
+	cpCommandList->SetGraphicsRoot32BitConstants(1, 1, &tiling, 4);
+	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &color, 0);
 	for (const auto& upUi : m_vUiObjects) upUi->DrawObject(cpCommandList);
 }
 

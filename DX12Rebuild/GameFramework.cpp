@@ -25,7 +25,7 @@ CGameFramework::CGameFramework()
 
 	m_ptOldCursorPos = { 0, 0 };
 
-	m_upSRVDescHeapAllocator = std::make_unique<CSRVDescHeapAllocator>();
+	m_upDescHeapAllocator = std::make_unique<CDescHeapAllocator>();
 
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
@@ -52,9 +52,9 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 	//CreateRTV();
 	if (FAILED(CreateDSV()))				return false;
 
-	if (FAILED(m_spTankScene->InitScene(m_cpDevice)))	return false;
+	if (FAILED(m_upDescHeapAllocator->CreateSRVDescHeap(m_cpDevice)))		return false;
 
-	if (FAILED(m_upSRVDescHeapAllocator->CreateSRVDescHeap(m_cpDevice)))		return false;
+	if (FAILED(m_spTankScene->InitScene(m_cpDevice, m_cpCommandList, *m_upDescHeapAllocator)))	return false;
 
 	if (FAILED(BuildObjects()))				return false;
 	m_timer.Reset();
@@ -307,7 +307,7 @@ HRESULT CGameFramework::BuildObjects()
 	HRESULT hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), NULL);
 	if (FAILED(hr)) return hr;
 
-	hr = m_spTankScene->BuildObjects(m_cpDevice, m_cpCommandList, m_upSRVDescHeapAllocator.get());
+	hr = m_spTankScene->BuildObjects(m_cpDevice, m_cpCommandList, m_upDescHeapAllocator.get());
 	if (FAILED(hr)) return hr;
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
@@ -432,7 +432,7 @@ void CGameFramework::FrameAdvance()
 	m_cpCommandList->ClearDepthStencilView(DSVDescHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
 	//SRV Desc Heap 설정(모든 텍스쳐 통합)
-	m_cpCommandList->SetDescriptorHeaps(1, m_upSRVDescHeapAllocator->GetDescriptorHeap());
+	m_cpCommandList->SetDescriptorHeaps(1, m_upDescHeapAllocator->GetDescriptorHeap());
 
 	//Scene Render Here
 	m_upCurrentScene.lock()->DrawScene(m_cpCommandList);
@@ -606,7 +606,7 @@ void CGameFramework::EnterStage(EGameStage stage)
 HRESULT CGameFramework::BuildPortingUi()
 {
 	auto spUiShader = std::make_shared<CShader>();
-	HRESULT hr = spUiShader->CreateShader(m_cpDevice);
+	HRESULT hr = spUiShader->CreateShader(m_cpDevice, m_cpCommandList, *m_upDescHeapAllocator);
 	if (FAILED(hr)) return hr;
 
 	m_spMainMenuScene = std::make_shared<CMainMenuScene>(spUiShader);

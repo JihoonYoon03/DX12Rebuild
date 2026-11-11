@@ -114,10 +114,75 @@ CShader::CShader()
 
 CShader::~CShader()
 {
+	if (m_cpSceneInfoBuffer && m_mappedSceneInfoBuffer)
+		m_cpSceneInfoBuffer->Unmap(0, NULL);
+}
+
+HRESULT CShader::CreateCBV(
+	const ComPtr<ID3D12Device>& cpDevice,
+	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+	CDescHeapAllocator& descHeapAllocator)
+{
+	const UINT bufferSize = (sizeof(CB_SceneInfo) + 255) & ~255;
+
+	HRESULT hr = descHeapAllocator.AllocateHeapSlot(m_descHeapInfo);
+	if (FAILED(hr)) return hr;
+	hr = descHeapAllocator.AllocateHeapSlot(m_hudDescHeapInfo);
+	if (FAILED(hr)) return hr;
+
+	hr = CreateBufferResource(cpDevice, cpCommandList, m_cpSceneInfoBuffer, NULL, bufferSize * 2);
+	if (FAILED(hr))
+	{
+		OutputDebugString(L"CShader::CreateCBV() CreateBufferResource\n");
+		return hr;
+	}
+	D3D12_RANGE range = { 0, 0 };
+	hr = m_cpSceneInfoBuffer->Map(0, &range, (void**)&m_mappedSceneInfoBuffer);
+	if (FAILED(hr)) return hr;
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
+	cbvDesc.SizeInBytes = bufferSize;
+	cbvDesc.BufferLocation = m_cpSceneInfoBuffer->GetGPUVirtualAddress();
+	cpDevice->CreateConstantBufferView(&cbvDesc, m_descHeapInfo.cpuHandle);
+
+	cbvDesc.BufferLocation += bufferSize;
+	cpDevice->CreateConstantBufferView(&cbvDesc, m_hudDescHeapInfo.cpuHandle);
+
+	return S_OK;
 }
 
 HRESULT CShader::CreateRootSignature(const ComPtr<ID3D12Device>& cpDevice)
 {
+	D3D12_ROOT_PARAMETER rootParams[5];
+
+	//World, WorldInv
+	rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParams[0].Constants.Num32BitValues = 32;
+	rootParams[0].Constants.ShaderRegister = 0;
+	rootParams[0].Constants.RegisterSpace = 0;
+	rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+
+	//BaseColor, Tiling
+	rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+	rootParams[1].Constants.ShaderRegister = 1;
+	rootParams[1].Constants.RegisterSpace = 0;
+	rootParams[1].Constants.Num32BitValues = 5;
+	rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
+	//View, Proj, ViewSky
+	D3D12_DESCRIPTOR_RANGE mtxDescRange;
+	mtxDescRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+	mtxDescRange.NumDescriptors = 1;
+	mtxDescRange.BaseShaderRegister = 2;
+	mtxDescRange.RegisterSpace = 0;
+	mtxDescRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	rootParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParams[2].DescriptorTable.NumDescriptorRanges = 1;
+	rootParams[2].DescriptorTable.pDescriptorRanges = &mtxDescRange;
+	rootParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+	//텍스쳐용. 단순화 필요
 	D3D12_DESCRIPTOR_RANGE descRange;
 	descRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 	descRange.NumDescriptors = 1;
@@ -125,26 +190,12 @@ HRESULT CShader::CreateRootSignature(const ComPtr<ID3D12Device>& cpDevice)
 	descRange.RegisterSpace = 0;
 	descRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-	D3D12_ROOT_PARAMETER rootParams[4];
+	rootParams[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParams[3].DescriptorTable.NumDescriptorRanges = 1;
+	rootParams[3].DescriptorTable.pDescriptorRanges = &descRange;
+	rootParams[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-	rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-	rootParams[0].Constants.ShaderRegister = 0;
-	rootParams[0].Constants.RegisterSpace = 0;
-	rootParams[0].Constants.Num32BitValues = 48;
-	rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-
-	rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootParams[1].DescriptorTable.NumDescriptorRanges = 1;
-	rootParams[1].DescriptorTable.pDescriptorRanges = &descRange;
-	rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	rootParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-	rootParams[2].Constants.ShaderRegister = 1;
-	rootParams[2].Constants.RegisterSpace = 0;
-	rootParams[2].Constants.Num32BitValues = 5;
-	rootParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-	//노멀맵용. 나중에 단순화 필요
+	//노멀맵용
 	D3D12_DESCRIPTOR_RANGE descRange2;
 	descRange2.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
 	descRange2.NumDescriptors = 1;
@@ -152,11 +203,12 @@ HRESULT CShader::CreateRootSignature(const ComPtr<ID3D12Device>& cpDevice)
 	descRange2.RegisterSpace = 0;
 	descRange2.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-	rootParams[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-	rootParams[3].DescriptorTable.NumDescriptorRanges = 1;
-	rootParams[3].DescriptorTable.pDescriptorRanges = &descRange2;
-	rootParams[3].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParams[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParams[4].DescriptorTable.NumDescriptorRanges = 1;
+	rootParams[4].DescriptorTable.pDescriptorRanges = &descRange2;
+	rootParams[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
+	//Static Sampler
 	D3D12_STATIC_SAMPLER_DESC samplerDesc;
 	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
 	samplerDesc.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
@@ -174,7 +226,7 @@ HRESULT CShader::CreateRootSignature(const ComPtr<ID3D12Device>& cpDevice)
 
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc;
 	::ZeroMemory(&rootSigDesc, sizeof(D3D12_ROOT_SIGNATURE_DESC));
-	rootSigDesc.NumParameters = 4;
+	rootSigDesc.NumParameters = 5;
 	rootSigDesc.pParameters = rootParams;
 	rootSigDesc.NumStaticSamplers = 1;
 	rootSigDesc.pStaticSamplers = &samplerDesc;
@@ -205,9 +257,15 @@ HRESULT CShader::CreateRootSignature(const ComPtr<ID3D12Device>& cpDevice)
 	return S_OK;
 }
 
-HRESULT CShader::CreateShader(const ComPtr<ID3D12Device>& cpDevice)
+HRESULT CShader::CreateShader(
+	const ComPtr<ID3D12Device>& cpDevice,
+	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+	CDescHeapAllocator& descHeapAllocator
+)
 {
 	HRESULT hr = CreateRootSignature(cpDevice);
+	if (FAILED(hr)) return hr;
+	hr = CreateCBV(cpDevice, cpCommandList, descHeapAllocator);
 	if (FAILED(hr)) return hr;
 
 	//Input Layout
@@ -254,28 +312,12 @@ HRESULT CShader::CreateShader(const ComPtr<ID3D12Device>& cpDevice)
 	);
 	if (FAILED(hr)) { OutputDebugString(L"Tex PSO Creation Failed\n"); return hr; }
 
-	//Skybox PSO
-	hr = CompileShaderFromFile(cpPS, L"Shaders.hlsl", "PSSky", "ps_5_0");
-	if (FAILED(hr)) return hr;
-	m_cpPipelineState[ERenderState::Skybox] = ComPtr<ID3D12PipelineState>{};
-	psoDesc.PS.BytecodeLength = cpPS->GetBufferSize();
-	psoDesc.PS.pShaderBytecode = cpPS->GetBufferPointer();
-	psoDesc.DepthStencilState.DepthEnable = FALSE;
-	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	hr = cpDevice->CreateGraphicsPipelineState(
-		&psoDesc, 
-		IID_PPV_ARGS(m_cpPipelineState[ERenderState::Skybox].ReleaseAndGetAddressOf())
-	);
-	if (FAILED(hr)) { OutputDebugString(L"Sky PSO Creation Failed\n"); return hr; }
-
 	//Unlit PSO
 	hr = CompileShaderFromFile(cpPS, L"Shaders.hlsl", "PSUnlit", "ps_5_0");
 	if (FAILED(hr)) return hr;
 	m_cpPipelineState[ERenderState::Unlit] = ComPtr<ID3D12PipelineState>{};
 	psoDesc.PS.BytecodeLength = cpPS->GetBufferSize();
 	psoDesc.PS.pShaderBytecode = cpPS->GetBufferPointer();
-	psoDesc.DepthStencilState.DepthEnable = TRUE;
-	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
 	hr = cpDevice->CreateGraphicsPipelineState(
 		&psoDesc,
 		IID_PPV_ARGS(m_cpPipelineState[ERenderState::Unlit].ReleaseAndGetAddressOf())
@@ -293,6 +335,24 @@ HRESULT CShader::CreateShader(const ComPtr<ID3D12Device>& cpDevice)
 		IID_PPV_ARGS(m_cpPipelineState[ERenderState::NormalMap].ReleaseAndGetAddressOf())
 	);
 	if (FAILED(hr)) { OutputDebugString(L"NormalMap PSO Creation Failed\n"); return hr; }
+
+	//Skybox PSO
+	hr = CompileShaderFromFile(cpVS, L"Shaders.hlsl", "VSSky", "vs_5_0");
+	if (FAILED(hr)) return hr;
+	hr = CompileShaderFromFile(cpPS, L"Shaders.hlsl", "PSSky", "ps_5_0");
+	if (FAILED(hr)) return hr;
+	m_cpPipelineState[ERenderState::Skybox] = ComPtr<ID3D12PipelineState>{};
+	psoDesc.VS.BytecodeLength = cpVS->GetBufferSize();
+	psoDesc.VS.pShaderBytecode = cpVS->GetBufferPointer();
+	psoDesc.PS.BytecodeLength = cpPS->GetBufferSize();
+	psoDesc.PS.pShaderBytecode = cpPS->GetBufferPointer();
+	psoDesc.DepthStencilState.DepthEnable = FALSE;
+	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	hr = cpDevice->CreateGraphicsPipelineState(
+		&psoDesc,
+		IID_PPV_ARGS(m_cpPipelineState[ERenderState::Skybox].ReleaseAndGetAddressOf())
+	);
+	if (FAILED(hr)) { OutputDebugString(L"Sky PSO Creation Failed\n"); return hr; }
 
 	return S_OK;
 }
@@ -327,4 +387,12 @@ void CShader::SetPipelineState(const ComPtr<ID3D12GraphicsCommandList>& cpComman
 		//해당 상태 PSO 존재하지 않음
 		return;
 	}
+}
+
+void CShader::SetSceneMatrix(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const CB_SceneInfo& data, bool bHud)
+{
+	const UINT bufferSize = (sizeof(CB_SceneInfo) + 255) & ~255;
+	::memcpy(m_mappedSceneInfoBuffer + (bHud ? bufferSize : 0), &data, sizeof(CB_SceneInfo));
+
+	cpCommandList->SetGraphicsRootDescriptorTable(2, bHud ? m_hudDescHeapInfo.gpuHandle : m_descHeapInfo.gpuHandle);
 }

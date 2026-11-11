@@ -1,15 +1,22 @@
 cbuffer cbGameObjInfo : register(b0)
 {
     matrix gmtxWorld;
-    matrix gmtxView;
-    matrix gmtxProjection;
+    matrix gmtxWorldInv;
 };
 
 cbuffer cbMaterial : register(b1)
 {
     float4 matBaseColor;
-    float  tiling;
+    float tiling;
 };
+
+//드로우 콜 한 번동안은 유지되는 데이터
+cbuffer cbSceneInfo : register(b2)
+{
+    matrix gmtxView;
+    matrix gmtxProjection;
+    matrix gmtxViewSky;
+}
 
 Texture2D tex1 : register(t0);
 Texture2D normalMap : register(t1);
@@ -39,7 +46,19 @@ VS_OUTPUT VSMain(VS_INPUT input)
     output.color = input.color;
     output.uv = input.uv;
     output.wpos = mul(float4(input.pos, 1), gmtxWorld);
-    output.normal = mul(float4(input.normal, 0), gmtxWorld);
+    output.normal = mul(float4(input.normal, 0), transpose(gmtxWorldInv));
+    
+    return output;
+}
+
+VS_OUTPUT VSSky(VS_INPUT input)
+{
+    VS_OUTPUT output;
+    output.pos = mul(mul(mul(float4(input.pos, 1), gmtxWorld), gmtxViewSky), gmtxProjection);
+    output.color = input.color;
+    output.uv = input.uv;
+    output.wpos = mul(float4(input.pos, 1), gmtxWorld);
+    output.normal = mul(float4(input.normal, 0), transpose(gmtxWorldInv));
     
     return output;
 }
@@ -53,7 +72,14 @@ float4 PSMain(VS_OUTPUT input) : SV_Target
     light.z = -1000.0f;
     light = normalize(light - input.wpos.xyz);
     
-    return (input.color * matBaseColor) * (0.2f + 0.8f * saturate(dot(normalize(input.normal), light)));
+    //----------------------------
+    //[아래 코드는 AI가 작성]
+    //인접 픽셀 사이의 값의 변화량을 벡터로서 사용해 외적하여 면의 법선벡터를 구함
+    //성능 부하가 있어보임
+    float3 planeNormal = normalize(cross(ddx(input.wpos), ddy(input.wpos)));
+    //----------------------------
+    
+    return (input.color * matBaseColor) * (0.2f + 0.8f * saturate(dot(normalize(planeNormal), light)));
 }
 
 float4 PSTex(VS_OUTPUT input) : SV_Target
@@ -88,7 +114,7 @@ float4 PSNormalMap(VS_OUTPUT input) : SV_Target
     light.y = 100.0f;
     light.z = -1000.0f;
     light = normalize(light - input.wpos.xyz);
- 
+    
     float2 normalUV;
     normalUV.x = input.uv.x;
     normalUV.y = 1 - input.uv.y;

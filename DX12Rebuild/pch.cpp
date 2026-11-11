@@ -119,3 +119,50 @@ HRESULT CreateBufferResource(
 
 	return S_OK;
 }
+
+//-----------------------------------------------
+// 
+// DescHeapAllocator
+// 
+//-----------------------------------------------
+CDescHeapAllocator::CDescHeapAllocator()
+{
+    m_nSlots = config::MAX_TEXTURE_SLOTS;
+    m_nNextIndex = 0;
+    m_nDescHeapIncrementSize = 0;
+}
+
+HRESULT CDescHeapAllocator::CreateSRVDescHeap(const ComPtr<ID3D12Device>& cpDevice)
+{
+    D3D12_DESCRIPTOR_HEAP_DESC heapDesc;
+    heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    heapDesc.NumDescriptors = m_nSlots;
+    heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+    heapDesc.NodeMask = 0;
+
+    HRESULT hr = cpDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_cpHeap.GetAddressOf()));
+    if (FAILED(hr)) return hr;
+
+    m_nDescHeapIncrementSize = cpDevice->GetDescriptorHandleIncrementSize(
+        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    return S_OK;
+}
+
+HRESULT CDescHeapAllocator::AllocateHeapSlot(DescHeapInfo& descHeapInfo)
+{
+    DescHeapInfo info;
+
+    info.cpuHandle = m_cpHeap->GetCPUDescriptorHandleForHeapStart();
+    info.gpuHandle = m_cpHeap->GetGPUDescriptorHandleForHeapStart();
+
+    if (m_nNextIndex == m_nSlots) return E_FAIL;
+
+    info.cpuHandle.ptr += m_nDescHeapIncrementSize * m_nNextIndex;
+    info.gpuHandle.ptr += m_nDescHeapIncrementSize * m_nNextIndex;
+    info.index = m_nNextIndex++;
+
+    descHeapInfo = info;
+
+    return S_OK;
+}

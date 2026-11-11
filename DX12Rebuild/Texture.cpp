@@ -1,48 +1,6 @@
 #include "pch.h"
 #include "Texture.h"
 
-CSRVDescHeapAllocator::CSRVDescHeapAllocator()
-{
-	m_nSlots = config::MAX_TEXTURE_SLOTS;
-	m_nNextIndex = 0;
-	m_nDescHeapIncrementSize = 0;
-}
-
-HRESULT CSRVDescHeapAllocator::CreateSRVDescHeap(const ComPtr<ID3D12Device>& cpDevice)
-{
-	D3D12_DESCRIPTOR_HEAP_DESC heapDesc;
-	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	heapDesc.NumDescriptors = m_nSlots;
-	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	heapDesc.NodeMask = 0;
-
-	HRESULT hr = cpDevice->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(m_cpHeap.GetAddressOf()));
-	if (FAILED(hr)) return hr;
-
-	m_nDescHeapIncrementSize = cpDevice->GetDescriptorHandleIncrementSize(
-		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-
-	return S_OK;
-}
-
-HRESULT CSRVDescHeapAllocator::AllocateHeapSlot(SRVDescHeapInfo& DescHeapInfo)
-{
-	SRVDescHeapInfo info;
-
-	info.cpuHandle = m_cpHeap->GetCPUDescriptorHandleForHeapStart();
-	info.gpuHandle = m_cpHeap->GetGPUDescriptorHandleForHeapStart();
-
-	if (m_nNextIndex == m_nSlots) return E_FAIL;
-
-	info.cpuHandle.ptr += m_nDescHeapIncrementSize * m_nNextIndex;
-	info.gpuHandle.ptr += m_nDescHeapIncrementSize * m_nNextIndex;
-	info.index = m_nNextIndex++;
-
-	DescHeapInfo = info;
-
-	return S_OK;
-}
-
 //=========================================================================================
 //=========================================================================================
 CTexture::CTexture()
@@ -50,7 +8,7 @@ CTexture::CTexture()
 }
 
 HRESULT CTexture::CreateTexture(
-	CSRVDescHeapAllocator& allocator,
+	CDescHeapAllocator& allocator,
 	const ComPtr<ID3D12Device>& cpDevice,
 	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
 	const wchar_t* fileName,

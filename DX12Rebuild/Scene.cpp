@@ -21,11 +21,12 @@ CScene::CScene()
 CScene::~CScene()
 {}
 
-HRESULT CScene::InitScene(ComPtr<ID3D12Device>& cpDevice)
+HRESULT CScene::InitScene(ComPtr<ID3D12Device>& cpDevice,
+		ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator& descHeapAllocator)
 {
 	HRESULT hr;
 	m_spShader = std::make_shared<CShader>();
-	hr = m_spShader->CreateShader(cpDevice);
+	hr = m_spShader->CreateShader(cpDevice, cpCommandList, descHeapAllocator);
 	if (FAILED(hr))
 	{
 		OutputDebugString(L"CScene::InitScene() Failed to create Shader\n");
@@ -38,7 +39,7 @@ HRESULT CScene::InitScene(ComPtr<ID3D12Device>& cpDevice)
 HRESULT CScene::BuildObjects(
 	ComPtr<ID3D12Device>& cpDevice,
 	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	CSRVDescHeapAllocator* SRVDespHeapAllocator)
+	CDescHeapAllocator* DescHeapAllocator)
 {
 	return S_OK;
 }
@@ -89,12 +90,15 @@ void CScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	
 	//기본 타일링 수치 설정
 	float defaultTiling = 1.0f;
-	cpCommandList->SetGraphicsRoot32BitConstants(2, 1, &defaultTiling, 4);
+	cpCommandList->SetGraphicsRoot32BitConstants(1, 1, &defaultTiling, 4);
 
-	XMFLOAT4X4 view = Matrix4x4::Transpose(m_spCamera->GetView());
-	XMFLOAT4X4 proj = Matrix4x4::Transpose(m_spCamera->GetProj());
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &proj, 32);
+	CB_SceneInfo sceneInfo;
+	sceneInfo.view = Matrix4x4::Transpose(m_spCamera->GetView());
+	sceneInfo.proj = Matrix4x4::Transpose(m_spCamera->GetProj());
+	sceneInfo.viewSky = m_spCamera->GetView();
+	sceneInfo.viewSky._41 = sceneInfo.viewSky._42 = sceneInfo.viewSky._43 = 0.0f;
+	sceneInfo.viewSky = Matrix4x4::Transpose(sceneInfo.viewSky);
+	m_spShader->SetSceneMatrix(cpCommandList, sceneInfo);
 
 	for (std::unique_ptr<CModelObject>& upObject : m_vObjects)
 	{
@@ -154,11 +158,12 @@ CGameScene::CGameScene(const PlayerRules& rules)
 CGameScene::~CGameScene()
 {}
 
-HRESULT CGameScene::InitScene(ComPtr<ID3D12Device>& cpDevice)
+HRESULT CGameScene::InitScene(ComPtr<ID3D12Device>& cpDevice,
+		ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator& descHeapAllocator)
 {
 	HRESULT hr;
 	m_spShader = std::make_shared<CShader>();
-	hr = m_spShader->CreateShader(cpDevice);
+	hr = m_spShader->CreateShader(cpDevice, cpCommandList, descHeapAllocator);
 	if (FAILED(hr))
 	{
 		OutputDebugString(L"CScene::InitScene() Failed to create Shader\n");
@@ -172,11 +177,11 @@ HRESULT CGameScene::InitScene(ComPtr<ID3D12Device>& cpDevice)
 HRESULT CGameScene::BuildObjects(
 	ComPtr<ID3D12Device>& cpDevice,
 	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	CSRVDescHeapAllocator* SRVDespHeapAllocator)
+	CDescHeapAllocator* DescHeapAllocator)
 {
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	if (!SRVDespHeapAllocator) return E_INVALIDARG;
+	if (!DescHeapAllocator) return E_INVALIDARG;
 	//-----------------------------------
 
 	m_spStageResources = std::make_shared<StageResources>();
@@ -187,7 +192,7 @@ HRESULT CGameScene::BuildObjects(
 	resources.upTerrain = std::make_unique<CTerrainObject>();
 	auto spHeightmap = std::make_shared<CHeightMapImage>(L"../Resources/Cheongsando.raw", TerrainSamples, TerrainSamples);
 	resources.upTerrain->SetHeightMap(spHeightmap);
-	HRESULT hr = resources.upTerrain->GenerateTerrain(cpDevice, cpCommandList, SRVDespHeapAllocator, true);
+	HRESULT hr = resources.upTerrain->GenerateTerrain(cpDevice, cpCommandList, DescHeapAllocator, true);
 	if (FAILED(hr)) return hr;
 
 	//auto spNormalmap = std::make_shared<CNormalMapImage>(L"../Resources/Cheongsando.raw", TerrainSamples, TerrainSamples);
@@ -200,7 +205,7 @@ HRESULT CGameScene::BuildObjects(
 		return E_FAIL;
 
 	resources.upSkybox = std::make_unique<CSkyboxObject>();
-	hr = resources.upSkybox->GenerateSkyBox(cpDevice, cpCommandList, *SRVDespHeapAllocator);
+	hr = resources.upSkybox->GenerateSkyBox(cpDevice, cpCommandList, *DescHeapAllocator);
 	if (FAILED(hr)) return hr;
 	//-----------------------------------
 
@@ -238,26 +243,25 @@ void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	//[직접 작성한 코드]
 	m_spShader->SetGraphicsRootSignature(cpCommandList);
 	m_spShader->SetPipelineState(cpCommandList, ERenderState::Default);
-	XMFLOAT4X4 view = Matrix4x4::Transpose(m_spCamera->GetView());
-	XMFLOAT4X4 proj = Matrix4x4::Transpose(m_spCamera->GetProj());
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &proj, 32);
+
+	CB_SceneInfo sceneInfo;
+	sceneInfo.view = Matrix4x4::Transpose(m_spCamera->GetView());
+	sceneInfo.proj = Matrix4x4::Transpose(m_spCamera->GetProj());
+	sceneInfo.viewSky = m_spCamera->GetView();
+	sceneInfo.viewSky._41 = sceneInfo.viewSky._42 = sceneInfo.viewSky._43 = 0.0f;
+	sceneInfo.viewSky = Matrix4x4::Transpose(sceneInfo.viewSky);
+	m_spShader->SetSceneMatrix(cpCommandList, sceneInfo);
 
 	//Skybox
-	XMFLOAT4X4 skyView = m_spCamera->GetView();
-	skyView._41 = skyView._42 = skyView._43 = 0.0f;
-	skyView = Matrix4x4::Transpose(skyView);
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &skyView, 16);
 	m_spShader->SetPipelineState(cpCommandList, ERenderState::Skybox);
 	m_spStageResources->upSkybox->DrawObject(cpCommandList);
 
 	//Terrain
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
 	m_spShader->SetPipelineState(cpCommandList, ERenderState::NormalMap);
 	XMFLOAT4X4 temp = Matrix4x4::Transpose(Matrix4x4::Identity());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &temp, 0);
 	XMFLOAT4 color{ 1, 1, 1, 1 };
-	cpCommandList->SetGraphicsRoot32BitConstants(2, 4, &color, 0);
+	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &color, 0);
 	m_spStageResources->upTerrain->DrawObject(cpCommandList);
 
 	//-----------------------------------
@@ -310,7 +314,9 @@ void CGameScene::DrawStageBox(const ComPtr<ID3D12GraphicsCommandList>& cpCommand
 	pose.scale = size;
 	const XMFLOAT4X4 matrix = Matrix4x4::Transpose(pose.getMatrix());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &matrix, 0);
-	cpCommandList->SetGraphicsRoot32BitConstants(2, 4, &color, 0);
+	const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(matrix);
+	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
+	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &color, 0);
 	m_spStageResources->box.DrawMesh(cpCommandList);
 }
 
@@ -335,8 +341,8 @@ void CGameScene::DrawStageHud(const ComPtr<ID3D12GraphicsCommandList>& cpCommand
 	const XMFLOAT3 aimNdc = Vector3::TransformCoord(m_reticleAimPoint, Matrix4x4::Multiply(view, projection));
 
 	const XMFLOAT4X4 identity = Matrix4x4::Identity();
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &identity, 16);
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &identity, 32);
+	const CB_SceneInfo sceneInfo{ identity, identity, identity };
+	m_spShader->SetSceneMatrix(cpCommandList, sceneInfo, true);
 
 	const float aspectScale = projection._11 / projection._22;
 	const XMFLOAT4 white{ .9f, .95f, 1, 1 };
@@ -680,9 +686,9 @@ CTankGameScene::~CTankGameScene() = default;
 HRESULT CTankGameScene::BuildObjects(
 	ComPtr<ID3D12Device>& cpDevice,
 	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	CSRVDescHeapAllocator* SRVDespHeapAllocator)
+	CDescHeapAllocator* DescHeapAllocator)
 {
-	const HRESULT hr = CGameScene::BuildObjects(cpDevice, cpCommandList, SRVDespHeapAllocator);
+	const HRESULT hr = CGameScene::BuildObjects(cpDevice, cpCommandList, DescHeapAllocator);
 	if (FAILED(hr)) return hr;
 
 	//-----------------------------------

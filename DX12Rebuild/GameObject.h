@@ -4,7 +4,7 @@ class CModel;
 class CMesh;
 class CHeightMapImage;
 class CTexture;
-class CSRVDescHeapAllocator;
+class CDescHeapAllocator;
 
 // -------------------------------------------
 // 
@@ -82,7 +82,7 @@ public:
 	HRESULT GenerateTerrain(
 		ComPtr<ID3D12Device>& cpDevice,
 		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CSRVDescHeapAllocator* SRVDescHeapAllocator = nullptr,
+		CDescHeapAllocator* DescHeapAllocator = nullptr,
 		bool normalMapping = false
 	);
 
@@ -119,7 +119,7 @@ public:
 	HRESULT GenerateSkyBox(
 		const ComPtr<ID3D12Device>& cpDevice,
 		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CSRVDescHeapAllocator& allocator);
+		CDescHeapAllocator& allocator);
 
 	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 	void ReleaseUploadBuffer();

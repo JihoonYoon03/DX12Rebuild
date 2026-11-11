@@ -85,8 +85,32 @@ HRESULT CreateBufferResource(
 	ComPtr<ID3D12Resource>* pUploadBuffer = nullptr
 );
 
-//-----------------------------------
-//[직접 작성한 코드]
+
+struct DescHeapInfo
+{
+	D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+	D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+	UINT						index;
+};
+
+class CDescHeapAllocator
+{
+public:
+	CDescHeapAllocator();
+	HRESULT CreateSRVDescHeap(const ComPtr<ID3D12Device>& cpDevice);
+
+	HRESULT AllocateHeapSlot(DescHeapInfo& srvDescHeapInfo);
+
+	ID3D12DescriptorHeap* const* GetDescriptorHeap() { return m_cpHeap.GetAddressOf(); }
+
+private:
+	ComPtr<ID3D12DescriptorHeap>	m_cpHeap;
+	UINT							m_nSlots;
+	UINT							m_nNextIndex;
+	UINT							m_nDescHeapIncrementSize;
+
+};
+
 struct Transform
 {
 	XMFLOAT3 scale{ 1, 1, 1 };
@@ -309,7 +333,6 @@ namespace Matrix4x4
 		return(xmmtx4x4Result);
 	}
 }
-//-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
