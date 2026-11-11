@@ -187,7 +187,7 @@ HRESULT CGameScene::BuildObjects(
 	resources.upTerrain = std::make_unique<CTerrainObject>();
 	auto spHeightmap = std::make_shared<CHeightMapImage>(L"../Resources/Cheongsando.raw", TerrainSamples, TerrainSamples);
 	resources.upTerrain->SetHeightMap(spHeightmap);
-	HRESULT hr = resources.upTerrain->GenerateTerrain(cpDevice, cpCommandList, SRVDespHeapAllocator);
+	HRESULT hr = resources.upTerrain->GenerateTerrain(cpDevice, cpCommandList, SRVDespHeapAllocator, true);
 	if (FAILED(hr)) return hr;
 
 	//auto spNormalmap = std::make_shared<CNormalMapImage>(L"../Resources/Cheongsando.raw", TerrainSamples, TerrainSamples);
@@ -240,25 +240,20 @@ void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	m_spShader->SetPipelineState(cpCommandList, ERenderState::Default);
 	XMFLOAT4X4 view = Matrix4x4::Transpose(m_spCamera->GetView());
 	XMFLOAT4X4 proj = Matrix4x4::Transpose(m_spCamera->GetProj());
+	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &proj, 32);
-	//-----------------------------------
 
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
+	//Skybox
 	XMFLOAT4X4 skyView = m_spCamera->GetView();
 	skyView._41 = skyView._42 = skyView._43 = 0.0f;
 	skyView = Matrix4x4::Transpose(skyView);
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &skyView, 16);
 	m_spShader->SetPipelineState(cpCommandList, ERenderState::Skybox);
 	m_spStageResources->upSkybox->DrawObject(cpCommandList);
-	//-----------------------------------
-
-	//-----------------------------------
-	//[직접 작성한 코드]
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
 
 	//Terrain
-	m_spShader->SetPipelineState(cpCommandList, ERenderState::Texture);
+	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
+	m_spShader->SetPipelineState(cpCommandList, ERenderState::NormalMap);
 	XMFLOAT4X4 temp = Matrix4x4::Transpose(Matrix4x4::Identity());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &temp, 0);
 	XMFLOAT4 color{ 1, 1, 1, 1 };

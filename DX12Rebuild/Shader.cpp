@@ -222,19 +222,10 @@ HRESULT CShader::CreateShader(const ComPtr<ID3D12Device>& cpDevice)
 
 	ComPtr<ID3DBlob> cpVS;
 	ComPtr<ID3DBlob> cpPS;
-	ComPtr<ID3DBlob> cpPSTex;
-	ComPtr<ID3DBlob> cpPSSky;
-	ComPtr<ID3DBlob> cpPSUnlit;
 
 	hr = CompileShaderFromFile(cpVS, L"Shaders.hlsl", "VSMain", "vs_5_0");
 	if (FAILED(hr)) return hr;
 	hr = CompileShaderFromFile(cpPS, L"Shaders.hlsl", "PSMain", "ps_5_0");
-	if (FAILED(hr)) return hr;
-	hr = CompileShaderFromFile(cpPSTex, L"Shaders.hlsl", "PSTex", "ps_5_0");
-	if (FAILED(hr)) return hr;
-	hr = CompileShaderFromFile(cpPSSky, L"Shaders.hlsl", "PSSky", "ps_5_0");
-	if (FAILED(hr)) return hr;
-	hr = CompileShaderFromFile(cpPSUnlit, L"Shaders.hlsl", "PSUnlit", "ps_5_0");
 	if (FAILED(hr)) return hr;
 
 	//Shaders
@@ -243,6 +234,7 @@ HRESULT CShader::CreateShader(const ComPtr<ID3D12Device>& cpDevice)
 	psoDesc.PS.BytecodeLength = cpPS->GetBufferSize();
 	psoDesc.PS.pShaderBytecode = cpPS->GetBufferPointer();
 
+	//Default PSO
 	m_cpPipelineState[ERenderState::Default] = ComPtr<ID3D12PipelineState>{};
 	hr = cpDevice->CreateGraphicsPipelineState(
 		&psoDesc,
@@ -250,19 +242,24 @@ HRESULT CShader::CreateShader(const ComPtr<ID3D12Device>& cpDevice)
 	);
 	if (FAILED(hr)) { OutputDebugString(L"PSO Creation Failed\n"); return hr; }
 
+	//Texture PSO
+	hr = CompileShaderFromFile(cpPS, L"Shaders.hlsl", "PSTex", "ps_5_0");
+	if (FAILED(hr)) return hr;
 	m_cpPipelineState[ERenderState::Texture] = ComPtr<ID3D12PipelineState>{};
-	psoDesc.PS.BytecodeLength = cpPSTex->GetBufferSize();
-	psoDesc.PS.pShaderBytecode = cpPSTex->GetBufferPointer();
+	psoDesc.PS.BytecodeLength = cpPS->GetBufferSize();
+	psoDesc.PS.pShaderBytecode = cpPS->GetBufferPointer();
 	hr = cpDevice->CreateGraphicsPipelineState(
 		&psoDesc,
 		IID_PPV_ARGS(m_cpPipelineState[ERenderState::Texture].ReleaseAndGetAddressOf())
 	);
 	if (FAILED(hr)) { OutputDebugString(L"Tex PSO Creation Failed\n"); return hr; }
 
-	//Skybox¿ë PSO
+	//Skybox PSO
+	hr = CompileShaderFromFile(cpPS, L"Shaders.hlsl", "PSSky", "ps_5_0");
+	if (FAILED(hr)) return hr;
 	m_cpPipelineState[ERenderState::Skybox] = ComPtr<ID3D12PipelineState>{};
-	psoDesc.PS.BytecodeLength = cpPSSky->GetBufferSize();
-	psoDesc.PS.pShaderBytecode = cpPSSky->GetBufferPointer();
+	psoDesc.PS.BytecodeLength = cpPS->GetBufferSize();
+	psoDesc.PS.pShaderBytecode = cpPS->GetBufferPointer();
 	psoDesc.DepthStencilState.DepthEnable = FALSE;
 	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 	hr = cpDevice->CreateGraphicsPipelineState(
@@ -271,17 +268,31 @@ HRESULT CShader::CreateShader(const ComPtr<ID3D12Device>& cpDevice)
 	);
 	if (FAILED(hr)) { OutputDebugString(L"Sky PSO Creation Failed\n"); return hr; }
 
-	//Unlit¿ë PSO
+	//Unlit PSO
+	hr = CompileShaderFromFile(cpPS, L"Shaders.hlsl", "PSUnlit", "ps_5_0");
+	if (FAILED(hr)) return hr;
 	m_cpPipelineState[ERenderState::Unlit] = ComPtr<ID3D12PipelineState>{};
-	psoDesc.PS.BytecodeLength = cpPSUnlit->GetBufferSize();
-	psoDesc.PS.pShaderBytecode = cpPSUnlit->GetBufferPointer();
-	psoDesc.DepthStencilState.DepthEnable = FALSE;
-	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	psoDesc.PS.BytecodeLength = cpPS->GetBufferSize();
+	psoDesc.PS.pShaderBytecode = cpPS->GetBufferPointer();
+	psoDesc.DepthStencilState.DepthEnable = TRUE;
+	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
 	hr = cpDevice->CreateGraphicsPipelineState(
 		&psoDesc,
 		IID_PPV_ARGS(m_cpPipelineState[ERenderState::Unlit].ReleaseAndGetAddressOf())
 	);
-	if (FAILED(hr)) { OutputDebugString(L"Sky PSO Creation Failed\n"); return hr; }
+	if (FAILED(hr)) { OutputDebugString(L"Unlit PSO Creation Failed\n"); return hr; }
+
+	//NormalMap PSO
+	hr = CompileShaderFromFile(cpPS, L"Shaders.hlsl", "PSNormalMap", "ps_5_0");
+	if (FAILED(hr)) return hr;
+	m_cpPipelineState[ERenderState::NormalMap] = ComPtr<ID3D12PipelineState>{};
+	psoDesc.PS.BytecodeLength = cpPS->GetBufferSize();
+	psoDesc.PS.pShaderBytecode = cpPS->GetBufferPointer();
+	hr = cpDevice->CreateGraphicsPipelineState(
+		&psoDesc,
+		IID_PPV_ARGS(m_cpPipelineState[ERenderState::NormalMap].ReleaseAndGetAddressOf())
+	);
+	if (FAILED(hr)) { OutputDebugString(L"NormalMap PSO Creation Failed\n"); return hr; }
 
 	return S_OK;
 }

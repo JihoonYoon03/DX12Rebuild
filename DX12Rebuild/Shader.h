@@ -7,6 +7,7 @@ enum class ERenderState
 	Texture,
 	Skybox,
 	Unlit,
+	NormalMap,
 	NumStates //상태 종류 카운트
 };
 
