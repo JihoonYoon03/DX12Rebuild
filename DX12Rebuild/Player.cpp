@@ -277,7 +277,7 @@ void CTankPlayer::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandL
 	if (!m_spModel) return;
 
 	m_spModel->DrawModel(cpCommandList, m_umFrameTransform, m_Transform.getMatrix());
-	CannonTestDraw(cpCommandList);
+	//CannonTestDraw(cpCommandList);
 }
 
 //-----------------------------------

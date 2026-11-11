@@ -1,6 +1,6 @@
 #pragma once
 
-class CShader;
+#include "Shader.h"
 
 struct MaterialData
 {
@@ -26,6 +26,7 @@ public:
 	void BindMaterial(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 
 private:
+	ERenderState				m_eRenderState = ERenderState::Default;
 	MaterialData				m_matData;
 	std::shared_ptr<CShader>	m_spShader;
 };

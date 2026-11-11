@@ -84,7 +84,7 @@ void CScene::ReleaseObjects()
 
 void CScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
-	m_spShader->SetPipelineState(cpCommandList);
+	m_spShader->SetPipelineState(cpCommandList, ERenderState::Default);
 	XMFLOAT4X4 view = Matrix4x4::Transpose(m_spCamera->GetView());
 	XMFLOAT4X4 proj = Matrix4x4::Transpose(m_spCamera->GetProj());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
@@ -237,7 +237,7 @@ void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	//-----------------------------------
 	//[流立 累己茄 内靛]
-	m_spShader->SetPipelineState(cpCommandList);
+	m_spShader->SetPipelineState(cpCommandList, ERenderState::Default);
 	XMFLOAT4X4 view = Matrix4x4::Transpose(m_spCamera->GetView());
 	XMFLOAT4X4 proj = Matrix4x4::Transpose(m_spCamera->GetProj());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &proj, 32);
@@ -249,7 +249,7 @@ void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	skyView._41 = skyView._42 = skyView._43 = 0.0f;
 	skyView = Matrix4x4::Transpose(skyView);
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &skyView, 16);
-	m_spTexShader->SetPipelineStateSky(cpCommandList);
+	m_spTexShader->SetPipelineState(cpCommandList, ERenderState::Skybox);
 	m_spStageResources->upSkybox->DrawObject(cpCommandList);
 	//-----------------------------------
 
@@ -258,7 +258,7 @@ void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &view, 16);
 
 	//Terrain
-	m_spTexShader->SetPipelineState(cpCommandList);
+	m_spTexShader->SetPipelineState(cpCommandList, ERenderState::Default);
 	XMFLOAT4X4 temp = Matrix4x4::Transpose(Matrix4x4::Identity());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &temp, 0);
 	XMFLOAT4 color{ 1, 1, 1, 1 };
@@ -370,9 +370,9 @@ void CGameScene::DrawStageHud(const ComPtr<ID3D12GraphicsCommandList>& cpCommand
 void CGameScene::DrawStage(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	using namespace config::stage;
-	m_spShader->SetPipelineState(cpCommandList);
+	m_spShader->SetPipelineState(cpCommandList, ERenderState::Default);
 	DrawStageObjects(cpCommandList);
-	m_spShader->SetPipelineState(cpCommandList);
+	m_spShader->SetPipelineState(cpCommandList, ERenderState::Default);
 	for (size_t i = 0; i < m_vEnemies.size(); ++i)
 	{
 		const auto& enemy = m_vEnemies[i];

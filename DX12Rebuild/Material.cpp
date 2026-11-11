@@ -1,6 +1,5 @@
 #include "pch.h"
 #include "Material.h"
-#include "Shader.h"
 
 CMaterial::CMaterial(const std::shared_ptr<CShader>& spShader)
 	: m_spShader(spShader)
@@ -24,5 +23,5 @@ void CMaterial::SetMaterialData(const ComPtr<ID3D12GraphicsCommandList>& cpComma
 
 void CMaterial::BindMaterial(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
-	m_spShader->SetPipelineState(cpCommandList);
+	m_spShader->SetPipelineState(cpCommandList, m_eRenderState);
 }

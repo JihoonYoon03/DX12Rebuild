@@ -133,26 +133,43 @@ HRESULT CShader::CreateShader(const ComPtr<ID3D12Device>& cpDevice, const ComPtr
 
 	psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 
-	hr = cpDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(m_cpPipelineState.ReleaseAndGetAddressOf()));
+	m_cpPipelineState[ERenderState::Default] = ComPtr<ID3D12PipelineState>{};
+	hr = cpDevice->CreateGraphicsPipelineState(
+		&psoDesc,
+		IID_PPV_ARGS(m_cpPipelineState[ERenderState::Default].ReleaseAndGetAddressOf())
+	);
 	if (FAILED(hr)) { OutputDebugString(L"PSO Creation Failed\n"); return hr; }
 
 	//Skybox용 PSO
+	m_cpPipelineState[ERenderState::Skybox] = ComPtr<ID3D12PipelineState>{};
 	psoDesc.DepthStencilState.DepthEnable = FALSE;
 	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	hr = cpDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(m_cpPipelineStateSky.ReleaseAndGetAddressOf()));
+	hr = cpDevice->CreateGraphicsPipelineState(
+		&psoDesc, 
+		IID_PPV_ARGS(m_cpPipelineState[ERenderState::Skybox].ReleaseAndGetAddressOf())
+	);
 	if (FAILED(hr)) { OutputDebugString(L"Sky PSO Creation Failed\n"); return hr; }
 
 	return S_OK;
 }
 
-void CShader::SetPipelineState(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+HRESULT CShader::AddPipelineState(const ComPtr<ID3D12Device>& cpDevice, const ERenderState& state, const D3D12_GRAPHICS_PIPELINE_STATE_DESC& pipelineState)
 {
-	cpCommandList->SetPipelineState(m_cpPipelineState.Get());
+	return E_NOTIMPL;
 }
 
-void CShader::SetPipelineStateSky(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+void CShader::SetPipelineState(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const ERenderState& state)
 {
-	cpCommandList->SetPipelineState(m_cpPipelineStateSky.Get());
+	try
+	{
+		ComPtr<ID3D12PipelineState>& PSO = m_cpPipelineState.at(state);
+		cpCommandList->SetPipelineState(PSO.Get());
+	}
+	catch (...)
+	{
+		//해당 상태 PSO 존재하지 않음
+		return;
+	}
 }
 
 
