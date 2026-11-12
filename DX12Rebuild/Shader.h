@@ -7,6 +7,10 @@ enum class ERenderState
 	Texture,
 	Skybox,
 	Unlit,
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	UI,
+	//-----------------------------------
 	NormalMap,
 	NumStates //상태 종류 카운트
 };

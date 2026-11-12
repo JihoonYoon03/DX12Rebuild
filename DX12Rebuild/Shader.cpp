@@ -324,6 +324,17 @@ HRESULT CShader::CreateShader(
 	);
 	if (FAILED(hr)) { OutputDebugString(L"Unlit PSO Creation Failed\n"); return hr; }
 
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	const auto depthState = psoDesc.DepthStencilState;
+	psoDesc.DepthStencilState.DepthEnable = FALSE;
+	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	hr = cpDevice->CreateGraphicsPipelineState(&psoDesc,
+		IID_PPV_ARGS(m_cpPipelineState[ERenderState::UI].ReleaseAndGetAddressOf()));
+	if (FAILED(hr)) return hr;
+	psoDesc.DepthStencilState = depthState;
+	//-----------------------------------
+
 	//NormalMap PSO
 	hr = CompileShaderFromFile(cpPS, L"Shaders.hlsl", "PSNormalMap", "ps_5_0");
 	if (FAILED(hr)) return hr;

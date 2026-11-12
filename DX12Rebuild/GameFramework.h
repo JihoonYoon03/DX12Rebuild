@@ -16,6 +16,7 @@ enum class EGameStage;
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
 class CUiScene;
+class CStageResources;
 //-----------------------------------
 
 //-----------------------------------
@@ -124,9 +125,11 @@ private:
 
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	HRESULT BuildPortingUi();
-	void ResizePortingUi();
-	void ProcessPortingUiMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+	HRESULT BuildUi();
+	void ResizeUi();
+	void ProcessSceneMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
+
+	std::shared_ptr<CStageResources> m_spStageResources;
 
 	std::shared_ptr<CGameScene> m_spHelicopterScene;
 	std::shared_ptr<CUiScene> m_spMainMenuScene;
@@ -145,7 +148,10 @@ private:
 	
 	XMFLOAT4X4	mtx44World;
 	ComPtr<ID3D12Resource>				m_cpMtxBuffer;
-	UINT8*								m_mappedMtxBuffer;
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	UINT8*								m_mappedMtxBuffer = nullptr;
+	//-----------------------------------
 };
 //-----------------------------------
 

@@ -82,10 +82,10 @@ HRESULT CUI::BuildMesh(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12
 	MeshData<VertexTexcoord> meshData;
 	meshData.vertices =
 	{
-		{ { -0.5f,  0.5f, 0.0f }, m_color, { 0.0f, 0.0f } },
-		{ {  0.5f,  0.5f, 0.0f }, m_color, { 1.0f, 0.0f } },
-		{ {  0.5f, -0.5f, 0.0f }, m_color, { 1.0f, 1.0f } },
-		{ { -0.5f, -0.5f, 0.0f }, m_color, { 0.0f, 1.0f } }
+		{ { -0.5f,  0.5f, 0.0f }, { 1, 1, 1, 1 }, { 0.0f, 0.0f } },
+		{ {  0.5f,  0.5f, 0.0f }, { 1, 1, 1, 1 }, { 1.0f, 0.0f } },
+		{ {  0.5f, -0.5f, 0.0f }, { 1, 1, 1, 1 }, { 1.0f, 1.0f } },
+		{ { -0.5f, -0.5f, 0.0f }, { 1, 1, 1, 1 }, { 0.0f, 1.0f } }
 	};
 	meshData.indices = { 0, 1, 2, 0, 2, 3 };
 	return m_mesh.CreateBuffer(cpDevice, cpCommandList, meshData);
@@ -98,6 +98,8 @@ void CUI::ReleaseUploadBuffer()
 
 void CUI::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
+	if (!m_bVisible) return;
+	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &m_color, 0);
 	const XMFLOAT4X4 world = Matrix4x4::Transpose(m_Transform.getMatrix());
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
 	const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(world);
@@ -109,7 +111,7 @@ bool CUI::HitTest(float x, float y) const
 {
 	const XMFLOAT4X4 inverse = Matrix4x4::Inverse(m_Transform.getMatrix());
 	const XMFLOAT3 local = Vector3::TransformCoord({ x, y, m_Transform.position.z }, inverse);
-	return std::abs(local.x) <= 0.5f && std::abs(local.y) <= 0.5f;
+	return m_bVisible && std::abs(local.x) <= 0.5f && std::abs(local.y) <= 0.5f;
 }
 
 CUiScene::CUiScene(const std::shared_ptr<CShader>& spShader)
@@ -161,7 +163,10 @@ void CUiScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	//---------------------------------------
 	//[직접 작성한 코드]
 	m_spShader->SetGraphicsRootSignature(cpCommandList);
-	m_spShader->SetPipelineState(cpCommandList, ERenderState::Unlit);
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	m_spShader->SetPipelineState(cpCommandList, ERenderState::UI);
+	//-----------------------------------
 	//---------------------------------------
 	const XMFLOAT4X4 view = Matrix4x4::Identity();
 	const XMFLOAT4X4 projection = Matrix4x4::Transpose(Matrix4x4::OrthographicLH(m_fViewWidth, m_fViewHeight, 0.0f, 1.0f));
@@ -194,10 +199,12 @@ void CStageSelectScene::BuildUi()
 {
 	AddUi(std::make_unique<CUI>(XMFLOAT4{ .35f, .20f, .65f, .27f }, XMFLOAT4{ .65f, .88f, 1.0f, 1.0f }));
 
+	constexpr float firstCenter = .33188919f;
+	constexpr float spacing = .076414005f;
 	XMFLOAT4 buttons[6];
 	for (int i = 0; i < 6; ++i)
 	{
-		const float y = 0.5f - (1.65f - 0.75f * static_cast<float>(i)) * 0.10188534f;
+		const float y = firstCenter + i * spacing;
 		buttons[i] = { .36f, y - .029f, .64f, y + .029f };
 	}
 
@@ -215,5 +222,13 @@ void CPortingTutorialScene::BuildUi()
 	const XMFLOAT4 hint{ .37f, .72f, .63f, .79f };
 	AddUi(std::make_unique<CUI>(card, XMFLOAT4{ .13f, .29f, .39f, 1.0f }));
 	AddUi(std::make_unique<CTutorialReturnButton>(hint, XMFLOAT4{ .15f, .46f, .48f, 1.0f }));
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CPortingTutorialScene::KeyPressed(WPARAM key, CGameFramework& framework)
+{
+	if (key == VK_ESCAPE) framework.OpenStageSelect();
 }
 //-----------------------------------

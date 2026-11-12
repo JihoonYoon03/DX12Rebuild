@@ -364,3 +364,97 @@ void CSkyboxObject::ReleaseUploadBuffer()
 		texture->ReleaseUploadBuffer();
 	}
 }
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+CMeshObject::CMeshObject(CMesh& mesh, const XMFLOAT4& color)
+	: m_pMesh(&mesh), m_color(color)
+{
+}
+
+void CMeshObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	const XMFLOAT4X4 world = Matrix4x4::Transpose(m_Transform.getMatrix());
+	const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(world);
+	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
+	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
+	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &m_color, 0);
+	m_pMesh->DrawMesh(cpCommandList);
+}
+
+void CDamageableObject::SetCombatInfo(int health, float aimHeight, float hitRadius, float homingHitRadius, float markerHeight, float hitHeight)
+{
+	m_nHealth = health;
+	m_fAimHeight = aimHeight;
+	m_fHitHeight = hitHeight;
+	m_fHitRadius = hitRadius;
+	m_fHomingHitRadius = homingHitRadius;
+	m_fMarkerHeight = markerHeight;
+}
+
+XMFLOAT3 CDamageableObject::GetAimPoint() const
+{
+	XMFLOAT3 point = GetPosition();
+	point.y += m_fAimHeight;
+	return point;
+}
+
+CTargetObject::CTargetObject(CMesh& mesh)
+	: m_visual(mesh, { .86f, .18f, .16f, 1 })
+{
+	m_visual.SetScale(1.0f, 1.6f, 1.0f);
+	SetCombatInfo(config::stage::TargetHealth, 0.0f, config::stage::TargetHitRadius,
+		config::stage::TargetHomingHitRadius, 1.3f);
+}
+
+void CTargetObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	if (!IsVisible()) return;
+	m_visual.SetPosition(GetPosition());
+	m_visual.DrawObject(cpCommandList);
+}
+
+CProjectileObject::CProjectileObject(CMesh& mesh, const XMFLOAT3& position, const ProjectileData& data)
+	: CMeshObject(mesh, data.enemyOwned ? XMFLOAT4{ 1, .35f, .10f, 1 } : XMFLOAT4{ 1, .9f, .36f, 1 }), flight(data)
+{
+	SetPosition(position);
+	SetScale(.38f);
+}
+
+float CProjectileObject::AdvanceTime(float dt, const std::optional<XMFLOAT3>& targetPoint)
+{
+	const float step = (std::min)(dt, flight.lifetime);
+	flight.lifetime -= step;
+	if (targetPoint)
+	{
+		flight.homingDelay -= step;
+		if (flight.homingDelay <= 0.0f)
+			flight.direction = Vector3::RotateTowards(flight.direction,
+				Vector3::Subtract(*targetPoint, GetPosition()), flight.homingTurnSpeed * step);
+	}
+	return step;
+}
+
+XMFLOAT3 CProjectileObject::NextPosition(float dt) const
+{
+	return Vector3::Add(GetPosition(), flight.direction, flight.speed * dt);
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CDamageableObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	if (IsVisible()) CModelObject::DrawObject(cpCommandList);
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+XMFLOAT3 CDamageableObject::GetHitPoint() const
+{
+	XMFLOAT3 point = GetPosition();
+	point.y += m_fHitHeight;
+	return point;
+}
+//-----------------------------------

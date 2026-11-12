@@ -15,6 +15,8 @@ public:
 
 	HRESULT BuildMesh(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 	void ReleaseUploadBuffer();
+	void SetColor(const XMFLOAT4& color) { m_color = color; }
+	void SetVisible(bool visible) { m_bVisible = visible; }
 	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 
 	virtual bool HitTest(float x, float y) const;
@@ -23,6 +25,7 @@ public:
 private:
 	CMesh m_mesh;
 	XMFLOAT4 m_color;
+	bool m_bVisible = true;
 };
 
 class CUiScene : public CScene
@@ -38,7 +41,7 @@ public:
 	void DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 
 	void ResizeUi(int width, int height);
-	void Click(int x, int y, CGameFramework& framework);
+	void Click(int x, int y, CGameFramework& framework) override;
 
 protected:
 	virtual void BuildUi() = 0;
@@ -77,5 +80,6 @@ public:
 
 private:
 	void BuildUi() override;
+	void KeyPressed(WPARAM key, CGameFramework& framework) override;
 };
 //-----------------------------------

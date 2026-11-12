@@ -25,7 +25,10 @@ public:
 	void SetPosition(const float x, const float y, const float z);
 	void SetPosition(const XMFLOAT3& position);
 
-	XMFLOAT3 GetPosition() { return m_Transform.position; }
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	XMFLOAT3 GetPosition() const { return m_Transform.position; }
+	//-----------------------------------
 
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
@@ -127,5 +130,80 @@ public:
 private:
 	std::vector<std::unique_ptr<CMesh>> m_vPlane;
 	std::vector<std::unique_ptr<CTexture>> m_vSkyTextures;
+};
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+class CMeshObject : public CObjectBase
+{
+public:
+	CMeshObject(CMesh& mesh, const XMFLOAT4& color);
+	void SetColor(const XMFLOAT4& color) { m_color = color; }
+	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+
+protected:
+	CMesh* m_pMesh; // 공용 메시를 참조하며 소유하지 않는다.
+	XMFLOAT4 m_color;
+};
+
+class CDamageableObject : public CModelObject
+{
+public:
+	void SetCombatInfo(int health, float aimHeight, float hitRadius, float homingHitRadius, float markerHeight, float hitHeight = 0.0f);
+	void ApplyDamage() { if (m_nHealth > 0) --m_nHealth; }
+	int GetHealth() const { return m_nHealth; }
+	bool IsAlive() const { return m_nHealth > 0; }
+	void SetVisible(bool visible) { m_bVisible = visible; }
+	bool IsVisible() const { return m_bVisible && IsAlive(); }
+	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+	XMFLOAT3 GetAimPoint() const;
+	XMFLOAT3 GetHitPoint() const;
+	float GetHitRadius(bool homing) const { return homing ? m_fHomingHitRadius : m_fHitRadius; }
+	float GetMarkerHeight() const { return m_fMarkerHeight; }
+	virtual void Reload() {}
+	virtual bool TryFire(const XMFLOAT3&, float, XMFLOAT3&, XMFLOAT3&) { return false; }
+
+private:
+	bool m_bVisible = true;
+	int m_nHealth = 1;
+	float m_fAimHeight = 0.0f;
+	float m_fHitHeight = 0.0f;
+	float m_fHitRadius = 0.0f;
+	float m_fHomingHitRadius = 0.0f;
+	float m_fMarkerHeight = 0.0f;
+};
+
+class CTargetObject final : public CDamageableObject
+{
+public:
+	explicit CTargetObject(CMesh& mesh);
+	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+
+private:
+	CMeshObject m_visual;
+};
+
+struct ProjectileData
+{
+	XMFLOAT3 direction;
+	float speed;
+	float lifetime;
+	float clearance;
+	float homingDelay = 0.0f;
+	float homingTurnSpeed = 0.0f;
+	int target = -1;
+	bool enemyOwned = false;
+};
+
+class CProjectileObject final : public CMeshObject
+{
+public:
+	CProjectileObject(CMesh& mesh, const XMFLOAT3& position, const ProjectileData& data);
+	XMFLOAT3& Position() { return m_Transform.position; }
+	float AdvanceTime(float dt, const std::optional<XMFLOAT3>& targetPoint);
+	XMFLOAT3 NextPosition(float dt) const;
+
+	ProjectileData flight;
 };
 //-----------------------------------

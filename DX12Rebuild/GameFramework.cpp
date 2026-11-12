@@ -54,7 +54,7 @@ bool CGameFramework::OnCreate(HINSTANCE hInstance, HWND hWnd)
 
 	if (FAILED(m_upDescHeapAllocator->CreateSRVDescHeap(m_cpDevice)))		return false;
 
-	if (FAILED(m_spTankScene->InitScene(m_cpDevice, m_cpCommandList, *m_upDescHeapAllocator)))	return false;
+
 
 	if (FAILED(BuildObjects()))				return false;
 	m_timer.Reset();
@@ -307,13 +307,18 @@ HRESULT CGameFramework::BuildObjects()
 	HRESULT hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), NULL);
 	if (FAILED(hr)) return hr;
 
-	hr = m_spTankScene->BuildObjects(m_cpDevice, m_cpCommandList, m_upDescHeapAllocator.get());
-	if (FAILED(hr)) return hr;
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	m_spHelicopterScene->ShareStageResources(*m_spTankScene);
+	m_spStageResources = std::make_shared<CStageResources>();
+	hr = m_spStageResources->Build(m_cpDevice, m_cpCommandList, *m_upDescHeapAllocator);
+	if (FAILED(hr)) return hr;
+	for (const auto& scene : { m_spTankScene, m_spHelicopterScene })
+	{
+		scene->SetStageResources(m_spStageResources);
+		hr = scene->BuildObjects(m_cpDevice, m_cpCommandList, m_upDescHeapAllocator.get());
+		if (FAILED(hr)) return hr;
+	}
 	//-----------------------------------
-
 	//행렬 버퍼 생성
 	hr = CreateBufferResource(
 		m_cpDevice,
@@ -329,7 +334,7 @@ HRESULT CGameFramework::BuildObjects()
 	if (FAILED(hr)) return hr;
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	hr = BuildPortingUi();
+	hr = BuildUi();
 	if (FAILED(hr)) return hr;
 	//-----------------------------------
 
@@ -357,45 +362,52 @@ void CGameFramework::ReleaseUploadBuffers()
 	m_spTankScene->ReleaseUploadBuffers();
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	m_spMainMenuScene->ReleaseUploadBuffers();
-	m_spStageSelectScene->ReleaseUploadBuffers();
-	m_spTutorialScene->ReleaseUploadBuffers();
+	m_spStageResources->ReleaseUploadBuffers();
+	m_spHelicopterScene->ReleaseUploadBuffers();
+	for (const auto& scene : { m_spMainMenuScene, m_spStageSelectScene, m_spTutorialScene })
+		scene->ReleaseUploadBuffers();
 	//-----------------------------------
 }
 
 void CGameFramework::ReleaseObjects()
 {
-	m_cpMtxBuffer->Unmap(0, nullptr);
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	if (m_cpMtxBuffer && m_mappedMtxBuffer) m_cpMtxBuffer->Unmap(0, nullptr);
+	//-----------------------------------
 	m_upCurrentScene.reset();
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
+	m_spTankScene.reset();
 	m_spHelicopterScene.reset();
+	m_spStageResources.reset();
 	m_spMainMenuScene.reset();
 	m_spStageSelectScene.reset();
 	m_spTutorialScene.reset();
 	//-----------------------------------
 }
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CGameFramework::ProcessInput()
 {
-	static UCHAR pKeyBuffer[256];
-
-	DWORD dwDirection = 0;
-
-	m_upCurrentScene.lock()->ProcessInput(pKeyBuffer, m_timer.GetTimeElapsed());
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
-	if (const auto spGame = std::dynamic_pointer_cast<CGameScene>(m_upCurrentScene.lock()); spGame && spGame->StageFinished())
-	{
-		if (spGame->GetStage() == EGameStage::HelicopterTargets) EnterStage(EGameStage::TankBattle);
-		else m_upCurrentScene = m_spStageSelectScene;
-	}
-	//-----------------------------------
+	UCHAR keys[256]{};
+	if (!::GetKeyboardState(keys)) ZeroMemory(keys, sizeof(keys));
+	if (const auto scene = m_upCurrentScene.lock()) scene->ProcessInput(keys, m_timer.GetTimeElapsed());
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CGameFramework::AnimateObjects()
 {
+	if (const auto scene = m_upCurrentScene.lock())
+	{
+		scene->Update(m_timer.GetTimeElapsed());
+		scene->CheckStageTransition(*this);
+	}
 }
+//-----------------------------------
 
 void CGameFramework::FrameAdvance()
 {
@@ -533,7 +545,7 @@ HRESULT CGameFramework::ResizeBackBuffers(WPARAM wParam)
 		m_upCurrentScene.lock()->WindowResized(m_nClientW, m_nClientH);
 		//-----------------------------------
 		//[아래 코드는 AI로 구현됨]
-		ResizePortingUi();
+		ResizeUi();
 		//-----------------------------------
 
 		m_timer.Reset();
@@ -572,7 +584,7 @@ LRESULT CGameFramework::OnProcessingWindowMessage(HWND hWnd, UINT nMessageID, WP
 {
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	ProcessPortingUiMessage(hWnd, nMessageID, wParam, lParam);
+	ProcessSceneMessage(hWnd, nMessageID, wParam, lParam);
 	//-----------------------------------
 	return LRESULT();
 }
@@ -603,7 +615,7 @@ void CGameFramework::EnterStage(EGameStage stage)
 	m_upCurrentScene = spScene;
 }
 
-HRESULT CGameFramework::BuildPortingUi()
+HRESULT CGameFramework::BuildUi()
 {
 	auto spUiShader = std::make_shared<CShader>();
 	HRESULT hr = spUiShader->CreateShader(m_cpDevice, m_cpCommandList, *m_upDescHeapAllocator);
@@ -612,7 +624,7 @@ HRESULT CGameFramework::BuildPortingUi()
 	m_spMainMenuScene = std::make_shared<CMainMenuScene>(spUiShader);
 	m_spStageSelectScene = std::make_shared<CStageSelectScene>(spUiShader);
 	m_spTutorialScene = std::make_shared<CPortingTutorialScene>(spUiShader);
-	ResizePortingUi();
+	ResizeUi();
 
 	for (const auto& spUiScene : { m_spMainMenuScene, m_spStageSelectScene, m_spTutorialScene })
 	{
@@ -622,35 +634,19 @@ HRESULT CGameFramework::BuildPortingUi()
 	return S_OK;
 }
 
-void CGameFramework::ResizePortingUi()
+void CGameFramework::ResizeUi()
 {
-	m_spMainMenuScene->ResizeUi(m_nClientW, m_nClientH);
-	m_spStageSelectScene->ResizeUi(m_nClientW, m_nClientH);
-	m_spTutorialScene->ResizeUi(m_nClientW, m_nClientH);
+	for (const auto& scene : { m_spMainMenuScene, m_spStageSelectScene, m_spTutorialScene })
+		scene->ResizeUi(m_nClientW, m_nClientH);
 }
 
-void CGameFramework::ProcessPortingUiMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam)
+void CGameFramework::ProcessSceneMessage(HWND hWnd, UINT message, WPARAM key, LPARAM data)
 {
-	const auto spActiveScene = m_upCurrentScene.lock();
-	if (!spActiveScene || hWnd != m_hWnd) return;
-	const auto spGame = std::dynamic_pointer_cast<CGameScene>(spActiveScene);
-
-	if (nMessageID == WM_KEYDOWN && wParam == VK_ESCAPE &&
-		(spGame || spActiveScene == m_spTutorialScene))
-	{
-		m_upCurrentScene = m_spStageSelectScene;
-		return;
-	}
-	if (nMessageID == WM_KEYDOWN && spGame &&
-		(static_cast<ULONG_PTR>(lParam) & (1u << 30)) == 0)
-	{
-		spGame->StageKeyPressed(wParam);
-	}
-	if (nMessageID != WM_LBUTTONDOWN) return;
-
-	if (auto* pUiScene = dynamic_cast<CUiScene*>(spActiveScene.get()))
-	{
-		pUiScene->Click(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam), *this);
-	}
+	const auto scene = m_upCurrentScene.lock();
+	if (!scene || hWnd != m_hWnd) return;
+	if (message == WM_KEYDOWN && (static_cast<ULONG_PTR>(data) & (1u << 30)) == 0)
+		scene->KeyPressed(key, *this);
+	else if (message == WM_LBUTTONDOWN)
+		scene->Click(GET_X_LPARAM(data), GET_Y_LPARAM(data), *this);
 }
 //-----------------------------------

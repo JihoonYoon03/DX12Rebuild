@@ -48,7 +48,6 @@ void CPlayer::ProcessInput(DWORD dwInput, float deltaTime)
 }
 
 
-
 //--------------------------------
 // 
 // CTankPlayer
@@ -62,83 +61,95 @@ CTankPlayer::~CTankPlayer()
 {
 }
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CTankPlayer::SetModel(std::shared_ptr<CModel>& model)
 {
+	PrepareModel(model);
+	m_spModel = model;
+}
+
+void CTankPlayer::PrepareModel(std::shared_ptr<CModel>& model)
+{
+	//-----------------------------------
+	//[직접 작성한 코드]
 	//하드코딩 된 부분은 나중에 string vector 넘겨받는 형태로 처리하게 변경 예정
 
-	m_spModel = model;
-	XMFLOAT4X4 mtxTurret = m_spModel->GetFrameMatrix("Turret");
+
+	XMFLOAT4X4 mtxTurret = model->GetFrameMatrix("Turret");
 
 	//포신의 기존 로컬 행렬 저장
-	XMFLOAT4X4 localOrigin = m_spModel->GetFrameMatrix("maingun");
+	XMFLOAT4X4 localOrigin = model->GetFrameMatrix("maingun");
 
 	//터렛에 파츠 연결 => 파츠의 부모 변환 포함한 기본 모델 행렬 적용하면서,
 	//변환은 새 parent를 따르도록
-	m_spModel->SetFrameParent("maingun", "Turret");
+	model->SetFrameParent("maingun", "Turret");
 	//터렛 기본 설정으로 회전이 적용되어 있음. 그걸 빼줘야 함
 	//파츠들의 초기 변환 유지. 터렛의 변환 행렬이 부모행렬로 곱해져 상쇄됨.
-	m_spModel->SetFrameLocal("maingun", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	model->SetFrameLocal("maingun", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("m2");
-	m_spModel->SetFrameParent("m2", "Turret");
-	m_spModel->SetFrameLocal("m2", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("m2");
+	model->SetFrameParent("m2", "Turret");
+	model->SetFrameLocal("m2", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("comhatch");
-	m_spModel->SetFrameParent("comhatch", "Turret");
-	m_spModel->SetFrameLocal("comhatch", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("comhatch");
+	model->SetFrameParent("comhatch", "Turret");
+	model->SetFrameLocal("comhatch", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("ChamferCyl");
-	m_spModel->SetFrameParent("ChamferCyl", "Turret");
-	m_spModel->SetFrameLocal("ChamferCyl", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("ChamferCyl");
+	model->SetFrameParent("ChamferCyl", "Turret");
+	model->SetFrameLocal("ChamferCyl", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("Tube01");
-	m_spModel->SetFrameParent("Tube01", "Turret");
-	m_spModel->SetFrameLocal("Tube01", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("Tube01");
+	model->SetFrameParent("Tube01", "Turret");
+	model->SetFrameLocal("Tube01", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("Cylinder01");
-	m_spModel->SetFrameParent("Cylinder01", "Turret");
-	m_spModel->SetFrameLocal("Cylinder01", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("Cylinder01");
+	model->SetFrameParent("Cylinder01", "Turret");
+	model->SetFrameLocal("Cylinder01", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("Cylinder00");
-	m_spModel->SetFrameParent("Cylinder00", "Turret");
-	m_spModel->SetFrameLocal("Cylinder00", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("Cylinder00");
+	model->SetFrameParent("Cylinder00", "Turret");
+	model->SetFrameLocal("Cylinder00", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("Rectangle6");
-	m_spModel->SetFrameParent("Rectangle6", "Turret");
-	m_spModel->SetFrameLocal("Rectangle6", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("Rectangle6");
+	model->SetFrameParent("Rectangle6", "Turret");
+	model->SetFrameLocal("Rectangle6", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("ldoor");
-	m_spModel->SetFrameParent("ldoor", "Turret");
-	m_spModel->SetFrameLocal("ldoor", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("ldoor");
+	model->SetFrameParent("ldoor", "Turret");
+	model->SetFrameLocal("ldoor", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("rdoor");
-	m_spModel->SetFrameParent("rdoor", "Turret");
-	m_spModel->SetFrameLocal("rdoor", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("rdoor");
+	model->SetFrameParent("rdoor", "Turret");
+	model->SetFrameLocal("rdoor", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("Rectangle2");
-	m_spModel->SetFrameParent("Rectangle2", "Turret");
-	m_spModel->SetFrameLocal("Rectangle2", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("Rectangle2");
+	model->SetFrameParent("Rectangle2", "Turret");
+	model->SetFrameLocal("Rectangle2", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("Rectangle3");
-	m_spModel->SetFrameParent("Rectangle3", "Turret");
-	m_spModel->SetFrameLocal("Rectangle3", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("Rectangle3");
+	model->SetFrameParent("Rectangle3", "Turret");
+	model->SetFrameLocal("Rectangle3", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("Rectangle4");
-	m_spModel->SetFrameParent("Rectangle4", "Turret");
-	m_spModel->SetFrameLocal("Rectangle4", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("Rectangle4");
+	model->SetFrameParent("Rectangle4", "Turret");
+	model->SetFrameLocal("Rectangle4", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("Rectangle5");
-	m_spModel->SetFrameParent("Rectangle5", "Turret");
-	m_spModel->SetFrameLocal("Rectangle5", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("Rectangle5");
+	model->SetFrameParent("Rectangle5", "Turret");
+	model->SetFrameLocal("Rectangle5", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("grille");
-	m_spModel->SetFrameParent("grille", "Turret");
-	m_spModel->SetFrameLocal("grille", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("grille");
+	model->SetFrameParent("grille", "Turret");
+	model->SetFrameLocal("grille", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
 
-	localOrigin = m_spModel->GetFrameMatrix("tray");
-	m_spModel->SetFrameParent("tray", "Turret");
-	m_spModel->SetFrameLocal("tray", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	localOrigin = model->GetFrameMatrix("tray");
+	model->SetFrameParent("tray", "Turret");
+	model->SetFrameLocal("tray", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
+	//-----------------------------------
 }
+//-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
@@ -276,7 +287,10 @@ void CTankPlayer::CannonTestDraw(const ComPtr<ID3D12GraphicsCommandList>& cpComm
 
 void CTankPlayer::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
-	if (!m_spModel) return;
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	if (!m_spModel || !IsVisible()) return;
+	//-----------------------------------
 
 	m_spModel->DrawModel(cpCommandList, m_umFrameTransform, m_Transform.getMatrix());
 	//CannonTestDraw(cpCommandList);
@@ -366,5 +380,24 @@ bool CTankPlayer::AimStageCannon(const XMFLOAT3& target, float dt)
 	GetStageCannonRay(origin, direction);
 	const XMFLOAT3 finalTarget = Vector3::Normalize(Vector3::Subtract(target, origin));
 	return Vector3::DotProduct(finalTarget, direction) >= config::stage::CannonFireMinDot;
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+CEnemyTank::CEnemyTank()
+{
+	SetCombatInfo(config::stage::EnemyTankHealth, config::stage::EnemyTankAimHeight,
+		config::stage::TankHitRadius, config::stage::TankHitRadius, config::stage::EnemyTankAimHeight + 3.0f,
+		config::stage::TankAimHeight);
+}
+
+bool CEnemyTank::TryFire(const XMFLOAT3& target, float dt,
+	XMFLOAT3& origin, XMFLOAT3& direction)
+{
+	m_fReload = (std::max)(0.0f, m_fReload - dt);
+	if (!AimStageCannon(target, dt) || m_fReload > 0.0f) return false;
+	GetStageCannonRay(origin, direction);
+	return true;
 }
 //-----------------------------------

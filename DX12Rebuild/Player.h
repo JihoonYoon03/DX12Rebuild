@@ -6,7 +6,10 @@ class CCamera;
 
 //-----------------------------------
 //[직접 작성한 코드]
-class CPlayer : public CModelObject
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+class CPlayer : public CDamageableObject
+//-----------------------------------
 {
 public:
 	CPlayer();
@@ -31,7 +34,10 @@ public:
 	CTankPlayer();
 	~CTankPlayer();
 
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
 	void SetModel(std::shared_ptr<CModel>& model) override;
+	//-----------------------------------
 
 	void ProcessInput(DWORD dwInput, float deltaTime, const CTerrainObject* terrain = nullptr);
 	void Move(XMFLOAT3 shift);
@@ -43,6 +49,7 @@ public:
 
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
+	static void PrepareModel(std::shared_ptr<CModel>& model);
 	void UsePreparedTankModel(const std::shared_ptr<CModel>& spModel);
 	XMFLOAT3 ApplyControls(DWORD dwInput, float deltaTime, const CTerrainObject* terrain);
 	void ResetStagePose(const XMFLOAT3& position, float yaw);
@@ -73,3 +80,18 @@ private:
 	float	m_fCannonLiftSpeed = XMConvertToRadians(config::stage::CannonManualSpeedDegrees);
 	//-----------------------------------
 };
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+class CEnemyTank final : public CTankPlayer
+{
+public:
+	CEnemyTank();
+	void Reload() override { m_fReload = config::stage::EnemyTankReload; }
+	bool TryFire(const XMFLOAT3& target, float dt,
+		XMFLOAT3& origin, XMFLOAT3& direction) override;
+
+private:
+	float m_fReload = 0.0f;
+};
+//-----------------------------------

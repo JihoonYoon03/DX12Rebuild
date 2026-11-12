@@ -6,6 +6,11 @@
 #include "Texture.h"
 #include "Player.h"
 #include "Camera.h"
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+#include "UiScene.h"
+#include "GameFramework.h"
+//-----------------------------------
 
 CScene::CScene()
 {
@@ -59,10 +64,7 @@ void CScene::AddObjects(std::unique_ptr<CModelObject>* upObjects, size_t size)
 
 void CScene::AddObjects(std::vector<std::unique_ptr<CModelObject>>& upObjects)
 {
-	//소유권 이전
-	m_vObjects.insert(m_vObjects.end(),
-		std::make_move_iterator(upObjects.begin()),
-		std::make_move_iterator(upObjects.end()));
+	for (auto& object : upObjects) AddObject(object);
 }
 
 void CScene::WindowResized(int width, int height)
@@ -100,10 +102,13 @@ void CScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	sceneInfo.viewSky = Matrix4x4::Transpose(sceneInfo.viewSky);
 	m_spShader->SetSceneMatrix(cpCommandList, sceneInfo);
 
-	for (std::unique_ptr<CModelObject>& upObject : m_vObjects)
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	for (auto& upObject : m_vObjects)
 	{
 		upObject->DrawObject(cpCommandList);
 	}
+	//-----------------------------------
 }
 
 //===============================================================================================
@@ -135,18 +140,8 @@ namespace
 
 using namespace config::stage;
 
-struct CGameScene::StageResources
-{
-	std::unique_ptr<CTerrainObject> upTerrain;
-	std::shared_ptr<CModel> spTank;
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
-	std::shared_ptr<CModel> spApache;
-	std::shared_ptr<CModel> spRocks[2];
-	//-----------------------------------
-	std::unique_ptr<CSkyboxObject> upSkybox;
-	CMesh box;
-};
+CStageResources::CStageResources() = default;
+CStageResources::~CStageResources() = default;
 
 CGameScene::CGameScene(const PlayerRules& rules)
 	: m_rules(rules)
@@ -158,81 +153,81 @@ CGameScene::CGameScene(const PlayerRules& rules)
 CGameScene::~CGameScene()
 {}
 
-HRESULT CGameScene::InitScene(ComPtr<ID3D12Device>& cpDevice,
-		ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator& descHeapAllocator)
-{
-	HRESULT hr;
-	m_spShader = std::make_shared<CShader>();
-	hr = m_spShader->CreateShader(cpDevice, cpCommandList, descHeapAllocator);
-	if (FAILED(hr))
-	{
-		OutputDebugString(L"CScene::InitScene() Failed to create Shader\n");
-		return hr;
-	}
 
-	return S_OK;
-}
 //-----------------------------------
 
-HRESULT CGameScene::BuildObjects(
-	ComPtr<ID3D12Device>& cpDevice,
-	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	CDescHeapAllocator* DescHeapAllocator)
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+HRESULT CStageResources::Build(ComPtr<ID3D12Device>& cpDevice,
+	ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator& allocator)
 {
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
-	if (!DescHeapAllocator) return E_INVALIDARG;
-	//-----------------------------------
-
-	m_spStageResources = std::make_shared<StageResources>();
-	auto& resources = *m_spStageResources;
-
+	spShader = std::make_shared<CShader>();
+	HRESULT shaderResult = spShader->CreateShader(cpDevice, cpCommandList, allocator);
+	if (FAILED(shaderResult)) return shaderResult;
 	//-----------------------------------
 	//[직접 작성한 코드]
-	resources.upTerrain = std::make_unique<CTerrainObject>();
+	upTerrain = std::make_unique<CTerrainObject>();
 	auto spHeightmap = std::make_shared<CHeightMapImage>(L"../Resources/Cheongsando.raw", TerrainSamples, TerrainSamples);
-	resources.upTerrain->SetHeightMap(spHeightmap);
-	HRESULT hr = resources.upTerrain->GenerateTerrain(cpDevice, cpCommandList, DescHeapAllocator, true);
+	upTerrain->SetHeightMap(spHeightmap);
+	HRESULT hr = upTerrain->GenerateTerrain(cpDevice, cpCommandList, &allocator, true);
 	if (FAILED(hr)) return hr;
 
 	//auto spNormalmap = std::make_shared<CNormalMapImage>(L"../Resources/Cheongsando.raw", TerrainSamples, TerrainSamples);
 
-	resources.upTerrain->SetScale(TerrainHorizontalScale, TerrainVerticalScale, TerrainHorizontalScale);
+	upTerrain->SetScale(TerrainHorizontalScale, TerrainVerticalScale, TerrainHorizontalScale);
 
-	resources.spTank = std::make_shared<CModel>();
-	auto spMaterial = std::make_shared<CMaterial>(m_spShader);
-	if (!resources.spTank->LoadModelData(cpDevice, cpCommandList, "../Resources/AbramsTank.txt", spMaterial))
+	spTank = std::make_shared<CModel>();
+	auto spMaterial = std::make_shared<CMaterial>(spShader);
+	if (!spTank->LoadModelData(cpDevice, cpCommandList, "../Resources/AbramsTank.txt", spMaterial))
 		return E_FAIL;
 
-	resources.upSkybox = std::make_unique<CSkyboxObject>();
-	hr = resources.upSkybox->GenerateSkyBox(cpDevice, cpCommandList, *DescHeapAllocator);
-	if (FAILED(hr)) return hr;
 	//-----------------------------------
+	upSkybox = std::make_unique<CSkyboxObject>();
+	hr = upSkybox->GenerateSkyBox(cpDevice, cpCommandList, allocator);
+	if (FAILED(hr)) return hr;
 
-	return BuildStageVisuals(cpDevice, cpCommandList);
+	CTankPlayer::PrepareModel(spTank);
+	return BuildVisuals(cpDevice, cpCommandList);
 }
 
-void CGameScene::ShareStageResources(const CGameScene& source)
+HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice,
+	ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator*)
 {
-	m_spStageResources = source.m_spStageResources;
-	m_spShader = source.m_spShader;
+	if (!m_spStageResources) return E_UNEXPECTED;
+	m_vObjects.clear();
+	m_vEnemies.clear();
+	m_vProjectiles.clear();
+	m_vHud.clear();
+	for (int i = 0; i < HealthHudBegin + m_rules.maxHealth + 1; ++i)
+	{
+		auto upUi = std::make_unique<CUI>(XMFLOAT4{ 0, 0, 1, 1 }, XMFLOAT4{ 1, 1, 1, 1 });
+		const HRESULT hr = upUi->BuildMesh(cpDevice, cpCommandList);
+		if (FAILED(hr)) return hr;
+		m_vHud.push_back(std::move(upUi));
+	}
+	return S_OK;
+}
+
+
+//-----------------------------------
+
+void CGameScene::SetStageResources(const std::shared_ptr<CStageResources>& resources)
+{
+	m_spStageResources = resources;
+	m_spShader = resources->spShader;
 }
 
 void CGameScene::ReleaseUploadBuffers()
 {
-	if (!m_spStageResources) return;
-	auto& resources = *m_spStageResources;
-	resources.upTerrain->ReleaseUploadBuffer();
-	resources.spTank->ReleaseUploadBuffer();
-	resources.spApache->ReleaseUploadBuffer();
-	for (auto& model : resources.spRocks) model->ReleaseUploadBuffer();
-	resources.box.ReleaseUploadBuffer();
-	resources.upSkybox->ReleaseUploadBuffer();
+	for (auto& ui : m_vHud) ui->ReleaseUploadBuffer();
 }
 
 void CGameScene::ReleaseObjects()
 {
 	m_vEnemies.clear();
+	m_vProjectiles.clear();
+	m_vHud.clear();
+	CScene::ReleaseObjects();
 	m_spStageResources.reset();
 	m_spShader.reset();
 }
@@ -268,12 +263,12 @@ void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	DrawStage(cpCommandList);
 }
 
-HRESULT CGameScene::BuildStageVisuals(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+HRESULT CStageResources::BuildVisuals(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	const auto loadModel = [&](std::shared_ptr<CModel>& model, const char* path, const XMFLOAT3& offset)
 	{
 		model = std::make_shared<CModel>();
-		auto material = std::make_shared<CMaterial>(m_spShader);
+		auto material = std::make_shared<CMaterial>(spShader);
 		std::string error;
 		if (!model->LoadModelData(cpDevice, cpCommandList, path, material, &error))
 		{
@@ -285,10 +280,9 @@ HRESULT CGameScene::BuildStageVisuals(const ComPtr<ID3D12Device>& cpDevice, cons
 		model->SetFrameLocal(root, Matrix4x4::Multiply(model->GetFrameMatrix(root), Matrix4x4::Translation(offset)));
 		return true;
 	};
-	auto& spApache = m_spStageResources->spApache;
 	if (!loadModel(spApache, "../Resources/Apache.txt", { -2.1725f, -3.0716f, 21.0388f }) ||
-		!loadModel(m_spStageResources->spRocks[0], "../Resources/Rock.txt", { -2.9746f, -0.098f, -2.0176f }) ||
-		!loadModel(m_spStageResources->spRocks[1], "../Resources/Rock2.txt", { -2.9407f, -0.098f, -3.3343f })) return E_FAIL;
+		!loadModel(spRocks[0], "../Resources/Rock.txt", { -2.9746f, -0.098f, -2.0176f }) ||
+		!loadModel(spRocks[1], "../Resources/Rock2.txt", { -2.9407f, -0.098f, -3.3343f })) return E_FAIL;
 
 	MeshData<VertexTexcoord> cube;
 	const XMFLOAT3 corners[] =
@@ -302,7 +296,8 @@ HRESULT CGameScene::BuildStageVisuals(const ComPtr<ID3D12Device>& cpDevice, cons
 		0, 1, 2, 0, 2, 3, 4, 7, 6, 4, 6, 5, 0, 4, 5, 0, 5, 1,
 		3, 2, 6, 3, 6, 7, 1, 5, 6, 1, 6, 2, 0, 3, 7, 0, 7, 4
 	};
-	return m_spStageResources->box.CreateBuffer(cpDevice, cpCommandList, cube);
+	upBox = std::make_unique<CMesh>();
+	return upBox->CreateBuffer(cpDevice, cpCommandList, cube);
 }
 
 void CGameScene::DrawStageBox(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const XMFLOAT3& position,
@@ -317,7 +312,7 @@ void CGameScene::DrawStageBox(const ComPtr<ID3D12GraphicsCommandList>& cpCommand
 	const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(matrix);
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
 	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &color, 0);
-	m_spStageResources->box.DrawMesh(cpCommandList);
+	m_spStageResources->upBox->DrawMesh(cpCommandList);
 }
 
 void CGameScene::UpdateStageView()
@@ -332,10 +327,7 @@ void CGameScene::UpdateStageView()
 
 void CGameScene::DrawStageHud(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
-	//---------------------------------------
-	//[직접 작성한 코드]
-	m_spShader->SetPipelineState(cpCommandList, ERenderState::Unlit);
-	//---------------------------------------
+	m_spShader->SetPipelineState(cpCommandList, ERenderState::UI);
 	const XMFLOAT4X4 view = m_spCamera->GetView();
 	const XMFLOAT4X4 projection = m_spCamera->GetProj();
 	const XMFLOAT3 aimNdc = Vector3::TransformCoord(m_reticleAimPoint, Matrix4x4::Multiply(view, projection));
@@ -347,62 +339,53 @@ void CGameScene::DrawStageHud(const ComPtr<ID3D12GraphicsCommandList>& cpCommand
 	const float aspectScale = projection._11 / projection._22;
 	const XMFLOAT4 white{ .9f, .95f, 1, 1 };
 	const XMFLOAT4 lockColor = m_bLockPinned ? XMFLOAT4{ .18f, .96f, 1, 1 } : XMFLOAT4{ 1, .86f, .08f, 1 };
-	const auto hudBox = [&](float x, float y, float width, float height, const XMFLOAT4& color)
+	for (auto& ui : m_vHud) ui->SetVisible(false);
+	const auto hudPlane = [&](size_t slot, float x, float y, float width, float height, const XMFLOAT4& color)
 	{
-		DrawStageBox(cpCommandList, { x, y, .01f }, { width * aspectScale, height, .002f }, color);
+		SetHudPlane(slot, x, y, width * aspectScale, height, color);
 	};
 
 	const XMFLOAT4 reticle = m_nLockedEnemy < 0 ? white : lockColor;
 	if (aimNdc.z >= 0.0f && aimNdc.z <= 1.0f)
 	{
-		hudBox(aimNdc.x, aimNdc.y, .04f, .005f, reticle);
-		hudBox(aimNdc.x, aimNdc.y, .005f, .04f, reticle);
+		hudPlane(ReticleHorizontalHud, aimNdc.x, aimNdc.y, .04f, .005f, reticle);
+		hudPlane(ReticleVerticalHud, aimNdc.x, aimNdc.y, .005f, .04f, reticle);
 	}
 	for (int i = 0; i < m_rules.maxHealth; ++i)
 	{
-		const XMFLOAT4 color = i < m_nHealth ? XMFLOAT4{ .18f, .85f, .35f, 1 } : XMFLOAT4{ .35f, .15f, .15f, 1 };
-		hudBox(-.87f + i * .065f * aspectScale, .86f, .055f, .045f, color);
+		const XMFLOAT4 color = i < PlayerObject().GetHealth() ? XMFLOAT4{ .18f, .85f, .35f, 1 } : XMFLOAT4{ .35f, .15f, .15f, 1 };
+		hudPlane(HealthHudBegin + i, -.87f + i * .065f * aspectScale, .86f, .055f, .045f, color);
 	}
-	DrawStageHudExtras(cpCommandList, aspectScale, lockColor);
+	UpdateHudExtras(aspectScale, lockColor);
 	if (m_state == EStageState::Victory || m_state == EStageState::Defeat)
 	{
 		const XMFLOAT4 color = m_state == EStageState::Victory
 			? XMFLOAT4{ .18f, .72f, .32f, 1 } : XMFLOAT4{ .68f, .17f, .19f, 1 };
-		hudBox(0.0f, .45f, .65f, .14f, color);
+		hudPlane(HealthHudBegin + m_rules.maxHealth, 0.0f, .45f, .65f, .14f, color);
 	}
+	for (auto& ui : m_vHud) ui->DrawObject(cpCommandList);
 }
 
 void CGameScene::DrawStage(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
-	using namespace config::stage;
 	m_spShader->SetPipelineState(cpCommandList, ERenderState::Default);
 	DrawStageObjects(cpCommandList);
-	m_spShader->SetPipelineState(cpCommandList, ERenderState::Default);
-	for (size_t i = 0; i < m_vEnemies.size(); ++i)
+	for (const auto& object : m_vObjects) object->DrawObject(cpCommandList);
+	if (m_nLockedEnemy >= 0)
 	{
-		const auto& enemy = m_vEnemies[i];
-		if (enemy.health <= 0) continue;
-		if (enemy.upTank) enemy.upTank->DrawObject(cpCommandList);
-		else DrawStageBox(cpCommandList, enemy.Position(), { 1.0f, 1.6f, 1.0f }, { .86f, .18f, .16f, 1 });
-
-		if (static_cast<int>(i) != m_nLockedEnemy) continue;
-		XMFLOAT3 marker = enemy.Position();
-		marker.y += enemy.upTank ? EnemyTankAimHeight + 3.0f : 1.3f;
-		const XMFLOAT4 color = m_bLockPinned ? XMFLOAT4{ .18f, .96f, 1, 1 } : XMFLOAT4{ 1, .86f, .08f, 1 };
-		DrawStageBox(cpCommandList, marker, { .6f, .28f, .6f }, color);
+		const auto& enemy = *m_vEnemies[m_nLockedEnemy];
+		if (enemy.IsAlive())
+		{
+			XMFLOAT3 marker = enemy.GetPosition();
+			marker.y += enemy.GetMarkerHeight();
+			const XMFLOAT4 color = m_bLockPinned ? XMFLOAT4{ .18f, .96f, 1, 1 } : XMFLOAT4{ 1, .86f, .08f, 1 };
+			DrawStageBox(cpCommandList, marker, { .6f, .28f, .6f }, color);
+		}
 	}
-	for (const auto& shot : m_vProjectiles)
-	{
-		const XMFLOAT4 color = shot.enemyOwned ? XMFLOAT4{ 1, .35f, .10f, 1 } : XMFLOAT4{ 1, .9f, .36f, 1 };
-		DrawStageBox(cpCommandList, shot.position, { .38f, .38f, .38f }, color);
-	}
+	for (const auto& shot : m_vProjectiles) shot->DrawObject(cpCommandList);
 	DrawStageHud(cpCommandList);
 }
 
-XMFLOAT3 CGameScene::Enemy::Position() const
-{
-	return upTank ? upTank->GetTransform().position : targetPosition;
-}
 
 XMFLOAT3 CGameScene::OnTerrain(float x, float z, float offset) const
 {
@@ -416,10 +399,15 @@ void CGameScene::BeginStage(EGameStage stage)
 	m_bFireRequested = false;
 	m_bLockPinned = false;
 	m_nLockedEnemy = -1;
-	m_nHealth = m_rules.maxHealth;
+	PlayerObject().SetCombatInfo(m_rules.maxHealth, m_rules.aimHeight, m_rules.hitRadius,
+		m_rules.hitRadius, 0.0f, m_rules.aimHeight);
+	std::fill(std::begin(m_keys), std::end(m_keys), UCHAR{});
 	m_fReload = m_fResultTimer = 0.0f;
 	m_vEnemies.clear();
 	m_vProjectiles.clear();
+	// 플레이어 인스턴스는 보존하고 스테이지에 배치한 나머지 객체를 제거한다.
+	const auto* player = &PlayerObject();
+	std::erase_if(m_vObjects, [player](const auto& object) { return object.get() != player; });
 
 	ResetStage();
 	const XMFLOAT4X4 projection = m_spCamera->GetProj();
@@ -442,21 +430,13 @@ void CGameScene::StageKeyPressed(WPARAM key)
 
 XMFLOAT3 CGameScene::PlayerAimPoint() const
 {
-	XMFLOAT3 position = PlayerPosition();
-	position.y += m_rules.aimHeight;
-	return position;
+	return PlayerObject().GetAimPoint();
 }
 
-XMFLOAT3 CGameScene::EnemyAimPoint(const Enemy& enemy) const
-{
-	XMFLOAT3 point = enemy.Position();
-	if (enemy.upTank) point.y += EnemyTankAimHeight;
-	return point;
-}
 
 void CGameScene::UpdateLock(const XMFLOAT3& origin, const XMFLOAT3& direction)
 {
-	if (m_bLockPinned && m_nLockedEnemy >= 0 && m_vEnemies[m_nLockedEnemy].health > 0) return;
+	if (m_bLockPinned && m_nLockedEnemy >= 0 && m_vEnemies[m_nLockedEnemy]->IsAlive()) return;
 	m_bLockPinned = false;
 	m_nLockedEnemy = -1;
 	int directlyHit = -1;
@@ -466,9 +446,9 @@ void CGameScene::UpdateLock(const XMFLOAT3& origin, const XMFLOAT3& direction)
 	float nearest = (std::min)(1.0f, TerrainHitFraction(origin, rayEnd, LockTerrainClearance));
 	for (size_t i = 0; i < m_vEnemies.size(); ++i)
 	{
-		const auto& enemy = m_vEnemies[i];
-		if (enemy.health <= 0) continue;
-		const XMFLOAT3 aim = EnemyAimPoint(enemy);
+		const auto& enemy = *m_vEnemies[i];
+		if (!enemy.IsAlive()) continue;
+		const XMFLOAT3 aim = enemy.GetAimPoint();
 		const float hit = Collision::SegmentSphereFraction(origin, rayEnd, aim, m_fLockRadius);
 		if (hit < nearest)
 		{
@@ -490,32 +470,27 @@ void CGameScene::UpdateLock(const XMFLOAT3& origin, const XMFLOAT3& direction)
 void CGameScene::UpdateEnemies(float dt)
 {
 	const XMFLOAT3 target = PlayerAimPoint();
-	for (Enemy& enemy : m_vEnemies)
+	for (auto* enemy : m_vEnemies)
 	{
-		if (!enemy.upTank || enemy.health <= 0) continue;
-		enemy.reload = (std::max)(0.0f, enemy.reload - dt);
-		if (!enemy.upTank->AimStageCannon(target, dt) || enemy.reload > 0.0f) continue;
-
+		if (!enemy->IsAlive()) continue;
 		XMFLOAT3 muzzle, direction;
-		enemy.upTank->GetStageCannonRay(muzzle, direction);
+		if (!enemy->TryFire(target, dt, muzzle, direction)) continue;
 		if (TerrainHitFraction(muzzle, target, TankShellClearance) < 1.0f) continue;
-		m_vProjectiles.push_back({
-			.position = muzzle,
+		SpawnProjectile(muzzle, {
 			.direction = direction,
 			.speed = TankShellSpeed,
 			.lifetime = TankShellLifetime,
 			.clearance = TankShellClearance,
 			.enemyOwned = true
 		});
-		enemy.reload = EnemyTankReload;
+		enemy->Reload();
 	}
 }
 
 void CGameScene::FirePlayer(const XMFLOAT3& origin, const XMFLOAT3& direction)
 {
 	if (m_fReload > 0.0f) return;
-	m_vProjectiles.push_back({
-		.position = origin,
+	SpawnProjectile(origin, {
 		.direction = direction,
 		.speed = m_rules.shotSpeed,
 		.lifetime = m_rules.shotLifetime,
@@ -543,31 +518,26 @@ float CGameScene::TerrainHitFraction(const XMFLOAT3& start, const XMFLOAT3& end,
 
 void CGameScene::UpdateProjectiles(float dt)
 {
-	for (Projectile& shot : m_vProjectiles)
+	for (auto& upShot : m_vProjectiles)
 	{
-		const float stepTime = (std::min)(dt, shot.lifetime);
-		shot.lifetime -= stepTime;
-		if (shot.target >= 0 && m_vEnemies[shot.target].health > 0)
-		{
-			shot.homingDelay -= stepTime;
-			if (shot.homingDelay <= 0.0f)
-			{
-				const XMFLOAT3 aim = EnemyAimPoint(m_vEnemies[shot.target]);
-				const XMFLOAT3 delta = Vector3::Subtract(aim, shot.position);
-				shot.direction = Vector3::RotateTowards(shot.direction, delta, shot.homingTurnSpeed * stepTime);
-			}
-		}
-		const XMFLOAT3 end = Vector3::Add(shot.position, shot.direction, shot.speed * stepTime);
-		float closest = TerrainHitFraction(shot.position, end, shot.clearance);
+		auto& shot = *upShot;
+		std::optional<XMFLOAT3> target;
+		if (shot.flight.target >= 0 && m_vEnemies[shot.flight.target]->IsAlive())
+			target = m_vEnemies[shot.flight.target]->GetAimPoint();
+		const float stepTime = shot.AdvanceTime(dt, target);
+		const XMFLOAT3 end = shot.NextPosition(stepTime);
+		float closest = TerrainHitFraction(shot.Position(), end, shot.flight.clearance);
 		int hitEnemy = -1;
-		if (shot.enemyOwned)
+		if (shot.flight.enemyOwned)
 		{
-			const float hit = Collision::SegmentSphereFraction(shot.position, end, PlayerAimPoint(),
-				m_rules.hitRadius);
+			const float hit = Collision::SegmentSphereFraction(shot.Position(), end, PlayerAimPoint(),
+				PlayerObject().GetHitRadius(false));
 			if (hit <= 1.0f && hit < closest)
 			{
 				closest = hit;
-				if (!IsPlayerProtected() && m_nHealth > 0 && --m_nHealth == 0)
+				const bool wasAlive = IsPlayerAlive();
+				if (!IsPlayerProtected()) PlayerObject().ApplyDamage();
+				if (wasAlive && !IsPlayerAlive())
 				{
 					m_state = EStageState::Defeat;
 					m_fResultTimer = DefeatDelay;
@@ -580,12 +550,11 @@ void CGameScene::UpdateProjectiles(float dt)
 		{
 			for (size_t i = 0; i < m_vEnemies.size(); ++i)
 			{
-				auto& enemy = m_vEnemies[i];
-				if (enemy.health <= 0) continue;
-				const float radius = enemy.upTank ? TankHitRadius : (shot.target >= 0 ? TargetHomingHitRadius : TargetHitRadius);
-				XMFLOAT3 center = enemy.Position();
-				if (enemy.upTank) center.y += TankAimHeight;
-				const float hit = Collision::SegmentSphereFraction(shot.position, end, center, radius);
+				auto& enemy = *m_vEnemies[i];
+				if (!enemy.IsAlive()) continue;
+				const float radius = enemy.GetHitRadius(shot.flight.target >= 0);
+				const XMFLOAT3 center = enemy.GetHitPoint();
+				const float hit = Collision::SegmentSphereFraction(shot.Position(), end, center, radius);
 				if (hit <= 1.0f && hit < closest)
 				{
 					closest = hit;
@@ -593,11 +562,11 @@ void CGameScene::UpdateProjectiles(float dt)
 				}
 			}
 		}
-		if (hitEnemy >= 0) --m_vEnemies[hitEnemy].health;
-		if (closest <= 1.0f) shot.lifetime = 0.0f;
-		shot.position = end;
+		if (hitEnemy >= 0) m_vEnemies[hitEnemy]->ApplyDamage();
+		if (closest <= 1.0f) shot.flight.lifetime = 0.0f;
+		shot.Position() = end;
 	}
-	std::erase_if(m_vProjectiles, [](const Projectile& shot) { return shot.lifetime <= 0.0f; });
+	std::erase_if(m_vProjectiles, [](const std::unique_ptr<CProjectileObject>& shot) { return shot->flight.lifetime <= 0.0f; });
 }
 
 void CGameScene::Win()
@@ -607,9 +576,14 @@ void CGameScene::Win()
 	m_vProjectiles.clear();
 }
 
-void CGameScene::ProcessInput(UCHAR* keys, float dt)
+void CGameScene::ProcessInput(UCHAR* keys, float)
 {
-	if (!::GetKeyboardState(keys)) return;
+	std::copy_n(keys, 256, m_keys);
+}
+
+void CGameScene::Update(float dt)
+{
+	const UCHAR* keys = m_keys;
 	dt = std::clamp(dt, 0.0f, MaxTimeStep);
 	if (m_state == EStageState::Finished) return;
 	if (m_state == EStageState::Victory || m_state == EStageState::Defeat)
@@ -637,23 +611,27 @@ void CGameScene::ProcessInput(UCHAR* keys, float dt)
 	UpdateProjectiles(dt);
 
 	const bool allDestroyed = std::none_of(m_vEnemies.begin(), m_vEnemies.end(),
-		[](const Enemy& enemy) { return enemy.health > 0; });
-	if (m_nHealth > 0 && (allDestroyed || HasReachedExit())) Win();
+		[](const CDamageableObject* enemy) { return enemy->IsAlive(); });
+	if (IsPlayerAlive() && (allDestroyed || HasReachedExit())) Win();
 	UpdateStageView();
 }
 
 void CGameScene::AddTarget(const XMFLOAT3& position)
 {
-	m_vEnemies.push_back({ nullptr, position, TargetHealth });
+	auto object = std::make_unique<CTargetObject>(*m_spStageResources->upBox);
+	object->SetPosition(position);
+	m_vEnemies.push_back(object.get());
+	m_vObjects.push_back(std::move(object));
 }
 
 void CGameScene::AddEnemyTank(float x, float z, float playerStartZ)
 {
-	auto enemyTank = std::make_unique<CTankPlayer>();
+	auto enemyTank = std::make_unique<CEnemyTank>();
 	enemyTank->UsePreparedTankModel(m_spStageResources->spTank);
 	enemyTank->ResetStagePose(OnTerrain(x, z, TankGroundOffset), std::atan2(-x, playerStartZ - z));
 	enemyTank->FollowStageSlope(*m_spStageResources->upTerrain);
-	m_vEnemies.push_back({ std::move(enemyTank), {}, EnemyTankHealth });
+	m_vEnemies.push_back(enemyTank.get());
+	m_vObjects.push_back(std::move(enemyTank));
 }
 
 void CGameScene::SetLockSettings(float minDot, float radius)
@@ -665,7 +643,7 @@ void CGameScene::SetLockSettings(float minDot, float radius)
 std::optional<XMFLOAT3> CGameScene::LockedAimPoint() const
 {
 	if (m_nLockedEnemy < 0) return std::nullopt;
-	return EnemyAimPoint(m_vEnemies[m_nLockedEnemy]);
+	return m_vEnemies[m_nLockedEnemy]->GetAimPoint();
 }
 
 CTankGameScene::CTankGameScene()
@@ -692,9 +670,11 @@ HRESULT CTankGameScene::BuildObjects(
 	if (FAILED(hr)) return hr;
 
 	//-----------------------------------
-	//[직접 작성한 코드]
-	m_upPlayer = std::make_unique<CTankPlayer>();
-	m_upPlayer->SetModel(m_spStageResources->spTank);
+	//[아래 코드는 AI로 구현됨]
+	auto upPlayer = std::make_unique<CTankPlayer>();
+	m_pPlayer = upPlayer.get();
+	m_pPlayer->UsePreparedTankModel(m_spStageResources->spTank);
+	m_vObjects.push_back(std::move(upPlayer));
 	//-----------------------------------
 
 	const auto tankBounds = m_spStageResources->spTank->GetModelBounds();
@@ -707,18 +687,18 @@ HRESULT CTankGameScene::BuildObjects(
 		if (!bounds) return E_FAIL;
 		m_rockBounds[i] = *bounds;
 	}
-	return m_upPlayer->CreateCannonTestMesh(cpDevice, cpCommandList);
+	return m_pPlayer->CreateCannonTestMesh(cpDevice, cpCommandList);
 }
 
 void CTankGameScene::ReleaseUploadBuffers()
 {
 	CGameScene::ReleaseUploadBuffers();
-	if (m_upPlayer) m_upPlayer->ReleaseCannonTestUploadBuffer();
+	if (m_pPlayer) m_pPlayer->ReleaseCannonTestUploadBuffer();
 }
 
 void CTankGameScene::ReleaseObjects()
 {
-	m_upPlayer.reset();
+	m_pPlayer = nullptr;
 	m_vObstacles.clear();
 	CGameScene::ReleaseObjects();
 }
@@ -732,7 +712,7 @@ void CTankGameScene::ResetStage()
 
 	const auto& spawn = Level2Spawn;
 	const float startZ = -UsableHalf * spawn.startDepth;
-	m_upPlayer->ResetStagePose(OnTerrain(0.0f, startZ, TankGroundOffset), 0.0f);
+	m_pPlayer->ResetStagePose(OnTerrain(0.0f, startZ, TankGroundOffset), 0.0f);
 
 	for (int i = 0; i < Level2TankCount; ++i)
 	{
@@ -762,7 +742,13 @@ void CTankGameScene::ResetStage()
 		//-----------------------------------
 		//[아래 코드는 AI로 구현됨]
 		const size_t variant = i % std::size(m_rockBounds);
-		m_vObstacles.push_back({ pose, variant, Collision::MakeFootprint(m_rockBounds[variant], pose) });
+		m_vObstacles.push_back({ Collision::MakeFootprint(m_rockBounds[variant], pose) });
+		auto object = std::make_unique<CModelObject>();
+		object->SetModel(m_spStageResources->spRocks[variant]);
+		object->SetPosition(pose.position);
+		object->SetRotation(pose.rotation);
+		object->SetScale(pose.scale);
+		m_vObjects.push_back(std::move(object));
 		//-----------------------------------
 	}
 }
@@ -773,14 +759,14 @@ void CTankGameScene::OnStageKeyPressed(WPARAM key)
 	if (key == 'H') m_bShield = !m_bShield;
 }
 
-XMFLOAT3 CTankGameScene::PlayerPosition() const
+CDamageableObject& CTankGameScene::PlayerObject() const
 {
-	return m_upPlayer->GetTransform().position;
+	return *m_pPlayer;
 }
 
 void CTankGameScene::GetAimRay(XMFLOAT3& origin, XMFLOAT3& direction) const
 {
-	m_upPlayer->GetStageCannonRay(origin, direction);
+	m_pPlayer->GetStageCannonRay(origin, direction);
 }
 
 bool CTankGameScene::TryAutoAim(const UCHAR* keys, float dt, XMFLOAT3& origin, XMFLOAT3& direction)
@@ -790,28 +776,18 @@ bool CTankGameScene::TryAutoAim(const UCHAR* keys, float dt, XMFLOAT3& origin, X
 	const auto aim = LockedAimPoint();
 	if (!aim) return false;
 
-	const bool aimed = m_upPlayer->AimStageCannon(*aim, dt);
+	const bool aimed = m_pPlayer->AimStageCannon(*aim, dt);
 	GetAimRay(origin, direction);
 	return aimed;
 }
 
-void CTankGameScene::DrawStageObjects(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
-{
-	if (IsPlayerAlive()) m_upPlayer->DrawObject(cpCommandList);
-	for (const auto& obstacle : m_vObstacles)
-	{
-		m_spStageResources->spRocks[obstacle.variant]->DrawModel(cpCommandList, obstacle.pose.getMatrix());
-	}
-}
 
-void CTankGameScene::DrawStageHudExtras(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	float aspectScale, const XMFLOAT4& lockColor)
+void CTankGameScene::UpdateHudExtras(float aspectScale, const XMFLOAT4& lockColor)
 {
 	const XMFLOAT4 inactive{ .25f, .25f, .25f, 1 };
 	const XMFLOAT4 active{ .9f, .95f, 1, 1 };
-	const XMFLOAT3 size{ .055f * aspectScale, .025f, .002f };
-	DrawStageBox(cpCommandList, { -.87f, .77f, .01f }, size, m_bAutoAttack ? active : inactive);
-	DrawStageBox(cpCommandList, { -.87f + .065f * aspectScale, .77f, .01f }, size, m_bShield ? lockColor : inactive);
+	SetHudPlane(AutoAttackHud, -.87f, .77f, .055f * aspectScale, .025f, m_bAutoAttack ? active : inactive);
+	SetHudPlane(ShieldHud, -.87f + .065f * aspectScale, .77f, .055f * aspectScale, .025f, m_bShield ? lockColor : inactive);
 }
 
 void CTankGameScene::UpdatePlayer(const UCHAR* keys, float dt)
@@ -819,9 +795,9 @@ void CTankGameScene::UpdatePlayer(const UCHAR* keys, float dt)
 	const DWORD input = ReadTankControls(keys);
 	if (input)
 	{
-		const Transform previous = m_upPlayer->GetTransform();
-		m_upPlayer->ApplyControls(input, dt, m_spStageResources->upTerrain.get());
-		const Transform& candidate = m_upPlayer->GetTransform();
+		const Transform previous = m_pPlayer->GetTransform();
+		m_pPlayer->ApplyControls(input, dt, m_spStageResources->upTerrain.get());
+		const Transform& candidate = m_pPlayer->GetTransform();
 
 		const BoundingOrientedBox previousBounds = Collision::MakeFootprint(m_tankBounds, previous);
 		const BoundingOrientedBox candidateBounds = Collision::MakeFootprint(m_tankBounds, candidate);
@@ -838,17 +814,17 @@ void CTankGameScene::UpdatePlayer(const UCHAR* keys, float dt)
 		}
 		if (collision)
 		{
-			m_upPlayer->SetPosition(previous.position);
-			m_upPlayer->SetRotation(previous.rotation);
+			m_pPlayer->SetPosition(previous.position);
+			m_pPlayer->SetRotation(previous.rotation);
 		}
 	}
-	m_upPlayer->FollowStageSlope(*m_spStageResources->upTerrain);
+	m_pPlayer->FollowStageSlope(*m_spStageResources->upTerrain);
 }
 
 void CTankGameScene::UpdateStageCamera(const XMFLOAT3& aimPoint)
 {
-	const Transform& tank = m_upPlayer->GetTransform();
-	const XMFLOAT3 forward = m_upPlayer->GetTurretHeading();
+	const Transform& tank = m_pPlayer->GetTransform();
+	const XMFLOAT3 forward = m_pPlayer->GetTurretHeading();
 	XMFLOAT3 eye = Vector3::Add(tank.position, forward, -TankCameraDistance);
 	eye.y += TankCameraHeight;
 	eye.y = (std::max)(eye.y, m_spStageResources->upTerrain->GetHeightAt(eye) + CameraGroundClearance);
@@ -874,13 +850,17 @@ CHelicopterGameScene::CHelicopterGameScene()
 
 CHelicopterGameScene::~CHelicopterGameScene() = default;
 
-void CHelicopterGameScene::ShareStageResources(const CGameScene& source)
+HRESULT CHelicopterGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice,
+	ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator* allocator)
 {
-	CGameScene::ShareStageResources(source);
-	m_upStageHelicopter = std::make_unique<CModelObject>();
+	const HRESULT hr = CGameScene::BuildObjects(cpDevice, cpCommandList, allocator);
+	if (FAILED(hr)) return hr;
+	auto upPlayer = std::make_unique<CDamageableObject>();
+	m_pStageHelicopter = upPlayer.get();
+	m_vObjects.push_back(std::move(upPlayer));
 	auto& model = m_spStageResources->spApache;
-	m_upStageHelicopter->SetModel(model);
-	m_upStageHelicopter->SetScale(ApacheScale);
+	m_pStageHelicopter->SetModel(model);
+	m_pStageHelicopter->SetScale(ApacheScale);
 
 	const XMFLOAT4X4 mainRotor = model->GetFrameMatrix("rotor");
 	const XMFLOAT4X4 mainHub = model->GetFrameMatrix("black_m_6");
@@ -894,11 +874,12 @@ void CHelicopterGameScene::ShareStageResources(const CGameScene& source)
 	m_tailRotorAxis = Vector3::TransformNormal({ 0.0f, -1.0f, 0.0f }, tailRotor);
 	// black_m_7 허브 단면의 중심. 로컬 Y 방향이 회전축이다.
 	m_tailRotorOffset = Vector3::TransformNormal({ -0.758458f, 0.0f, -0.058565f }, tailRotor);
+	return S_OK;
 }
 
 void CHelicopterGameScene::ReleaseObjects()
 {
-	m_upStageHelicopter.reset();
+	m_pStageHelicopter = nullptr;
 	CGameScene::ReleaseObjects();
 }
 
@@ -915,6 +896,7 @@ void CHelicopterGameScene::ResetStage()
 	m_helicopterPose.rotation = { 0.0f, 0.0f, 0.0f };
 	if (targetStage) m_exitPosition = OnTerrain(0.0f, UsableHalf * ExitDepth, ExitHeight);
 
+	UpdateHelicopterPose();
 	const int count = targetStage ? Level1TargetCount : Level3TankCount;
 	for (int i = 0; i < count; ++i)
 	{
@@ -935,7 +917,11 @@ void CHelicopterGameScene::OnStageKeyPressed(WPARAM key)
 	if (key == 'V') m_bStageFirstPerson = !m_bStageFirstPerson;
 	else if (key == '1') m_bStageFirstPerson = true;
 	else if (key == '3') m_bStageFirstPerson = false;
-	if (wasFirstPerson != m_bStageFirstPerson) UpdateStageView();
+	if (wasFirstPerson != m_bStageFirstPerson)
+	{
+		UpdateHelicopterPose();
+		UpdateStageView();
+	}
 }
 
 XMFLOAT3 CHelicopterGameScene::HelicopterForward() const
@@ -943,9 +929,9 @@ XMFLOAT3 CHelicopterGameScene::HelicopterForward() const
 	return Vector3::Forward(m_helicopterPose.rotation.y, m_helicopterPose.rotation.x);
 }
 
-XMFLOAT3 CHelicopterGameScene::PlayerPosition() const
+CDamageableObject& CHelicopterGameScene::PlayerObject() const
 {
-	return m_helicopterPose.position;
+	return *m_pStageHelicopter;
 }
 
 void CHelicopterGameScene::GetAimRay(XMFLOAT3& origin, XMFLOAT3& direction) const
@@ -969,7 +955,6 @@ float CHelicopterGameScene::VictoryHoldTime() const
 
 void CHelicopterGameScene::DrawStageObjects(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
-	if (IsPlayerAlive() && !m_bStageFirstPerson) m_upStageHelicopter->DrawObject(cpCommandList);
 	if (!IsTargetStage()) return;
 
 	const XMFLOAT3& exitPosition = m_exitPosition;
@@ -1001,33 +986,39 @@ void CHelicopterGameScene::UpdatePlayer(const UCHAR* keys, float dt)
 	position.y = std::clamp(position.y + lift * HelicopterLiftSpeed * dt, minimum, minimum + HelicopterAltitudeRange);
 	m_helicopterPose.position = position;
 	m_helicopterPose.rotation.y = yaw;
+	UpdateHelicopterPose();
+}
+
+void CHelicopterGameScene::UpdateHelicopterPose()
+{
+	m_pStageHelicopter->SetVisible(!m_bStageFirstPerson);
+	m_pStageHelicopter->SetPosition(m_helicopterPose.position);
+	m_pStageHelicopter->SetRotation(m_helicopterPose.rotation.x * HelicopterBodyPitchFactor, m_helicopterPose.rotation.y, 0.0f);
+
+	const float rotorAngle = m_fRotorTime * HelicopterRotorSpeed;
+	const float mainAngle = XMScalarModAngle(rotorAngle * MainRotorSpeedFactor);
+	m_pStageHelicopter->SetFrameTransform("rotor", Matrix4x4::RotationAroundAxis(m_mainRotorAxis, mainAngle, m_mainRotorOffset));
+	m_pStageHelicopter->SetFrameTransform("black_m_6", Matrix4x4::RotationAroundAxis(m_mainRotorAxis, mainAngle, m_mainHubOffset));
+
+	const float tailAngle = XMScalarModAngle(rotorAngle * TailRotorSpeedFactor);
+	m_pStageHelicopter->SetFrameTransform("black_m_7", Matrix4x4::RotationAroundAxis(m_tailRotorAxis, tailAngle, m_tailRotorOffset));
+
 }
 
 void CHelicopterGameScene::UpdateStageCamera(const XMFLOAT3&)
 {
-	m_upStageHelicopter->SetPosition(m_helicopterPose.position);
-	m_upStageHelicopter->SetRotation(m_helicopterPose.rotation.x * HelicopterBodyPitchFactor, m_helicopterPose.rotation.y, 0.0f);
-
-	const float rotorAngle = m_fRotorTime * HelicopterRotorSpeed;
-	const float mainAngle = XMScalarModAngle(rotorAngle * MainRotorSpeedFactor);
-	m_upStageHelicopter->SetFrameTransform("rotor", Matrix4x4::RotationAroundAxis(m_mainRotorAxis, mainAngle, m_mainRotorOffset));
-	m_upStageHelicopter->SetFrameTransform("black_m_6", Matrix4x4::RotationAroundAxis(m_mainRotorAxis, mainAngle, m_mainHubOffset));
-
-	const float tailAngle = XMScalarModAngle(rotorAngle * TailRotorSpeedFactor);
-	m_upStageHelicopter->SetFrameTransform("black_m_7", Matrix4x4::RotationAroundAxis(m_tailRotorAxis, tailAngle, m_tailRotorOffset));
-
 	const XMFLOAT3 position = m_helicopterPose.position;
 	XMFLOAT3 eye;
 	XMFLOAT3 target;
 	if (m_bStageFirstPerson)
 	{
 		const XMFLOAT3 apacheCockpit{ 0.0f, 1.7f, 34.0f };
-		eye = Vector3::TransformCoord(apacheCockpit, m_upStageHelicopter->GetTransform().getMatrix());
+		eye = Vector3::TransformCoord(apacheCockpit, m_pStageHelicopter->GetTransform().getMatrix());
 		target = Vector3::Add(eye, HelicopterForward());
 	}
 	else
 	{
-		const XMFLOAT3 flatForward = Vector3::Forward(m_upStageHelicopter->GetTransform().rotation.y);
+		const XMFLOAT3 flatForward = Vector3::Forward(m_pStageHelicopter->GetTransform().rotation.y);
 		eye = Vector3::Add(position, flatForward, -HelicopterCameraDistance);
 		eye.y += HelicopterCameraHeight;
 		target = Vector3::Add(position, HelicopterForward(), HelicopterCameraLookAhead);
@@ -1035,5 +1026,51 @@ void CHelicopterGameScene::UpdateStageCamera(const XMFLOAT3&)
 	}
 	eye.y = (std::max)(eye.y, m_spStageResources->upTerrain->GetHeightAt(eye) + CameraGroundClearance);
 	m_spCamera->SetLookAt(eye, target, { 0, 1, 0 });
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CStageResources::ReleaseUploadBuffers()
+{
+	upTerrain->ReleaseUploadBuffer();
+	spTank->ReleaseUploadBuffer();
+	spApache->ReleaseUploadBuffer();
+	for (auto& model : spRocks) model->ReleaseUploadBuffer();
+	upBox->ReleaseUploadBuffer();
+	upSkybox->ReleaseUploadBuffer();
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CGameScene::SetHudPlane(size_t index, float x, float y, float width, float height, const XMFLOAT4& color)
+{
+	CUI& ui = *m_vHud[index];
+	ui.SetPosition(x, y, .01f);
+	ui.SetScale(width, height, 1.0f);
+	ui.SetColor(color);
+	ui.SetVisible(true);
+}
+
+bool CGameScene::IsPlayerAlive() const { return PlayerObject().IsAlive(); }
+XMFLOAT3 CGameScene::PlayerPosition() const { return PlayerObject().GetPosition(); }
+
+void CGameScene::KeyPressed(WPARAM key, CGameFramework& framework)
+{
+	if (key == VK_ESCAPE) framework.OpenStageSelect();
+	else StageKeyPressed(key);
+}
+
+void CGameScene::CheckStageTransition(CGameFramework& framework)
+{
+	if (!StageFinished()) return;
+	if (m_stage == EGameStage::HelicopterTargets) framework.EnterStage(EGameStage::TankBattle);
+	else framework.OpenStageSelect();
+}
+
+void CGameScene::SpawnProjectile(const XMFLOAT3& position, const ProjectileData& data)
+{
+	m_vProjectiles.push_back(std::make_unique<CProjectileObject>(*m_spStageResources->upBox, position, data));
 }
 //-----------------------------------
