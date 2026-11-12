@@ -16,10 +16,12 @@ cbuffer cbSceneInfo : register(b2)
     matrix gmtxView;
     matrix gmtxProjection;
     matrix gmtxViewSky;
+    float  fTime;
 }
 
-Texture2D tex1 : register(t0);
+Texture2D baseTex : register(t0);
 Texture2D normalMap : register(t1);
+Texture2D maskTex : register(t2);
 SamplerState sample : register(s0);
 
 struct VS_INPUT
@@ -90,14 +92,14 @@ float4 PSTex(VS_OUTPUT input) : SV_Target
     light.y = 100.0f;
     light.z = -1000.0f;
     light = normalize(light - input.wpos.xyz);
-    return tex1.Sample(sample, input.uv * tiling) * matBaseColor
+    return baseTex.Sample(sample, input.uv * tiling) * matBaseColor
     * (0.2f + 0.8 * saturate(dot(normalize(input.normal), light)));
 }
 
 //Unlit
 float4 PSSky(VS_OUTPUT input) : SV_Target
 {
-    return tex1.Sample(sample, input.uv * tiling);
+    return baseTex.Sample(sample, input.uv * tiling);
 }
 
 float4 PSUnlit(VS_OUTPUT input) : SV_Target
@@ -125,8 +127,20 @@ float4 PSNormalMap(VS_OUTPUT input) : SV_Target
     //원본 노멀맵의 G가 역방향이어서, 값에 음수를 곱해줘야 함.
     normal.z = -normal.z;
     
-    //노멀맵은 일단 타일링 끄기.
+    //노멀맵은 일단 타일링 끄기 << 현재 지형 전체 형상을 노멀맵으로 딴 상태
     //기본 텍스쳐 색상 * 머터리얼 베이스 색상 * 노멀에 따른 빛 받는 양
-    return tex1.Sample(sample, input.uv * tiling) * matBaseColor
+    return baseTex.Sample(sample, input.uv * tiling) * matBaseColor
         * (0.2f + 0.8f * saturate(dot(light, normalize(normal))));
+}
+
+float4 PSUI(VS_OUTPUT input) : SV_Target
+{
+    return baseTex.Sample(sample, input.uv) * matBaseColor;
+}
+
+float4 PSMaskedUI(VS_OUTPUT input) : SV_Target
+{
+    float Speed = 0.8f;
+    float dTime = frac(fTime * Speed);
+    return maskTex.Sample(sample, input.uv).r * (baseTex.Sample(sample, input.uv + dTime) + 0.1f);
 }

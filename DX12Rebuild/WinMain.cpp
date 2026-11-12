@@ -1,6 +1,12 @@
 #include "pch.h"
 #include "WinMain.h"
 #include "GameFramework.h"
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+#include <objbase.h>
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "windowscodecs.lib")
+//-----------------------------------
 
 #define MAX_LOADSTRING 100
 
@@ -28,6 +34,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     // TODO: 여기에 코드를 입력합니다.
 
+    //-----------------------------------
+    //[아래 코드는 AI로 구현됨]
+    const HRESULT comResult = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (FAILED(comResult)) return FALSE;
+    //-----------------------------------
+
     // 전역 문자열을 초기화합니다.
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
     LoadStringW(hInstance, IDC_DX12REBUILD, szWindowClass, MAX_LOADSTRING);
@@ -36,6 +48,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     // 애플리케이션 초기화를 수행합니다:
     if (!InitInstance (hInstance, nCmdShow))
     {
+        //-----------------------------------
+        //[아래 코드는 AI로 구현됨]
+        CoUninitialize();
+        //-----------------------------------
         return FALSE;
     }
     
@@ -61,6 +77,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
 
     GameFramework.OnDestroy();
+    //-----------------------------------
+    //[아래 코드는 AI로 구현됨]
+    CoUninitialize();
+    //-----------------------------------
 
     return (int) msg.wParam;
 }

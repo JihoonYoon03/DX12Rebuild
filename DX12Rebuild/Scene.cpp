@@ -192,17 +192,27 @@ HRESULT CStageResources::Build(ComPtr<ID3D12Device>& cpDevice,
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
 HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice,
-	ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator*)
+	ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator* allocator)
 {
 	if (!m_spStageResources) return E_UNEXPECTED;
+	if (!allocator) return E_INVALIDARG;
 	m_vObjects.clear();
 	m_vEnemies.clear();
 	m_vProjectiles.clear();
 	m_vHud.clear();
-	for (int i = 0; i < HealthHudBegin + m_rules.maxHealth + 1; ++i)
+	std::vector<const wchar_t*> textures
 	{
-		auto upUi = std::make_unique<CUI>(XMFLOAT4{ 0, 0, 1, 1 }, XMFLOAT4{ 1, 1, 1, 1 });
-		const HRESULT hr = upUi->BuildMesh(cpDevice, cpCommandList);
+		L"../Resources/UI/Aim.png",
+		L"../Resources/UI/AutoShoot.png",
+		L"../Resources/UI/Shield.png"
+	};
+	for (int i = 0; i < m_rules.maxHealth; ++i) textures.push_back(L"../Resources/UI/HealthBar.png");
+	textures.push_back(L"../Resources/UI/Victory!.png");
+	textures.push_back(L"../Resources/UI/Defeat.png");
+	for (const wchar_t* file : textures)
+	{
+		auto upUi = std::make_unique<CUI>(XMFLOAT4{ 0, 0, 1, 1 }, XMFLOAT4{ 1, 1, 1, 1 }, file);
+		const HRESULT hr = upUi->BuildMesh(cpDevice, cpCommandList, allocator);
 		if (FAILED(hr)) return hr;
 		m_vHud.push_back(std::move(upUi));
 	}
@@ -340,10 +350,7 @@ void CGameScene::UpdateStageView()
 {
 	XMFLOAT3 aimOrigin, aimDirection;
 	GetAimRay(aimOrigin, aimDirection);
-	const XMFLOAT3 aimEnd = Vector3::Add(aimOrigin, aimDirection, ReticleRayDistance);
-	const float hit = TerrainHitFraction(aimOrigin, aimEnd, 0.0f);
-	m_reticleAimPoint = Vector3::Lerp(aimOrigin, aimEnd, std::clamp(hit, ReticleMinRayFraction, 1.0f));
-	UpdateStageCamera(m_reticleAimPoint);
+	UpdateStageCamera(aimDirection);
 }
 //-----------------------------------
 
@@ -352,40 +359,28 @@ void CGameScene::UpdateStageView()
 void CGameScene::DrawStageHud(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	m_spShader->SetPipelineState(cpCommandList, ERenderState::UI);
-	const XMFLOAT4X4 view = m_spCamera->GetView();
 	const XMFLOAT4X4 projection = m_spCamera->GetProj();
-	const XMFLOAT3 aimNdc = Vector3::TransformCoord(m_reticleAimPoint, Matrix4x4::Multiply(view, projection));
-
 	const XMFLOAT4X4 identity = Matrix4x4::Identity();
 	const CB_SceneInfo sceneInfo{ identity, identity, identity };
 	m_spShader->SetSceneMatrix(cpCommandList, sceneInfo, true);
 
 	const float aspectScale = projection._11 / projection._22;
-	const XMFLOAT4 white{ .9f, .95f, 1, 1 };
+	const XMFLOAT4 white{ 1, 1, 1, 1 };
 	const XMFLOAT4 lockColor = m_bLockPinned ? XMFLOAT4{ .18f, .96f, 1, 1 } : XMFLOAT4{ 1, .86f, .08f, 1 };
+	const XMFLOAT4 reticleColor = m_nLockedEnemy < 0 ? white : lockColor;
 	for (auto& ui : m_vHud) ui->SetVisible(false);
-	const auto hudPlane = [&](size_t slot, float x, float y, float width, float height, const XMFLOAT4& color)
-	{
-		SetHudPlane(slot, x, y, width * aspectScale, height, color);
-	};
-
-	const XMFLOAT4 reticle = m_nLockedEnemy < 0 ? white : lockColor;
-	if (aimNdc.z >= 0.0f && aimNdc.z <= 1.0f)
-	{
-		hudPlane(ReticleHorizontalHud, aimNdc.x, aimNdc.y, .04f, .005f, reticle);
-		hudPlane(ReticleVerticalHud, aimNdc.x, aimNdc.y, .005f, .04f, reticle);
-	}
+	SetHudPlane(AimHud, 0, 0, ReticleSize * aspectScale, ReticleSize, reticleColor);
 	for (int i = 0; i < m_rules.maxHealth; ++i)
 	{
-		const XMFLOAT4 color = i < PlayerObject().GetHealth() ? XMFLOAT4{ .18f, .85f, .35f, 1 } : XMFLOAT4{ .35f, .15f, .15f, 1 };
-		hudPlane(HealthHudBegin + i, -.87f + i * .065f * aspectScale, .86f, .055f, .045f, color);
+		const XMFLOAT4 color = i < PlayerObject().GetHealth() ? white : XMFLOAT4{ .25f, .25f, .25f, 1 };
+		SetHudPlane(HealthHudBegin + i, -.87f + i * .065f * aspectScale, .86f, .055f * (259.0f / 260.0f) * aspectScale, .055f, color);
 	}
-	UpdateHudExtras(aspectScale, lockColor);
+	UpdateHudExtras(aspectScale, reticleColor);
 	if (m_state == EStageState::Victory || m_state == EStageState::Defeat)
 	{
-		const XMFLOAT4 color = m_state == EStageState::Victory
-			? XMFLOAT4{ .18f, .72f, .32f, 1 } : XMFLOAT4{ .68f, .17f, .19f, 1 };
-		hudPlane(HealthHudBegin + m_rules.maxHealth, 0.0f, .45f, .65f, .14f, color);
+		const size_t result = HealthHudBegin + m_rules.maxHealth + (m_state == EStageState::Defeat ? 1 : 0);
+		const float imageWidth = m_state == EStageState::Victory ? 1151.0f : 1027.0f;
+		SetHudPlane(result, 0, .45f, .65f * aspectScale, .65f * 463.0f / imageWidth, white);
 	}
 	for (auto& ui : m_vHud) ui->DrawObject(cpCommandList);
 }
@@ -890,12 +885,12 @@ bool CTankGameScene::TryAutoAim(const UCHAR* keys, float dt, XMFLOAT3& origin, X
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CTankGameScene::UpdateHudExtras(float aspectScale, const XMFLOAT4& lockColor)
+void CTankGameScene::UpdateHudExtras(float aspectScale, const XMFLOAT4& reticleColor)
 {
-	const XMFLOAT4 inactive{ .25f, .25f, .25f, 1 };
-	const XMFLOAT4 active{ .9f, .95f, 1, 1 };
-	SetHudPlane(AutoAttackHud, -.87f, .77f, .055f * aspectScale, .025f, m_bAutoAttack ? active : inactive);
-	SetHudPlane(ShieldHud, -.87f + .065f * aspectScale, .77f, .055f * aspectScale, .025f, m_bShield ? lockColor : inactive);
+	if (m_bAutoAttack)
+		SetHudPlane(AutoAttackHud, 0, 0, ReticleSize * aspectScale, ReticleSize, reticleColor);
+	const XMFLOAT4 shieldColor = m_bShield ? XMFLOAT4{ 1, 1, 1, 1 } : XMFLOAT4{ .25f, .25f, .25f, 1 };
+	SetHudPlane(ShieldHud, -.87f, .77f, .07f * (266.0f / 268.0f) * aspectScale, .07f, shieldColor);
 }
 //-----------------------------------
 
@@ -935,14 +930,16 @@ void CTankGameScene::UpdatePlayer(const UCHAR* keys, float dt)
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CTankGameScene::UpdateStageCamera(const XMFLOAT3& aimPoint)
+void CTankGameScene::UpdateStageCamera(const XMFLOAT3& aimDirection)
 {
 	const Transform& tank = m_pPlayer->GetTransform();
 	const XMFLOAT3 forward = m_pPlayer->GetTurretHeading();
 	XMFLOAT3 eye = Vector3::Add(tank.position, forward, -TankCameraDistance);
 	eye.y += TankCameraHeight;
 	eye.y = (std::max)(eye.y, m_spStageResources->upTerrain->GetHeightAt(eye) + CameraGroundClearance);
-	m_spCamera->SetLookAt(eye, aimPoint, { 0, 1, 0 });
+	// 충돌 거리와 무관하게 카메라의 시선을 포신 방향과 평행하게 유지한다.
+	const XMFLOAT3 target = Vector3::Add(eye, aimDirection);
+	m_spCamera->SetLookAt(eye, target, { 0, 1, 0 });
 }
 //-----------------------------------
 
@@ -1126,8 +1123,8 @@ void CHelicopterGameScene::UpdatePlayer(const UCHAR* keys, float dt)
 {
 	m_fRotorTime += dt;
 	const int turn = Down(keys, 'D') - Down(keys, 'A');
-	const int lift = Down(keys, 'W') - Down(keys, 'S');
-	const int drive = Down(keys, VK_UP) - Down(keys, VK_DOWN);
+	const int lift = Down(keys, VK_UP) - Down(keys, VK_DOWN);
+	const int drive = Down(keys, 'W') - Down(keys, 'S');
 	const float yaw = XMScalarModAngle(m_helicopterPose.rotation.y + turn * HelicopterYawSpeed * dt);
 	const float wantedPitch = -drive * HelicopterPitchLimit;
 	const float pitchStep = HelicopterPitchSpeed * dt;

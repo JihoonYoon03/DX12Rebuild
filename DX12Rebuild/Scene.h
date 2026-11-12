@@ -158,7 +158,7 @@ protected:
 	virtual void ResetStage() = 0;
 	virtual void OnStageKeyPressed(WPARAM key) = 0;
 	virtual void UpdatePlayer(const UCHAR* keys, float dt) = 0;
-	virtual void UpdateStageCamera(const XMFLOAT3& aimPoint) = 0;
+	virtual void UpdateStageCamera(const XMFLOAT3& aimDirection) = 0;
 	XMFLOAT3 PlayerPosition() const;
 	virtual void GetAimRay(XMFLOAT3& origin, XMFLOAT3& direction) const = 0;
 	virtual void DrawStageObjects(const ComPtr<ID3D12GraphicsCommandList>&) {}
@@ -169,7 +169,7 @@ protected:
 	virtual float VictoryHoldTime() const { return config::stage::VictoryDelay; }
 	virtual void UpdateHudExtras(float, const XMFLOAT4&) {}
 
-	enum EHudSlot { AutoAttackHud, ShieldHud, ReticleHorizontalHud, ReticleVerticalHud, HealthHudBegin };
+	enum EHudSlot { AimHud, AutoAttackHud, ShieldHud, HealthHudBegin };
 	void UpdateStageView();
 	void SetHudPlane(size_t index, float x, float y, float width, float height, const XMFLOAT4& color);
 	XMFLOAT3 OnTerrain(float x, float z, float offset) const;
@@ -204,7 +204,6 @@ private:
 	std::vector<std::unique_ptr<CUI>> m_vHud;
 	UCHAR m_keys[256]{};
 	const PlayerRules m_rules;
-	XMFLOAT3 m_reticleAimPoint{};
 
 	EGameStage m_stage = EGameStage::HelicopterTargets;
 	EStageState m_state = EStageState::Playing;
@@ -243,12 +242,12 @@ private:
 	void ResetStage() override;
 	void OnStageKeyPressed(WPARAM key) override;
 	void UpdatePlayer(const UCHAR* keys, float dt) override;
-	void UpdateStageCamera(const XMFLOAT3& aimPoint) override;
+	void UpdateStageCamera(const XMFLOAT3& aimDirection) override;
 	CDamageableObject& PlayerObject() const override;
 	void GetAimRay(XMFLOAT3& origin, XMFLOAT3& direction) const override;
 	bool TryAutoAim(const UCHAR* keys, float dt, XMFLOAT3& origin, XMFLOAT3& direction) override;
 	bool IsPlayerProtected() const override { return m_bShield; }
-	void UpdateHudExtras(float aspectScale, const XMFLOAT4& lockColor) override;
+	void UpdateHudExtras(float aspectScale, const XMFLOAT4& reticleColor) override;
 
 	CTankPlayer* m_pPlayer = nullptr; // m_vObjects가 소유한다.
 	std::vector<Obstacle> m_vObstacles;

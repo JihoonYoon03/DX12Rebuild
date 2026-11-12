@@ -160,8 +160,10 @@ namespace config::stage
 	constexpr float TargetHomingHitRadius = 4.0f;
 	constexpr float LockDistancePenalty = .0008f;
 	constexpr float LockTerrainClearance = .05f;
-	constexpr float ReticleRayDistance = 220.0f;
-	constexpr float ReticleMinRayFraction = .05f;
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	constexpr float ReticleSize = .08f;
+	//-----------------------------------
 
 	static_assert(TerrainRaySampleSpacing > 0.0f);
 	static_assert(Level2TankLanes > 0 && ObstacleScaleVariants > 0 && ObstacleYawVariants > 0);

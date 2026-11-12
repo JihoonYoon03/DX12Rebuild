@@ -153,7 +153,7 @@ HRESULT CShader::CreateCBV(
 
 HRESULT CShader::CreateRootSignature(const ComPtr<ID3D12Device>& cpDevice)
 {
-	D3D12_ROOT_PARAMETER rootParams[5];
+	D3D12_ROOT_PARAMETER rootParams[6];
 
 	//World, WorldInv
 	rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
@@ -208,6 +208,19 @@ HRESULT CShader::CreateRootSignature(const ComPtr<ID3D12Device>& cpDevice)
 	rootParams[4].DescriptorTable.pDescriptorRanges = &descRange2;
 	rootParams[4].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
+	//마스크용
+	D3D12_DESCRIPTOR_RANGE descRange3;
+	descRange3.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+	descRange3.NumDescriptors = 1;
+	descRange3.BaseShaderRegister = 2;
+	descRange3.RegisterSpace = 0;
+	descRange3.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	rootParams[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParams[5].DescriptorTable.NumDescriptorRanges = 1;
+	rootParams[5].DescriptorTable.pDescriptorRanges = &descRange3;
+	rootParams[5].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
 	//Static Sampler
 	D3D12_STATIC_SAMPLER_DESC samplerDesc;
 	samplerDesc.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
@@ -226,7 +239,7 @@ HRESULT CShader::CreateRootSignature(const ComPtr<ID3D12Device>& cpDevice)
 
 	D3D12_ROOT_SIGNATURE_DESC rootSigDesc;
 	::ZeroMemory(&rootSigDesc, sizeof(D3D12_ROOT_SIGNATURE_DESC));
-	rootSigDesc.NumParameters = 5;
+	rootSigDesc.NumParameters = 6;
 	rootSigDesc.pParameters = rootParams;
 	rootSigDesc.NumStaticSamplers = 1;
 	rootSigDesc.pStaticSamplers = &samplerDesc;
@@ -324,17 +337,6 @@ HRESULT CShader::CreateShader(
 	);
 	if (FAILED(hr)) { OutputDebugString(L"Unlit PSO Creation Failed\n"); return hr; }
 
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
-	const auto depthState = psoDesc.DepthStencilState;
-	psoDesc.DepthStencilState.DepthEnable = FALSE;
-	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	hr = cpDevice->CreateGraphicsPipelineState(&psoDesc,
-		IID_PPV_ARGS(m_cpPipelineState[ERenderState::UI].ReleaseAndGetAddressOf()));
-	if (FAILED(hr)) return hr;
-	psoDesc.DepthStencilState = depthState;
-	//-----------------------------------
-
 	//NormalMap PSO
 	hr = CompileShaderFromFile(cpPS, L"Shaders.hlsl", "PSNormalMap", "ps_5_0");
 	if (FAILED(hr)) return hr;
@@ -364,6 +366,41 @@ HRESULT CShader::CreateShader(
 		IID_PPV_ARGS(m_cpPipelineState[ERenderState::Skybox].ReleaseAndGetAddressOf())
 	);
 	if (FAILED(hr)) { OutputDebugString(L"Sky PSO Creation Failed\n"); return hr; }
+
+	//UI PSO
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	hr = CompileShaderFromFile(cpVS, L"Shaders.hlsl", "VSMain", "vs_5_0");
+	if (FAILED(hr)) return hr;
+	psoDesc.VS.BytecodeLength = cpVS->GetBufferSize();
+	psoDesc.VS.pShaderBytecode = cpVS->GetBufferPointer();
+	psoDesc.DepthStencilState.DepthEnable = FALSE;
+	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	auto& uiBlend = psoDesc.BlendState.RenderTarget[0];
+	uiBlend.BlendEnable = TRUE;
+	uiBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	uiBlend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	uiBlend.BlendOp = D3D12_BLEND_OP_ADD;
+	uiBlend.SrcBlendAlpha = D3D12_BLEND_ONE;
+	uiBlend.DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+	uiBlend.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	//-----------------------------------
+	hr = CompileShaderFromFile(cpPS, L"Shaders.hlsl", "PSUI", "ps_5_0");
+	if (FAILED(hr)) return hr;
+	psoDesc.PS.BytecodeLength = cpPS->GetBufferSize();
+	psoDesc.PS.pShaderBytecode = cpPS->GetBufferPointer();
+	hr = cpDevice->CreateGraphicsPipelineState(&psoDesc,
+		IID_PPV_ARGS(m_cpPipelineState[ERenderState::UI].ReleaseAndGetAddressOf()));
+	if (FAILED(hr)) return hr;
+
+	//MaskedUI PSO
+	hr = CompileShaderFromFile(cpPS, L"Shaders.hlsl", "PSMaskedUI", "ps_5_0");
+	if (FAILED(hr)) return hr;
+	psoDesc.PS.BytecodeLength = cpPS->GetBufferSize();
+	psoDesc.PS.pShaderBytecode = cpPS->GetBufferPointer();
+	hr = cpDevice->CreateGraphicsPipelineState(&psoDesc,
+		IID_PPV_ARGS(m_cpPipelineState[ERenderState::MaskedUI].ReleaseAndGetAddressOf()));
+	if (FAILED(hr)) return hr;
 
 	return S_OK;
 }

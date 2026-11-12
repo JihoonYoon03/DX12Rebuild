@@ -10,6 +10,7 @@ enum class ERenderState
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
 	UI,
+	MaskedUI,
 	//-----------------------------------
 	NormalMap,
 	NumStates //상태 종류 카운트
@@ -20,6 +21,8 @@ struct CB_SceneInfo
 	XMFLOAT4X4 view;
 	XMFLOAT4X4 proj;
 	XMFLOAT4X4 viewSky;
+	//임시로 이렇게 설정함. 실제 시간값 아님에 주의
+	float fTime = 0.0f;
 };
 
 //Root Signature와 Shader Bytecode 지정 필요

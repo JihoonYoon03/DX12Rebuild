@@ -81,7 +81,11 @@ HRESULT CTexture::CreateTexture(
 	resBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 	resBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
 	resBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
-	cpCommandList->ResourceBarrier(1, &resBarrier);
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	// WIC 로더는 이미 COPY_DEST 상태로 리소스를 생성한다.
+	if (!isWIC) cpCommandList->ResourceBarrier(1, &resBarrier);
+	//-----------------------------------
 
 	//CPU데이터를 UPLOAD 버퍼에 배치 -> 텍스처 복사 명령 기록
 	UINT64 result = UpdateSubresources(

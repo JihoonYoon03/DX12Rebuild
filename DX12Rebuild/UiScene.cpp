@@ -4,13 +4,14 @@
 #include "UiScene.h"
 #include "GameFramework.h"
 #include "Shader.h"
+#include "Texture.h"
 
 namespace
 {
-	class COpenStageSelectButton : public CUI
+	class COpenStageSelectButton : public CMaskedUI
 	{
 	public:
-		using CUI::CUI;
+		using CMaskedUI::CMaskedUI;
 
 		bool OnClick(CGameFramework& framework) override
 		{
@@ -34,8 +35,8 @@ namespace
 	class CStageButton final : public CUI
 	{
 	public:
-		CStageButton(const XMFLOAT4& bounds, const XMFLOAT4& color, EGameStage stage)
-			: CUI(bounds, color), m_stage(stage)
+		CStageButton(const XMFLOAT4& bounds, const XMFLOAT4& color, EGameStage stage, const wchar_t* textureFile)
+			: CUI(bounds, color, textureFile), m_stage(stage)
 		{
 		}
 
@@ -61,10 +62,16 @@ namespace
 		}
 	};
 
-	class CTutorialReturnButton final : public COpenStageSelectButton
+	class CTutorialReturnButton final : public CUI
 	{
 	public:
-		using COpenStageSelectButton::COpenStageSelectButton;
+		using CUI::CUI;
+
+		bool OnClick(CGameFramework& framework) override
+		{
+			framework.OpenStageSelect();
+			return true;
+		}
 
 		bool HitTest(float, float) const override { return true; }
 	};
@@ -73,8 +80,8 @@ namespace
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-CUI::CUI(const XMFLOAT4& bounds, const XMFLOAT4& color)
-	: m_color(color)
+CUI::CUI(const XMFLOAT4& bounds, const XMFLOAT4& color, const wchar_t* textureFile)
+	: m_color(color), m_textureFile(textureFile ? textureFile : L"")
 {
 	SetPosition((bounds.x + bounds.z) * 0.5f - 0.5f, 0.5f - (bounds.y + bounds.w) * 0.5f, 0.5f);
 	SetScale(bounds.z - bounds.x, bounds.w - bounds.y, 1.0f);
@@ -83,7 +90,8 @@ CUI::CUI(const XMFLOAT4& bounds, const XMFLOAT4& color)
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-HRESULT CUI::BuildMesh(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+HRESULT CUI::BuildMesh(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+	CDescHeapAllocator* allocator)
 {
 	MeshData<VertexTexcoord> meshData;
 	meshData.vertices =
@@ -94,7 +102,30 @@ HRESULT CUI::BuildMesh(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12
 		{ { -0.5f, -0.5f, 0.0f }, { 1, 1, 1, 1 }, { 0.0f, 1.0f } }
 	};
 	meshData.indices = { 0, 1, 2, 0, 2, 3 };
-	return m_mesh.CreateBuffer(cpDevice, cpCommandList, meshData);
+	HRESULT hr = m_mesh.CreateBuffer(cpDevice, cpCommandList, meshData);
+	if (FAILED(hr)) return hr;
+	if (m_textureFile.empty()) return S_OK;
+	if (!allocator) return E_INVALIDARG;
+
+	auto texture = std::make_shared<CTexture>();
+	hr = texture->CreateTexture(*allocator, cpDevice, cpCommandList, m_textureFile.c_str(), true);
+	if (FAILED(hr))
+	{
+		OutputDebugStringW(m_textureFile.c_str());
+		OutputDebugStringW(L": UI texture load failed\n");
+		return hr;
+	}
+	return BindTexture(texture);
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+HRESULT CUI::BindTexture(std::shared_ptr<CTexture>& texture)
+{
+	if (!texture) return E_INVALIDARG;
+	m_spUITexture = texture;
+	return S_OK;
 }
 //-----------------------------------
 
@@ -103,6 +134,7 @@ HRESULT CUI::BuildMesh(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12
 void CUI::ReleaseUploadBuffer()
 {
 	m_mesh.ReleaseUploadBuffer();
+	if (m_spUITexture) m_spUITexture->ReleaseUploadBuffer();
 }
 //-----------------------------------
 
@@ -116,6 +148,12 @@ void CUI::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
 	const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(world);
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
+
+	if (m_spUITexture)
+	{
+		cpCommandList->SetGraphicsRootDescriptorTable(3, m_spUITexture->getGPUDescHandle());
+	}
+
 	m_mesh.DrawMesh(cpCommandList);
 }
 //-----------------------------------
@@ -149,7 +187,7 @@ HRESULT CUiScene::BuildObjects(
 	BuildUi();
 	for (const auto& upUi : m_vUiObjects)
 	{
-		const HRESULT hr = upUi->BuildMesh(cpDevice, cpCommandList);
+		const HRESULT hr = upUi->BuildMesh(cpDevice, cpCommandList, DescHeapAllocator);
 		if (FAILED(hr)) return hr;
 	}
 	return S_OK;
@@ -196,21 +234,30 @@ void CUiScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	//---------------------------------------
 	//[직접 작성한 코드]
 	m_spShader->SetGraphicsRootSignature(cpCommandList);
+	//---------------------------------------
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
 	m_spShader->SetPipelineState(cpCommandList, ERenderState::UI);
 	//-----------------------------------
-	//---------------------------------------
 	const XMFLOAT4X4 view = Matrix4x4::Identity();
 	const XMFLOAT4X4 projection = Matrix4x4::Transpose(Matrix4x4::OrthographicLH(m_fViewWidth, m_fViewHeight, 0.0f, 1.0f));
 	const XMFLOAT4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
 
-	const CB_SceneInfo sceneInfo{ view, projection, view };
+	//---------------------------------------
+	//[직접 작성한 코드]
+	//실제 시간값이 아직 아님에 주의
+	m_fTime += 0.001f;
+	//---------------------------------------
+	const CB_SceneInfo sceneInfo{ view, projection, view, m_fTime };
 	m_spShader->SetSceneMatrix(cpCommandList, sceneInfo);
 	const float tiling = 1.0f;
 	cpCommandList->SetGraphicsRoot32BitConstants(1, 1, &tiling, 4);
 	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &color, 0);
-	for (const auto& upUi : m_vUiObjects) upUi->DrawObject(cpCommandList);
+	for (const auto& upUi : m_vUiObjects)
+	{
+		m_spShader->SetPipelineState(cpCommandList, upUi->GetRenderState());
+		upUi->DrawObject(cpCommandList);
+	}
 }
 //-----------------------------------
 
@@ -226,12 +273,14 @@ void CUiScene::AddUi(std::unique_ptr<CUI> upUi)
 //[아래 코드는 AI로 구현됨]
 void CMainMenuScene::BuildUi()
 {
-	const XMFLOAT4 title{ .20f, .31f, .80f, .41f };
-	const XMFLOAT4 play{ .38f, .45f, .62f, .63f };
-	const XMFLOAT4 hint{ .36f, .68f, .64f, .75f };
-	AddUi(std::make_unique<CUI>(title, XMFLOAT4{ .65f, .88f, 1.0f, 1.0f }));
-	AddUi(std::make_unique<COpenStageSelectButton>(play, XMFLOAT4{ .12f, .30f, .46f, 1.0f }));
-	AddUi(std::make_unique<CUI>(hint, XMFLOAT4{ .48f, .66f, .76f, 1.0f }));
+	const XMFLOAT4 white{ 1, 1, 1, 1 };
+	const float titleHeight = .60f * 513.0f / 3300.0f;
+	const float playHeight = .24f * 273.0f / 660.0f;
+	const XMFLOAT4 title{ .20f, .36f - titleHeight * .5f, .80f, .36f + titleHeight * .5f };
+	const XMFLOAT4 play{ .38f, .54f - playHeight * .5f, .62f, .54f + playHeight * .5f };
+	AddUi(std::make_unique<CUI>(title, white, L"../Resources/UI/Title.png"));
+	AddUi(std::make_unique<COpenStageSelectButton>(play, white,
+		L"../Resources/UI/PlayTex.png", L"../Resources/UI/PlayMask2.png"));
 }
 //-----------------------------------
 
@@ -239,23 +288,38 @@ void CMainMenuScene::BuildUi()
 //[아래 코드는 AI로 구현됨]
 void CStageSelectScene::BuildUi()
 {
-	AddUi(std::make_unique<CUI>(XMFLOAT4{ .35f, .20f, .65f, .27f }, XMFLOAT4{ .65f, .88f, 1.0f, 1.0f }));
+	const XMFLOAT4 white{ 1, 1, 1, 1 };
+	const float headingHeight = .30f * 463.0f / 1908.0f;
+	AddUi(std::make_unique<CUI>(XMFLOAT4{ .35f, .235f - headingHeight * .5f, .65f, .235f + headingHeight * .5f },
+		white, L"../Resources/UI/SelectStage.png"));
 
 	constexpr float firstCenter = .33188919f;
 	constexpr float spacing = .076414005f;
+	// PNG 원본 크기에 공통 배율을 적용해 글자와 이미지의 비율을 보존한다.
+	const XMFLOAT2 imageSizes[]
+	{
+		{ 1827, 463 }, // Howtoplay
+		{ 1827, 276 }, // TargetPractice
+		{ 1827, 463 }, // TankBattle
+		{ 2194, 463 }, // HelicopterBattle
+		{ 1549, 463 }, // StartGame
+		{ 690, 463 }   // Exit
+	};
+	constexpr float imageScale = .07f / 463.0f;
 	XMFLOAT4 buttons[6];
 	for (int i = 0; i < 6; ++i)
 	{
 		const float y = firstCenter + i * spacing;
-		buttons[i] = { .36f, y - .029f, .64f, y + .029f };
+		const float halfWidth = imageSizes[i].x * imageScale * .5f;
+		const float halfHeight = imageSizes[i].y * imageScale * .5f;
+		buttons[i] = { .5f - halfWidth, y - halfHeight, .5f + halfWidth, y + halfHeight };
 	}
-
-	AddUi(std::make_unique<COpenTutorialButton>(buttons[0], XMFLOAT4{ .16f, .37f, .46f, 1.0f }));
-	AddUi(std::make_unique<CStageButton>(buttons[1], XMFLOAT4{ .15f, .31f, .55f, 1.0f }, EGameStage::HelicopterTargets));
-	AddUi(std::make_unique<CStageButton>(buttons[2], XMFLOAT4{ .20f, .41f, .27f, 1.0f }, EGameStage::TankBattle));
-	AddUi(std::make_unique<CStageButton>(buttons[3], XMFLOAT4{ .37f, .26f, .48f, 1.0f }, EGameStage::HelicopterBattle));
-	AddUi(std::make_unique<CStageButton>(buttons[4], XMFLOAT4{ .15f, .45f, .48f, 1.0f }, EGameStage::HelicopterTargets));
-	AddUi(std::make_unique<CExitButton>(buttons[5], XMFLOAT4{ .49f, .22f, .23f, 1.0f }));
+	AddUi(std::make_unique<COpenTutorialButton>(buttons[0], white, L"../Resources/UI/Howtoplay.png"));
+	AddUi(std::make_unique<CStageButton>(buttons[1], white, EGameStage::HelicopterTargets, L"../Resources/UI/TargetPractice.png"));
+	AddUi(std::make_unique<CStageButton>(buttons[2], white, EGameStage::TankBattle, L"../Resources/UI/TankBattle.png"));
+	AddUi(std::make_unique<CStageButton>(buttons[3], white, EGameStage::HelicopterBattle, L"../Resources/UI/HelicopterBattle.png"));
+	AddUi(std::make_unique<CStageButton>(buttons[4], white, EGameStage::HelicopterTargets, L"../Resources/UI/StartGame.png"));
+	AddUi(std::make_unique<CExitButton>(buttons[5], white, L"../Resources/UI/Exit.png"));
 }
 //-----------------------------------
 
@@ -263,10 +327,16 @@ void CStageSelectScene::BuildUi()
 //[아래 코드는 AI로 구현됨]
 void CPortingTutorialScene::BuildUi()
 {
-	const XMFLOAT4 card{ .24f, .25f, .76f, .69f };
-	const XMFLOAT4 hint{ .37f, .72f, .63f, .79f };
-	AddUi(std::make_unique<CUI>(card, XMFLOAT4{ .13f, .29f, .39f, 1.0f }));
-	AddUi(std::make_unique<CTutorialReturnButton>(hint, XMFLOAT4{ .15f, .46f, .48f, 1.0f }));
+	const XMFLOAT4 white{ 1, 1, 1, 1 };
+	const float cardHeight = .82f;
+	const float cardWidth = cardHeight * 939.0f / 1814.0f;
+	const float returnWidth = .70f;
+	const float returnHeight = returnWidth * 174.0f / 1404.0f;
+	const XMFLOAT4 card{ .5f - cardWidth * .5f, .06f, .5f + cardWidth * .5f, .06f + cardHeight };
+	const XMFLOAT4 hint{ .5f - returnWidth * .5f, .94f - returnHeight * .5f,
+		.5f + returnWidth * .5f, .94f + returnHeight * .5f };
+	AddUi(std::make_unique<CUI>(card, white, L"../Resources/UI/Tutorial.png"));
+	AddUi(std::make_unique<CTutorialReturnButton>(hint, white, L"../Resources/UI/TutorialReturn.png"));
 }
 //-----------------------------------
 
@@ -275,5 +345,72 @@ void CPortingTutorialScene::BuildUi()
 void CPortingTutorialScene::KeyPressed(WPARAM key, CGameFramework& framework)
 {
 	if (key == VK_ESCAPE) framework.OpenStageSelect();
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+ERenderState CUI::GetRenderState() const
+{
+	return HasTexture() ? ERenderState::UI : ERenderState::Unlit;
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+CMaskedUI::CMaskedUI(const XMFLOAT4& bounds, const XMFLOAT4& color,
+	const wchar_t* textureFile, const wchar_t* maskTextureFile)
+	: CUI(bounds, color, textureFile), m_maskTextureFile(maskTextureFile ? maskTextureFile : L"")
+{
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+HRESULT CMaskedUI::BuildMesh(const ComPtr<ID3D12Device>& cpDevice,
+	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator* allocator)
+{
+	HRESULT hr = CUI::BuildMesh(cpDevice, cpCommandList, allocator);
+	if (FAILED(hr)) return hr;
+	if (m_spMaskTexture) return S_OK;
+	if (!allocator || m_maskTextureFile.empty()) return E_INVALIDARG;
+
+	auto mask = std::make_shared<CTexture>();
+	hr = mask->CreateTexture(*allocator, cpDevice, cpCommandList, m_maskTextureFile.c_str(), true);
+	if (FAILED(hr))
+	{
+		OutputDebugStringW(m_maskTextureFile.c_str());
+		OutputDebugStringW(L": UI mask texture load failed\n");
+		return hr;
+	}
+	SetMaskTexture(mask);
+	return S_OK;
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+ERenderState CMaskedUI::GetRenderState() const
+{
+	return ERenderState::MaskedUI;
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CMaskedUI::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	if (!HasTexture() || !m_spMaskTexture) return;
+	cpCommandList->SetGraphicsRootDescriptorTable(5, m_spMaskTexture->getGPUDescHandle());
+	CUI::DrawObject(cpCommandList);
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CMaskedUI::ReleaseUploadBuffer()
+{
+	CUI::ReleaseUploadBuffer();
+	if (m_spMaskTexture) m_spMaskTexture->ReleaseUploadBuffer();
 }
 //-----------------------------------

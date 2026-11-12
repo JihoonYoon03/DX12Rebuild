@@ -440,7 +440,9 @@ void CGameFramework::FrameAdvance()
 	RTVDescHandle.ptr += (m_nSwapChainBufferIndex * m_nRTVDescIncrementSize);
 	D3D12_CPU_DESCRIPTOR_HANDLE DSVDescHandle = m_cpDSVDescHeap->GetCPUDescriptorHandleForHeapStart();
 	m_cpCommandList->OMSetRenderTargets(1, &RTVDescHandle, TRUE, &DSVDescHandle);
-	m_cpCommandList->ClearRenderTargetView(RTVDescHandle, Colors::CadetBlue, 0, NULL);
+
+	float clearColor[4] = { 110 / 255.0f, 95 / 255.0f, 70 / 255.0f, 1.0f};
+	m_cpCommandList->ClearRenderTargetView(RTVDescHandle, clearColor, 0, NULL);
 	m_cpCommandList->ClearDepthStencilView(DSVDescHandle, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, NULL);
 
 	//SRV Desc Heap 설정(모든 텍스쳐 통합)
@@ -640,7 +642,7 @@ HRESULT CGameFramework::BuildUi()
 
 	for (const auto& spUiScene : { m_spMainMenuScene, m_spStageSelectScene, m_spTutorialScene })
 	{
-		hr = spUiScene->BuildObjects(m_cpDevice, m_cpCommandList);
+		hr = spUiScene->BuildObjects(m_cpDevice, m_cpCommandList, m_upDescHeapAllocator.get());
 		if (FAILED(hr)) return hr;
 	}
 	return S_OK;
