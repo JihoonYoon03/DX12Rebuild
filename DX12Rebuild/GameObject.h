@@ -148,8 +148,9 @@ public:
 	void SetVisible(bool visible) { m_bVisible = visible; }
 	bool IsVisible() const { return m_bVisible && IsAlive(); }
 	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
-	XMFLOAT3 GetAimPoint() const;
-	XMFLOAT3 GetHitPoint() const;
+	virtual XMFLOAT3 GetAimPoint() const;
+	virtual XMFLOAT3 GetHitPoint() const;
+	virtual float GetHitFraction(const XMFLOAT3& start, const XMFLOAT3& end, bool homing) const;
 	float GetHitRadius(bool homing) const { return homing ? m_fHomingHitRadius : m_fHitRadius; }
 	float GetMarkerHeight() const { return m_fMarkerHeight; }
 	virtual void Reload() {}

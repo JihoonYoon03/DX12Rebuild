@@ -412,6 +412,29 @@ namespace Collision
 		return result;
 	}
 
+	inline BoundingOrientedBox TransformOrientedBox(const BoundingBox& box, const XMFLOAT4X4& matrix)
+	{
+		BoundingOrientedBox local;
+		BoundingOrientedBox::CreateFromBoundingBox(local, box);
+		BoundingOrientedBox result;
+		local.Transform(result, XMLoadFloat4x4(&matrix));
+		return result;
+	}
+
+	// 선분 시작점 내부는 즉시 명중, 선분 밖 교차 또는 미교차는 2를 반환한다.
+	inline float SegmentBoxFraction(const XMFLOAT3& start, const XMFLOAT3& end, const BoundingOrientedBox& box)
+	{
+		const XMVECTOR origin = XMLoadFloat3(&start);
+		if (box.Contains(origin) != DISJOINT) return 0.0f;
+		const XMVECTOR step = XMVectorSubtract(XMLoadFloat3(&end), origin);
+		const float length = XMVectorGetX(XMVector3Length(step));
+		if (length <= 0.000001f) return 2.0f;
+		float distance;
+		if (!box.Intersects(origin, XMVectorScale(step, 1.0f / length), distance) || distance > length)
+			return 2.0f;
+		return distance / length;
+	}
+
 	inline BoundingOrientedBox MakeFootprint(const BoundingBox& box, const Transform& pose)
 	{
 		const BoundingOrientedBox local(

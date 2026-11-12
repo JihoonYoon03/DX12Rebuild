@@ -66,7 +66,7 @@ CTankPlayer::~CTankPlayer()
 void CTankPlayer::SetModel(std::shared_ptr<CModel>& model)
 {
 	PrepareModel(model);
-	m_spModel = model;
+	UsePreparedTankModel(model);
 }
 //-----------------------------------
 
@@ -304,6 +304,34 @@ void CTankPlayer::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandL
 void CTankPlayer::UsePreparedTankModel(const std::shared_ptr<CModel>& spModel)
 {
 	m_spModel = spModel;
+	m_hitBounds = spModel ? spModel->GetModelBounds() : std::nullopt;
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+XMFLOAT3 CTankPlayer::GetAimPoint() const
+{
+	return GetHitPoint();
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+XMFLOAT3 CTankPlayer::GetHitPoint() const
+{
+	if (!m_hitBounds) return CDamageableObject::GetHitPoint();
+	return Vector3::TransformCoord(m_hitBounds->Center, m_Transform.getMatrix());
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+float CTankPlayer::GetHitFraction(const XMFLOAT3& start, const XMFLOAT3& end, bool homing) const
+{
+	if (!m_hitBounds) return CDamageableObject::GetHitFraction(start, end, homing);
+	const BoundingOrientedBox bounds = Collision::TransformOrientedBox(*m_hitBounds, m_Transform.getMatrix());
+	return Collision::SegmentBoxFraction(start, end, bounds);
 }
 //-----------------------------------
 

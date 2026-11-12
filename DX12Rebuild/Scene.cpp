@@ -100,7 +100,7 @@ void CScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	sceneInfo.viewSky = m_spCamera->GetView();
 	sceneInfo.viewSky._41 = sceneInfo.viewSky._42 = sceneInfo.viewSky._43 = 0.0f;
 	sceneInfo.viewSky = Matrix4x4::Transpose(sceneInfo.viewSky);
-	m_spShader->SetSceneMatrix(cpCommandList, sceneInfo);
+	m_spShader->SetSceneData(cpCommandList, sceneInfo);
 
 	for (auto& upObject : m_vObjects)
 	{
@@ -265,7 +265,7 @@ void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	sceneInfo.viewSky = m_spCamera->GetView();
 	sceneInfo.viewSky._41 = sceneInfo.viewSky._42 = sceneInfo.viewSky._43 = 0.0f;
 	sceneInfo.viewSky = Matrix4x4::Transpose(sceneInfo.viewSky);
-	m_spShader->SetSceneMatrix(cpCommandList, sceneInfo);
+	m_spShader->SetSceneData(cpCommandList, sceneInfo);
 
 	//Skybox
 	m_spShader->SetPipelineState(cpCommandList, ERenderState::Skybox);
@@ -362,7 +362,7 @@ void CGameScene::DrawStageHud(const ComPtr<ID3D12GraphicsCommandList>& cpCommand
 	const XMFLOAT4X4 projection = m_spCamera->GetProj();
 	const XMFLOAT4X4 identity = Matrix4x4::Identity();
 	const CB_SceneInfo sceneInfo{ identity, identity, identity };
-	m_spShader->SetSceneMatrix(cpCommandList, sceneInfo, true);
+	m_spShader->SetSceneData(cpCommandList, sceneInfo, true);
 
 	const float aspectScale = projection._11 / projection._22;
 	const XMFLOAT4 white{ 1, 1, 1, 1 };
@@ -579,8 +579,7 @@ void CGameScene::UpdateProjectiles(float dt)
 		int hitEnemy = -1;
 		if (shot.flight.enemyOwned)
 		{
-			const float hit = Collision::SegmentSphereFraction(shot.Position(), end, PlayerAimPoint(),
-				PlayerObject().GetHitRadius(false));
+			const float hit = PlayerObject().GetHitFraction(shot.Position(), end, false);
 			if (hit <= 1.0f && hit < closest)
 			{
 				closest = hit;
@@ -601,9 +600,7 @@ void CGameScene::UpdateProjectiles(float dt)
 			{
 				auto& enemy = *m_vEnemies[i];
 				if (!enemy.IsAlive()) continue;
-				const float radius = enemy.GetHitRadius(shot.flight.target >= 0);
-				const XMFLOAT3 center = enemy.GetHitPoint();
-				const float hit = Collision::SegmentSphereFraction(shot.Position(), end, center, radius);
+				const float hit = enemy.GetHitFraction(shot.Position(), end, shot.flight.target >= 0);
 				if (hit <= 1.0f && hit < closest)
 				{
 					closest = hit;

@@ -479,3 +479,11 @@ XMFLOAT3 CDamageableObject::GetHitPoint() const
 	return point;
 }
 //-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+float CDamageableObject::GetHitFraction(const XMFLOAT3& start, const XMFLOAT3& end, bool homing) const
+{
+	return Collision::SegmentSphereFraction(start, end, GetHitPoint(), GetHitRadius(homing));
+}
+//-----------------------------------

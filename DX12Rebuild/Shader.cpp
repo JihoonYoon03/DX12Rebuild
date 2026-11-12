@@ -437,7 +437,7 @@ void CShader::SetPipelineState(const ComPtr<ID3D12GraphicsCommandList>& cpComman
 	}
 }
 
-void CShader::SetSceneMatrix(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const CB_SceneInfo& data, bool bHud)
+void CShader::SetSceneData(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const CB_SceneInfo& data, bool bHud)
 {
 	const UINT bufferSize = (sizeof(CB_SceneInfo) + 255) & ~255;
 	::memcpy(m_mappedSceneInfoBuffer + (bHud ? bufferSize : 0), &data, sizeof(CB_SceneInfo));

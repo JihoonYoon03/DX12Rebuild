@@ -249,7 +249,7 @@ void CUiScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	m_fTime += 0.001f;
 	//---------------------------------------
 	const CB_SceneInfo sceneInfo{ view, projection, view, m_fTime };
-	m_spShader->SetSceneMatrix(cpCommandList, sceneInfo);
+	m_spShader->SetSceneData(cpCommandList, sceneInfo);
 	const float tiling = 1.0f;
 	cpCommandList->SetGraphicsRoot32BitConstants(1, 1, &tiling, 4);
 	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &color, 0);

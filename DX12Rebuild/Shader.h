@@ -46,7 +46,6 @@ public:
 		CDescHeapAllocator& descHeapAllocator
 	);
 	
-	//아직 미완
 	HRESULT AddPipelineState(
 		const ComPtr<ID3D12Device>& cpDevice,
 		const ERenderState& state,
@@ -56,7 +55,7 @@ public:
 	void SetGraphicsRootSignature(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 	void SetPipelineState(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const ERenderState& state);
 	//View/Proj/ViewSky
-	void SetSceneMatrix(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const CB_SceneInfo& data, bool bHud = false);
+	void SetSceneData(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const CB_SceneInfo& data, bool bHud = false);
 
 protected:
 	ComPtr<ID3D12RootSignature>		m_cpRootSignature;

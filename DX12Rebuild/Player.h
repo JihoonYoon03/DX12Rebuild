@@ -42,6 +42,9 @@ public:
 	//[아래 코드는 AI로 구현됨]
 	static void PrepareModel(std::shared_ptr<CModel>& model);
 	void UsePreparedTankModel(const std::shared_ptr<CModel>& spModel);
+	XMFLOAT3 GetAimPoint() const override;
+	XMFLOAT3 GetHitPoint() const override;
+	float GetHitFraction(const XMFLOAT3& start, const XMFLOAT3& end, bool homing) const override;
 	XMFLOAT3 ApplyControls(DWORD dwInput, float deltaTime, const CTerrainObject* terrain);
 	void ResetStagePose(const XMFLOAT3& position, float yaw);
 	void FollowStageSlope(const CTerrainObject& terrain);
@@ -67,6 +70,11 @@ private:
 	float	m_fTurretTurnSpeed = XMConvertToRadians(config::stage::TurretManualSpeedDegrees);
 	float	m_fCannonPitch = 0.0f;
 	float	m_fCannonLiftSpeed = XMConvertToRadians(config::stage::CannonManualSpeedDegrees);
+	//-----------------------------------
+
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	std::optional<BoundingBox> m_hitBounds;
 	//-----------------------------------
 };
 
