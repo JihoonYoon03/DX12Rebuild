@@ -48,7 +48,10 @@ public:
 	);
 	void AddObject(std::unique_ptr<CModelObject>& upObject);
 	void AddObjects(std::unique_ptr<CModelObject>* upObjects, size_t size);
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
 	void AddObjects(std::vector<std::unique_ptr<CModelObject>>& upObjects);
+	//-----------------------------------
 
 	std::shared_ptr<CCamera> GetCamera() { return m_spCamera; }
 	void WindowResized(int width, int height);
@@ -100,9 +103,15 @@ public:
 	std::unique_ptr<CMesh> upBox;
 
 private:
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
 	HRESULT BuildVisuals(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	//-----------------------------------
 };
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 class CGameScene : public CScene
 {
 public:
@@ -208,7 +217,10 @@ private:
 	bool m_bFireRequested = false;
 	bool m_bLockPinned = false;
 };
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 class CTankGameScene final : public CGameScene
 {
 public:
@@ -245,7 +257,10 @@ private:
 	bool m_bAutoAttack = config::stage::TankAutoAttackAtStart;
 	bool m_bShield = false;
 };
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 class CHelicopterGameScene final : public CGameScene
 {
 public:

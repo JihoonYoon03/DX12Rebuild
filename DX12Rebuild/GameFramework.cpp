@@ -596,17 +596,26 @@ void CGameFramework::OpenStageSelect()
 {
 	m_upCurrentScene = m_spStageSelectScene;
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CGameFramework::OpenTutorial()
 {
 	m_upCurrentScene = m_spTutorialScene;
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CGameFramework::RequestExit()
 {
 	PostMessageW(m_hWnd, WM_CLOSE, 0, 0);
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CGameFramework::EnterStage(EGameStage stage)
 {
 	const auto& spScene = stage == EGameStage::TankBattle ? m_spTankScene : m_spHelicopterScene;
@@ -614,7 +623,10 @@ void CGameFramework::EnterStage(EGameStage stage)
 	spScene->BeginStage(stage);
 	m_upCurrentScene = spScene;
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 HRESULT CGameFramework::BuildUi()
 {
 	auto spUiShader = std::make_shared<CShader>();
@@ -633,13 +645,19 @@ HRESULT CGameFramework::BuildUi()
 	}
 	return S_OK;
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CGameFramework::ResizeUi()
 {
 	for (const auto& scene : { m_spMainMenuScene, m_spStageSelectScene, m_spTutorialScene })
 		scene->ResizeUi(m_nClientW, m_nClientH);
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CGameFramework::ProcessSceneMessage(HWND hWnd, UINT message, WPARAM key, LPARAM data)
 {
 	const auto scene = m_upCurrentScene.lock();

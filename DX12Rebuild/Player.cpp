@@ -68,7 +68,10 @@ void CTankPlayer::SetModel(std::shared_ptr<CModel>& model)
 	PrepareModel(model);
 	m_spModel = model;
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CTankPlayer::PrepareModel(std::shared_ptr<CModel>& model)
 {
 	//-----------------------------------
@@ -157,8 +160,8 @@ void CTankPlayer::ProcessInput(DWORD dwInput, float deltaTime, const CTerrainObj
 {
 	m_spCamera->Move(ApplyControls(dwInput, deltaTime, terrain));
 }
-
 //-----------------------------------
+
 
 //-----------------------------------
 //[직접 작성한 코드]
@@ -302,7 +305,10 @@ void CTankPlayer::UsePreparedTankModel(const std::shared_ptr<CModel>& spModel)
 {
 	m_spModel = spModel;
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CTankPlayer::ResetStagePose(const XMFLOAT3& position, float yaw)
 {
 	SetPosition(position);
@@ -311,7 +317,10 @@ void CTankPlayer::ResetStagePose(const XMFLOAT3& position, float yaw)
 	m_fCannonPitch = 0.0f;
 	m_umFrameTransform.clear();
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CTankPlayer::FollowStageSlope(const CTerrainObject& terrain)
 {
 	constexpr float halfWidth = config::stage::TankFootprintHalfWidth;
@@ -334,7 +343,10 @@ void CTankPlayer::FollowStageSlope(const CTerrainObject& terrain)
 	m_Transform.rotation.x = -std::atan2(frontMinusBack, 2.0f * halfLength);
 	m_Transform.rotation.z = std::atan2(rightMinusLeft, 2.0f * halfWidth);
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 XMFLOAT3 CTankPlayer::GetTurretHeading()
 {
 	const XMFLOAT4X4 turretWorld = Matrix4x4::Multiply(
@@ -343,7 +355,10 @@ XMFLOAT3 CTankPlayer::GetTurretHeading()
 	forward.y = 0.0f;
 	return Vector3::Normalize(forward);
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CTankPlayer::GetStageCannonRay(XMFLOAT3& origin, XMFLOAT3& direction)
 {
 	const XMFLOAT4X4 cannonWorld = Matrix4x4::Multiply(
@@ -354,7 +369,10 @@ void CTankPlayer::GetStageCannonRay(XMFLOAT3& origin, XMFLOAT3& direction)
 	direction = Vector3::Normalize(Vector3::TransformNormal({ 0.0f, -1.0f, 0.0f }, cannonWorld));
 	//-----------------------------------
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 bool CTankPlayer::AimStageCannon(const XMFLOAT3& target, float dt)
 {
 	XMFLOAT3 origin, direction;
@@ -391,7 +409,10 @@ CEnemyTank::CEnemyTank()
 		config::stage::TankHitRadius, config::stage::TankHitRadius, config::stage::EnemyTankAimHeight + 3.0f,
 		config::stage::TankAimHeight);
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 bool CEnemyTank::TryFire(const XMFLOAT3& target, float dt,
 	XMFLOAT3& origin, XMFLOAT3& direction)
 {

@@ -69,14 +69,20 @@ namespace
 		bool HitTest(float, float) const override { return true; }
 	};
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 CUI::CUI(const XMFLOAT4& bounds, const XMFLOAT4& color)
 	: m_color(color)
 {
 	SetPosition((bounds.x + bounds.z) * 0.5f - 0.5f, 0.5f - (bounds.y + bounds.w) * 0.5f, 0.5f);
 	SetScale(bounds.z - bounds.x, bounds.w - bounds.y, 1.0f);
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 HRESULT CUI::BuildMesh(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	MeshData<VertexTexcoord> meshData;
@@ -90,12 +96,18 @@ HRESULT CUI::BuildMesh(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12
 	meshData.indices = { 0, 1, 2, 0, 2, 3 };
 	return m_mesh.CreateBuffer(cpDevice, cpCommandList, meshData);
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CUI::ReleaseUploadBuffer()
 {
 	m_mesh.ReleaseUploadBuffer();
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CUI::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	if (!m_bVisible) return;
@@ -106,19 +118,28 @@ void CUI::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
 	m_mesh.DrawMesh(cpCommandList);
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 bool CUI::HitTest(float x, float y) const
 {
 	const XMFLOAT4X4 inverse = Matrix4x4::Inverse(m_Transform.getMatrix());
 	const XMFLOAT3 local = Vector3::TransformCoord({ x, y, m_Transform.position.z }, inverse);
 	return m_bVisible && std::abs(local.x) <= 0.5f && std::abs(local.y) <= 0.5f;
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 CUiScene::CUiScene(const std::shared_ptr<CShader>& spShader)
 {
 	m_spShader = spShader;
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 HRESULT CUiScene::BuildObjects(
 	ComPtr<ID3D12Device>& cpDevice,
 	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
@@ -133,12 +154,18 @@ HRESULT CUiScene::BuildObjects(
 	}
 	return S_OK;
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CUiScene::ReleaseUploadBuffers()
 {
 	for (const auto& upUi : m_vUiObjects) upUi->ReleaseUploadBuffer();
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CUiScene::ResizeUi(int width, int height)
 {
 	if (width <= 0 || height <= 0) return;
@@ -147,7 +174,10 @@ void CUiScene::ResizeUi(int width, int height)
 	m_fViewWidth = static_cast<float>(width) / m_fCanvasPixels;
 	m_fViewHeight = static_cast<float>(height) / m_fCanvasPixels;
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CUiScene::Click(int x, int y, CGameFramework& framework)
 {
 	const float uiX = static_cast<float>(x) / m_fCanvasPixels - m_fViewWidth * 0.5f;
@@ -157,7 +187,10 @@ void CUiScene::Click(int x, int y, CGameFramework& framework)
 		if (upUi->HitTest(uiX, uiY) && upUi->OnClick(framework)) return;
 	}
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CUiScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	//---------------------------------------
@@ -179,12 +212,18 @@ void CUiScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &color, 0);
 	for (const auto& upUi : m_vUiObjects) upUi->DrawObject(cpCommandList);
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CUiScene::AddUi(std::unique_ptr<CUI> upUi)
 {
 	m_vUiObjects.push_back(std::move(upUi));
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CMainMenuScene::BuildUi()
 {
 	const XMFLOAT4 title{ .20f, .31f, .80f, .41f };
@@ -194,7 +233,10 @@ void CMainMenuScene::BuildUi()
 	AddUi(std::make_unique<COpenStageSelectButton>(play, XMFLOAT4{ .12f, .30f, .46f, 1.0f }));
 	AddUi(std::make_unique<CUI>(hint, XMFLOAT4{ .48f, .66f, .76f, 1.0f }));
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CStageSelectScene::BuildUi()
 {
 	AddUi(std::make_unique<CUI>(XMFLOAT4{ .35f, .20f, .65f, .27f }, XMFLOAT4{ .65f, .88f, 1.0f, 1.0f }));
@@ -215,7 +257,10 @@ void CStageSelectScene::BuildUi()
 	AddUi(std::make_unique<CStageButton>(buttons[4], XMFLOAT4{ .15f, .45f, .48f, 1.0f }, EGameStage::HelicopterTargets));
 	AddUi(std::make_unique<CExitButton>(buttons[5], XMFLOAT4{ .49f, .22f, .23f, 1.0f }));
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CPortingTutorialScene::BuildUi()
 {
 	const XMFLOAT4 card{ .24f, .25f, .76f, .69f };

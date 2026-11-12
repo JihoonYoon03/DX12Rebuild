@@ -64,8 +64,6 @@ CModelObject::CModelObject()
 CModelObject::~CModelObject()
 {}
 
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
 void CModelObject::SetFrameTransform(const std::string& name, const Transform& transform)
 {
 	SetFrameTransform(name, transform.getMatrix());
@@ -78,7 +76,6 @@ void CModelObject::SetFrameTransform(const std::string& name, const XMFLOAT4X4& 
 
 	m_umFrameTransform[index] = transform;
 }
-//-----------------------------------
 
 void CModelObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
@@ -371,7 +368,10 @@ CMeshObject::CMeshObject(CMesh& mesh, const XMFLOAT4& color)
 	: m_pMesh(&mesh), m_color(color)
 {
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CMeshObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	const XMFLOAT4X4 world = Matrix4x4::Transpose(m_Transform.getMatrix());
@@ -381,7 +381,10 @@ void CMeshObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandL
 	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &m_color, 0);
 	m_pMesh->DrawMesh(cpCommandList);
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CDamageableObject::SetCombatInfo(int health, float aimHeight, float hitRadius, float homingHitRadius, float markerHeight, float hitHeight)
 {
 	m_nHealth = health;
@@ -391,14 +394,20 @@ void CDamageableObject::SetCombatInfo(int health, float aimHeight, float hitRadi
 	m_fHomingHitRadius = homingHitRadius;
 	m_fMarkerHeight = markerHeight;
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 XMFLOAT3 CDamageableObject::GetAimPoint() const
 {
 	XMFLOAT3 point = GetPosition();
 	point.y += m_fAimHeight;
 	return point;
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 CTargetObject::CTargetObject(CMesh& mesh)
 	: m_visual(mesh, { .86f, .18f, .16f, 1 })
 {
@@ -406,21 +415,30 @@ CTargetObject::CTargetObject(CMesh& mesh)
 	SetCombatInfo(config::stage::TargetHealth, 0.0f, config::stage::TargetHitRadius,
 		config::stage::TargetHomingHitRadius, 1.3f);
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CTargetObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	if (!IsVisible()) return;
 	m_visual.SetPosition(GetPosition());
 	m_visual.DrawObject(cpCommandList);
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 CProjectileObject::CProjectileObject(CMesh& mesh, const XMFLOAT3& position, const ProjectileData& data)
 	: CMeshObject(mesh, data.enemyOwned ? XMFLOAT4{ 1, .35f, .10f, 1 } : XMFLOAT4{ 1, .9f, .36f, 1 }), flight(data)
 {
 	SetPosition(position);
 	SetScale(.38f);
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 float CProjectileObject::AdvanceTime(float dt, const std::optional<XMFLOAT3>& targetPoint)
 {
 	const float step = (std::min)(dt, flight.lifetime);
@@ -434,7 +452,10 @@ float CProjectileObject::AdvanceTime(float dt, const std::optional<XMFLOAT3>& ta
 	}
 	return step;
 }
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 XMFLOAT3 CProjectileObject::NextPosition(float dt) const
 {
 	return Vector3::Add(GetPosition(), flight.direction, flight.speed * dt);

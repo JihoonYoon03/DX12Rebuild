@@ -25,15 +25,8 @@ public:
 	void SetPosition(const float x, const float y, const float z);
 	void SetPosition(const XMFLOAT3& position);
 
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
 	XMFLOAT3 GetPosition() const { return m_Transform.position; }
-	//-----------------------------------
-
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
 	const Transform& GetTransform() const { return m_Transform; }
-	//-----------------------------------
 
 	virtual void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) = 0;
 
@@ -55,10 +48,7 @@ public:
 	virtual void SetModel(std::shared_ptr<CModel>& model) { m_spModel = model; }
 
 	void SetFrameTransform(const std::string& name, const Transform& transform);
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
 	void SetFrameTransform(const std::string& name, const XMFLOAT4X4& transform);
-	//-----------------------------------
 
 	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 
@@ -111,8 +101,6 @@ private:
 // SkyboxObject
 // 
 // -------------------------------------------
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
 class CSkyboxObject : public CObjectBase
 {
 public:
@@ -146,7 +134,10 @@ protected:
 	CMesh* m_pMesh; // 공용 메시를 참조하며 소유하지 않는다.
 	XMFLOAT4 m_color;
 };
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 class CDamageableObject : public CModelObject
 {
 public:
@@ -173,7 +164,10 @@ private:
 	float m_fHomingHitRadius = 0.0f;
 	float m_fMarkerHeight = 0.0f;
 };
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 class CTargetObject final : public CDamageableObject
 {
 public:
@@ -183,7 +177,10 @@ public:
 private:
 	CMeshObject m_visual;
 };
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 struct ProjectileData
 {
 	XMFLOAT3 direction;
@@ -195,7 +192,10 @@ struct ProjectileData
 	int target = -1;
 	bool enemyOwned = false;
 };
+//-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 class CProjectileObject final : public CMeshObject
 {
 public:
