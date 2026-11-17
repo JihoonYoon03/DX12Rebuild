@@ -81,7 +81,7 @@ float4 PSMain(VS_OUTPUT input) : SV_Target
     float3 planeNormal = normalize(cross(ddx(input.wpos), ddy(input.wpos)));
     //----------------------------
     
-    return (input.color * matBaseColor) * (0.2f + 0.8f * saturate(dot(normalize(planeNormal), light)));
+    return (input.color * matBaseColor) * (0.2f + 0.8f * saturate(dot(normalize(input.normal), light)));
 }
 
 float4 PSTex(VS_OUTPUT input) : SV_Target
