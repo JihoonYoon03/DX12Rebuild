@@ -1,233 +1,114 @@
 #include "pch.h"
 #include "Player.h"
 #include "Camera.h"
-#include "GameObject.h"
-#include "Mesh.h"
+
+using namespace config::stage;
+
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-#include <algorithm>
-#include <cmath>
+namespace
+{
+	bool Down(const UCHAR* keys, int key) { return (keys[key] & 0x80) != 0; }
+DWORD ReadTankControls(const UCHAR* keys)
+	{
+		DWORD input = 0;
+		if (Down(keys, 'W')) input |= DIR_FORWARD;
+		if (Down(keys, 'S')) input |= DIR_BACKWARD;
+		if (Down(keys, 'A')) input |= DIR_LEFT;
+		if (Down(keys, 'D')) input |= DIR_RIGHT;
+		if (Down(keys, VK_UP)) input |= CANNON_UP;
+		if (Down(keys, VK_DOWN)) input |= CANNON_DOWN;
+		if (Down(keys, VK_LEFT)) input |= TURRET_LEFT;
+		if (Down(keys, VK_RIGHT)) input |= TURRET_RIGHT;
+		return input;
+	}
+}
 //-----------------------------------
 
-CPlayer::CPlayer()
-{}
+// -------------------------------------------
+//
+// TankPlayer
+//
+// -------------------------------------------
 
-CPlayer::~CPlayer()
-{}
-
-void CPlayer::SetCamera(std::shared_ptr<CCamera> spCamera)
-{
-	m_spCamera = spCamera;
-}
-
-void CPlayer::Update()
-{
-}
-
-void CPlayer::ProcessInput(DWORD dwInput, float deltaTime)
-{
-	XMFLOAT3 Right	{ 1.0f, 0.0f, 0.0f };
-	XMFLOAT3 Up		{ 0.0f, 1.0f, 0.0f };
-	XMFLOAT3 Look	{ 0.0f, 0.0f, 1.0f };
-	XMFLOAT3 xmf3Shift = XMFLOAT3(0.0f, 0.0f, 0.0f);
-	if (dwInput & DIR_FORWARD) xmf3Shift = Vector3::Add(xmf3Shift, Look, 1.0f);
-	if (dwInput & DIR_BACKWARD) xmf3Shift = Vector3::Add(xmf3Shift, Look, -1.0f);
-
-	if (dwInput & DIR_RIGHT) xmf3Shift = Vector3::Add(xmf3Shift, Right, 1.0f);
-	if (dwInput & DIR_LEFT) xmf3Shift = Vector3::Add(xmf3Shift, Right, -1.0f);
-
-	if (dwInput & DIR_UP) xmf3Shift = Vector3::Add(xmf3Shift, Up, 1.0f);
-	if (dwInput & DIR_DOWN) xmf3Shift = Vector3::Add(xmf3Shift, Up, -1.0f);
-
-	//상수값은 나중에 카메라 속도로 분리
-	float moveDistance = 10.0f * deltaTime;
-	xmf3Shift = Vector3::Normalize(xmf3Shift);
-	xmf3Shift = Vector3::Multiply(moveDistance, xmf3Shift);
-
-	//Custom
-}
-
-
-//--------------------------------
-// 
-// CTankPlayer
-// 
-//--------------------------------
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 CTankPlayer::CTankPlayer()
 {
+	SetCombatInfo(PlayerTankHealth, TankAimHeight, TankHitRadius, TankHitRadius, 0.0f, TankAimHeight);
+	SetTargeting(TankLockMinDot, TankHitRadius);
 }
+//-----------------------------------
 
-CTankPlayer::~CTankPlayer()
+CTankPlayer::~CTankPlayer() = default;
+
+void CTankPlayer::ProcessInput(DWORD input, float dt, const CTerrainObject* terrain)
 {
+	ApplyControls(input, dt, terrain);
 }
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CTankPlayer::SetModel(std::shared_ptr<CModel>& model)
+void CTankPlayer::ProcessControls(const UCHAR* keys, float dt, const CTerrainObject& terrain)
 {
-	PrepareModel(model);
-	UsePreparedTankModel(model);
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CTankPlayer::PrepareModel(std::shared_ptr<CModel>& model)
-{
-	//-----------------------------------
-	//[직접 작성한 코드]
-	//하드코딩 된 부분은 나중에 string vector 넘겨받는 형태로 처리하게 변경 예정
-
-
-	XMFLOAT4X4 mtxTurret = model->GetFrameMatrix("Turret");
-
-	//포신의 기존 로컬 행렬 저장
-	XMFLOAT4X4 localOrigin = model->GetFrameMatrix("maingun");
-
-	//터렛에 파츠 연결 => 파츠의 부모 변환 포함한 기본 모델 행렬 적용하면서,
-	//변환은 새 parent를 따르도록
-	model->SetFrameParent("maingun", "Turret");
-	//터렛 기본 설정으로 회전이 적용되어 있음. 그걸 빼줘야 함
-	//파츠들의 초기 변환 유지. 터렛의 변환 행렬이 부모행렬로 곱해져 상쇄됨.
-	model->SetFrameLocal("maingun", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("m2");
-	model->SetFrameParent("m2", "Turret");
-	model->SetFrameLocal("m2", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("comhatch");
-	model->SetFrameParent("comhatch", "Turret");
-	model->SetFrameLocal("comhatch", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("ChamferCyl");
-	model->SetFrameParent("ChamferCyl", "Turret");
-	model->SetFrameLocal("ChamferCyl", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Tube01");
-	model->SetFrameParent("Tube01", "Turret");
-	model->SetFrameLocal("Tube01", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Cylinder01");
-	model->SetFrameParent("Cylinder01", "Turret");
-	model->SetFrameLocal("Cylinder01", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Cylinder00");
-	model->SetFrameParent("Cylinder00", "Turret");
-	model->SetFrameLocal("Cylinder00", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Rectangle6");
-	model->SetFrameParent("Rectangle6", "Turret");
-	model->SetFrameLocal("Rectangle6", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("ldoor");
-	model->SetFrameParent("ldoor", "Turret");
-	model->SetFrameLocal("ldoor", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("rdoor");
-	model->SetFrameParent("rdoor", "Turret");
-	model->SetFrameLocal("rdoor", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Rectangle2");
-	model->SetFrameParent("Rectangle2", "Turret");
-	model->SetFrameLocal("Rectangle2", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Rectangle3");
-	model->SetFrameParent("Rectangle3", "Turret");
-	model->SetFrameLocal("Rectangle3", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Rectangle4");
-	model->SetFrameParent("Rectangle4", "Turret");
-	model->SetFrameLocal("Rectangle4", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Rectangle5");
-	model->SetFrameParent("Rectangle5", "Turret");
-	model->SetFrameLocal("Rectangle5", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("grille");
-	model->SetFrameParent("grille", "Turret");
-	model->SetFrameLocal("grille", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("tray");
-	model->SetFrameParent("tray", "Turret");
-	model->SetFrameLocal("tray", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-	//-----------------------------------
+	const DWORD input = ReadTankControls(keys);
+	m_bManualAim = (input & (CANNON_UP | CANNON_DOWN | TURRET_LEFT | TURRET_RIGHT)) != 0;
+	if (input) ProcessInput(input, dt, &terrain);
+	FollowStageSlope(terrain);
 }
 //-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CTankPlayer::ProcessInput(DWORD dwInput, float deltaTime, const CTerrainObject* terrain)
+void CTankPlayer::ResetControls()
 {
-	m_spCamera->Move(ApplyControls(dwInput, deltaTime, terrain));
+	m_bAutoAttack = TankAutoAttackAtStart;
+	m_bShield = m_bManualAim = false;
 }
 //-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CTankPlayer::OnKeyPressed(WPARAM key)
+{
+	if (key == 'T') m_bAutoAttack = !m_bAutoAttack;
+	if (key == 'H') m_bShield = !m_bShield;
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+bool CTankPlayer::AimAutomatically(float dt)
+{
+	const auto* target = GetLockedTarget();
+	return m_bAutoAttack && !m_bManualAim && target && target->IsAlive() && AimStageCannon(target->GetAimPoint(), dt);
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CTankPlayer::UpdateCamera(const CTerrainObject& terrain)
+{
+	XMFLOAT3 origin, direction;
+	GetAimRay(origin, direction);
+	XMFLOAT3 eye = Vector3::Add(GetPosition(), GetTurretHeading(), -TankCameraDistance);
+	eye.y += TankCameraHeight;
+	eye.y = (std::max)(eye.y, terrain.GetHeightAt(eye) + CameraGroundClearance);
+	m_spCamera->SetLookAt(eye, Vector3::Add(eye, direction), { 0, 1, 0 });
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CTankPlayer::ReleaseUploadBuffer()
+{
+	CTankObject::ReleaseUploadBuffer();
+	ReleaseCannonTestUploadBuffer();
+}
+//-----------------------------------
 
 //-----------------------------------
 //[직접 작성한 코드]
-XMFLOAT3 CTankPlayer::ApplyControls(DWORD dwInput, float deltaTime, const CTerrainObject* terrain)
-{
-	float turn = 0.0f;
-	if (dwInput & DIR_LEFT) turn -= 1.0f;
-	if (dwInput & DIR_RIGHT) turn += 1.0f;
-	
-	float yaw = m_Transform.rotation.y += turn * m_fTurnSpeed * deltaTime;
-	XMFLOAT3 forward{ sinf(yaw), 0.0f, cosf(yaw) };
-
-	float drive = 0.0f;
-	if (dwInput & DIR_FORWARD) drive += 1.0f;
-	if (dwInput & DIR_BACKWARD) drive -= 1.0f;
-
-	XMFLOAT3 xmf3Shift = XMFLOAT3(0.0f, 0.0f, 0.0f);
-
-	float moveDistance = drive * m_fVelocity * deltaTime;
-	xmf3Shift = Vector3::Normalize(xmf3Shift);
-	xmf3Shift = Vector3::Add(Vector3::Multiply(moveDistance, forward), xmf3Shift);
-	if (terrain)
-	{
-		//-----------------------------------
-		//[아래 코드는 AI로 구현됨]
-		float terrainHeight = terrain->GetHeightAt(Vector3::Add(m_Transform.position, xmf3Shift)) + config::stage::TankGroundOffset;
-		//-----------------------------------
-		//플레이어 위치를 빼줘야 이동량만 나옴
-		xmf3Shift.y = terrainHeight - m_Transform.position.y;
-	}
-
-	Move(xmf3Shift);
-
-	float turretTurn = 0.0f;
-	if (dwInput & TURRET_LEFT) turretTurn -= 1.0f;
-	if (dwInput & TURRET_RIGHT) turretTurn += 1.0f;
-
-	m_fTurretYaw += turretTurn * m_fTurretTurnSpeed * deltaTime;
-	Transform turret;
-	turret.rotation.y = m_fTurretYaw;
-	SetFrameTransform("Turret", turret);
-
-	float cannonTurn = 0.0f;
-	if (dwInput & CANNON_UP) cannonTurn -= 1.0f;
-	if (dwInput & CANNON_DOWN) cannonTurn += 1.0f;
-
-	m_fCannonPitch += cannonTurn * m_fCannonLiftSpeed * deltaTime;
-	//실제 포신 사각 반영. 부호는 위가 -각이므로 반대로 해야 함
-	if (m_fCannonPitch < -config::ABRAMS_CANNON_ELEVATION_RADIAN) m_fCannonPitch = -config::ABRAMS_CANNON_ELEVATION_RADIAN;
-	if (m_fCannonPitch > -config::ABRAMS_CANNON_DEPRESSION_RADIAN) m_fCannonPitch = -config::ABRAMS_CANNON_DEPRESSION_RADIAN;
-
-	turret.rotation.x = m_fCannonPitch;
-	turret.rotation.y = 0.0f;
-	SetFrameTransform("maingun", turret);
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
-	return xmf3Shift;
-	//-----------------------------------
-}
-//-----------------------------------
-
-void CTankPlayer::Move(XMFLOAT3 shift)
-{
-	m_Transform.position = Vector3::Add(m_Transform.position, shift);
-}
-
 HRESULT CTankPlayer::CreateCannonTestMesh(const ComPtr<ID3D12Device>& cpDevice,
 	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
@@ -253,32 +134,32 @@ HRESULT CTankPlayer::CreateCannonTestMesh(const ComPtr<ID3D12Device>& cpDevice,
 	m_upCannonTestMesh = std::make_unique<CMesh>();
 	return m_upCannonTestMesh->CreateBuffer(cpDevice, cpCommandList, cube);
 }
+//-----------------------------------
 
+//-----------------------------------
+//[직접 작성한 코드]
 void CTankPlayer::ReleaseCannonTestUploadBuffer()
 {
 	if (m_upCannonTestMesh) m_upCannonTestMesh->ReleaseUploadBuffer();
 }
+//-----------------------------------
 
+//-----------------------------------
+//[직접 작성한 코드]
 void CTankPlayer::CannonTestDraw(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	if (!m_upCannonTestMesh || m_spModel->GetFrameIndex("maingun") == -1) return;
 
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
 	XMFLOAT3 muzzle, forward;
 	GetStageCannonRay(muzzle, forward);
 	const XMFLOAT3 positions[] = { muzzle, Vector3::Add(muzzle, forward, 0.5f) };
-	//-----------------------------------
 	const XMFLOAT4 colors[] = { { 1, 0, 0, 1 }, { 1, 1, 0, 1 } };
 
 	for (int i = 0; i < 2; ++i)
 	{
 		Transform marker;
 		marker.scale = { 0.08f, 0.08f, 0.08f };
-		//-----------------------------------
-		//[아래 코드는 AI로 구현됨]
 		marker.position = positions[i];
-		//-----------------------------------
 		const XMFLOAT4X4 markerWorld = Matrix4x4::Transpose(marker.getMatrix());
 		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &markerWorld, 0);
 		const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(markerWorld);
@@ -287,166 +168,161 @@ void CTankPlayer::CannonTestDraw(const ComPtr<ID3D12GraphicsCommandList>& cpComm
 		m_upCannonTestMesh->DrawMesh(cpCommandList);
 	}
 }
+//-----------------------------------
 
-void CTankPlayer::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
-{
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
-	if (!m_spModel || !IsVisible()) return;
-	//-----------------------------------
-
-	m_spModel->DrawModel(cpCommandList, m_umFrameTransform, m_Transform.getMatrix());
-	//CannonTestDraw(cpCommandList);
-}
+// -------------------------------------------
+//
+// HelicopterPlayer
+//
+// -------------------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CTankPlayer::UsePreparedTankModel(const std::shared_ptr<CModel>& spModel)
+CHelicopterPlayer::CHelicopterPlayer()
+	: CVehicleObject(WeaponSettings{ .reload = HelicopterReload, .speed = HelicopterMissileSpeed,
+		.lifetime = HelicopterMissileLifetime, .clearance = HelicopterMissileClearance,
+		.muzzleOffset = HelicopterMissileOffset, .homingDelay = HelicopterHomingDelay,
+		.homingTurnSpeed = HelicopterHomingTurnSpeed, .homing = true })
 {
-	m_spModel = spModel;
-	m_hitBounds = spModel ? spModel->GetModelBounds() : std::nullopt;
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-XMFLOAT3 CTankPlayer::GetAimPoint() const
-{
-	return GetHitPoint();
+	SetCombatInfo(HelicopterHealth, 0.0f, HelicopterHitRadius, HelicopterHitRadius, 0.0f);
+	SetScale(ApacheScale);
 }
 //-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-XMFLOAT3 CTankPlayer::GetHitPoint() const
+void CHelicopterPlayer::SetModel(std::shared_ptr<CModel>& model)
 {
-	if (!m_hitBounds) return CDamageableObject::GetHitPoint();
-	return Vector3::TransformCoord(m_hitBounds->Center, m_Transform.getMatrix());
+	CModelObject::SetModel(model);
+	const XMFLOAT4X4 mainRotor = m_spModel->GetFrameMatrix("rotor");
+	const XMFLOAT4X4 mainHub = m_spModel->GetFrameMatrix("black_m_6");
+	m_mainRotorAxis = Vector3::TransformNormal({ 0.0f, 1.0f, 0.0f }, mainRotor);
+	// 날개 프레임 좌표로 환산한 허브 회전축의 중심.
+	m_mainRotorOffset = Vector3::TransformNormal({ 0.115010f, 0.0f, -0.696087f }, mainRotor);
+	const XMFLOAT3 hubToBladeOrigin{ mainRotor._41 - mainHub._41, mainRotor._42 - mainHub._42, mainRotor._43 - mainHub._43 };
+	m_mainHubOffset = Vector3::Add(hubToBladeOrigin, m_mainRotorOffset);
+
+	const XMFLOAT4X4 tailRotor = m_spModel->GetFrameMatrix("black_m_7");
+	m_tailRotorAxis = Vector3::TransformNormal({ 0.0f, -1.0f, 0.0f }, tailRotor);
+	// black_m_7 허브 단면의 중심. 로컬 Y 방향이 회전축이다.
+	m_tailRotorOffset = Vector3::TransformNormal({ -0.758458f, 0.0f, -0.058565f }, tailRotor);
 }
 //-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-float CTankPlayer::GetHitFraction(const XMFLOAT3& start, const XMFLOAT3& end, bool homing) const
+void CHelicopterPlayer::ResetControls()
 {
-	if (!m_hitBounds) return CDamageableObject::GetHitFraction(start, end, homing);
-	const BoundingOrientedBox bounds = Collision::TransformOrientedBox(*m_hitBounds, m_Transform.getMatrix());
-	return Collision::SegmentBoxFraction(start, end, bounds);
+	m_fFlightPitch = m_fRotorTime = 0.0f;
+	m_bFirstPerson = false;
 }
 //-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CTankPlayer::ResetStagePose(const XMFLOAT3& position, float yaw)
+void CHelicopterPlayer::ResetStagePose(const XMFLOAT3& position, bool targetStage)
 {
 	SetPosition(position);
-	SetRotation(0.0f, yaw, 0.0f);
-	m_fTurretYaw = 0.0f;
-	m_fCannonPitch = 0.0f;
-	m_umFrameTransform.clear();
+	SetRotation(0.0f, 0.0f, 0.0f);
+	m_bAllowFirstPerson = !targetStage;
+	SetTargeting(targetStage ? Level1LockMinDot : Level3LockMinDot,
+		targetStage ? TargetLockRadius : Level3LockHitRadius);
+	UpdatePose();
 }
 //-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CTankPlayer::FollowStageSlope(const CTerrainObject& terrain)
+void CHelicopterPlayer::OnKeyPressed(WPARAM key)
 {
-	constexpr float halfWidth = config::stage::TankFootprintHalfWidth;
-	constexpr float halfLength = config::stage::TankFootprintHalfLength;
-	const auto& position = m_Transform.position;
-	const float yaw = m_Transform.rotation.y;
-	const float sine = std::sin(yaw);
-	const float cosine = std::cos(yaw);
-	const auto corner = [&](float right, float forward)
+	if (!m_bAllowFirstPerson) return;
+	if (key == 'V') m_bFirstPerson = !m_bFirstPerson;
+	else if (key == '1') m_bFirstPerson = true;
+	else if (key == '3') m_bFirstPerson = false;
+	UpdatePose();
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+XMFLOAT3 CHelicopterPlayer::Forward() const
+{
+	return Vector3::Forward(m_Transform.rotation.y, m_fFlightPitch);
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CHelicopterPlayer::GetAimRay(XMFLOAT3& origin, XMFLOAT3& direction) const
+{
+	origin = GetPosition();
+	direction = Forward();
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CHelicopterPlayer::ProcessControls(const UCHAR* keys, float dt, const CTerrainObject& terrain)
+{
+	m_fRotorTime += dt;
+	const int turn = Down(keys, 'D') - Down(keys, 'A');
+	const int lift = Down(keys, VK_UP) - Down(keys, VK_DOWN);
+	const int drive = Down(keys, 'W') - Down(keys, 'S');
+	const float yaw = XMScalarModAngle(m_Transform.rotation.y + turn * HelicopterYawSpeed * dt);
+	const float wantedPitch = -drive * HelicopterPitchLimit;
+	const float pitchStep = HelicopterPitchSpeed * dt;
+	m_fFlightPitch += std::clamp(wantedPitch - m_fFlightPitch, -pitchStep, pitchStep);
+	XMFLOAT3 position = Vector3::Add(m_Transform.position, Vector3::Forward(yaw), drive * HelicopterDriveSpeed * dt);
+	position.x = std::clamp(position.x, -MovementLimit, MovementLimit);
+	position.z = std::clamp(position.z, -MovementLimit, MovementLimit);
+	const float minimum = terrain.GetHeightAt(position) + HelicopterMinClearance;
+	position.y = std::clamp(position.y + lift * HelicopterLiftSpeed * dt, minimum, minimum + HelicopterAltitudeRange);
+	m_Transform.position = position;
+	m_Transform.rotation.y = yaw;
+	UpdatePose();
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CHelicopterPlayer::UpdatePose()
+{
+	SetVisible(!m_bFirstPerson);
+	SetRotation(m_fFlightPitch * HelicopterBodyPitchFactor, m_Transform.rotation.y, 0.0f);
+
+	const float rotorAngle = m_fRotorTime * HelicopterRotorSpeed;
+	const float mainAngle = XMScalarModAngle(rotorAngle * MainRotorSpeedFactor);
+	SetFrameTransform("rotor", Matrix4x4::RotationAroundAxis(m_mainRotorAxis, mainAngle, m_mainRotorOffset));
+	SetFrameTransform("black_m_6", Matrix4x4::RotationAroundAxis(m_mainRotorAxis, mainAngle, m_mainHubOffset));
+
+	const float tailAngle = XMScalarModAngle(rotorAngle * TailRotorSpeedFactor);
+	SetFrameTransform("black_m_7", Matrix4x4::RotationAroundAxis(m_tailRotorAxis, tailAngle, m_tailRotorOffset));
+
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CHelicopterPlayer::UpdateCamera(const CTerrainObject& terrain)
+{
+	const XMFLOAT3 position = m_Transform.position;
+	XMFLOAT3 eye;
+	XMFLOAT3 target;
+	if (m_bFirstPerson)
 	{
-		return terrain.GetHeightAt(position.x + cosine * right + sine * forward,
-			position.z - sine * right + cosine * forward);
-	};
-	const float frontLeft = corner(-halfWidth, halfLength);
-	const float frontRight = corner(halfWidth, halfLength);
-	const float backLeft = corner(-halfWidth, -halfLength);
-	const float backRight = corner(halfWidth, -halfLength);
-	const float frontMinusBack = (frontLeft + frontRight - backLeft - backRight) * 0.5f;
-	const float rightMinusLeft = (frontRight + backRight - frontLeft - backLeft) * 0.5f;
-	m_Transform.rotation.x = -std::atan2(frontMinusBack, 2.0f * halfLength);
-	m_Transform.rotation.z = std::atan2(rightMinusLeft, 2.0f * halfWidth);
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-XMFLOAT3 CTankPlayer::GetTurretHeading()
-{
-	const XMFLOAT4X4 turretWorld = Matrix4x4::Multiply(
-		m_spModel->GetFrameMatrix("Turret", m_umFrameTransform), m_Transform.getMatrix());
-	XMFLOAT3 forward = Vector3::TransformNormal({ 0.0f, -1.0f, 0.0f }, turretWorld);
-	forward.y = 0.0f;
-	return Vector3::Normalize(forward);
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CTankPlayer::GetStageCannonRay(XMFLOAT3& origin, XMFLOAT3& direction)
-{
-	const XMFLOAT4X4 cannonWorld = Matrix4x4::Multiply(
-		m_spModel->GetFrameMatrix("maingun", m_umFrameTransform), m_Transform.getMatrix());
-	//-----------------------------------
-	//[직접 작성한 코드]
-	origin = Vector3::TransformCoord({ 0.0f, -1.368214f, 0.0f }, cannonWorld);
-	direction = Vector3::Normalize(Vector3::TransformNormal({ 0.0f, -1.0f, 0.0f }, cannonWorld));
-	//-----------------------------------
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-bool CTankPlayer::AimStageCannon(const XMFLOAT3& target, float dt)
-{
-	XMFLOAT3 origin, direction;
-	GetStageCannonRay(origin, direction);
-	const XMFLOAT3 desired = Vector3::Normalize(Vector3::Subtract(target, origin));
-	const float yawDelta = XMScalarModAngle(std::atan2(desired.x, desired.z) - std::atan2(direction.x, direction.z));
-	const float yawStep = config::stage::TurretAimSpeed * dt;
-	m_fTurretYaw = XMScalarModAngle(m_fTurretYaw + std::clamp(yawDelta, -yawStep, yawStep));
-	Transform turret;
-	turret.rotation.y = m_fTurretYaw;
-	SetFrameTransform("Turret", turret);
-
-	GetStageCannonRay(origin, direction);
-	const float pitchDelta = std::asin(std::clamp(desired.y, -1.0f, 1.0f)) -
-		std::asin(std::clamp(direction.y, -1.0f, 1.0f));
-	const float pitchStep = config::stage::CannonAimSpeed * dt;
-	m_fCannonPitch = std::clamp(m_fCannonPitch - std::clamp(pitchDelta, -pitchStep, pitchStep),
-		-config::ABRAMS_CANNON_ELEVATION_RADIAN, -config::ABRAMS_CANNON_DEPRESSION_RADIAN);
-	Transform cannon;
-	cannon.rotation.x = m_fCannonPitch;
-	SetFrameTransform("maingun", cannon);
-
-	GetStageCannonRay(origin, direction);
-	const XMFLOAT3 finalTarget = Vector3::Normalize(Vector3::Subtract(target, origin));
-	return Vector3::DotProduct(finalTarget, direction) >= config::stage::CannonFireMinDot;
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-CEnemyTank::CEnemyTank()
-{
-	SetCombatInfo(config::stage::EnemyTankHealth, config::stage::EnemyTankAimHeight,
-		config::stage::TankHitRadius, config::stage::TankHitRadius, config::stage::EnemyTankAimHeight + 3.0f,
-		config::stage::TankAimHeight);
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-bool CEnemyTank::TryFire(const XMFLOAT3& target, float dt,
-	XMFLOAT3& origin, XMFLOAT3& direction)
-{
-	m_fReload = (std::max)(0.0f, m_fReload - dt);
-	if (!AimStageCannon(target, dt) || m_fReload > 0.0f) return false;
-	GetStageCannonRay(origin, direction);
-	return true;
+		const XMFLOAT3 apacheCockpit{ 0.0f, 1.7f, 34.0f };
+		eye = Vector3::TransformCoord(apacheCockpit, GetTransform().getMatrix());
+		target = Vector3::Add(eye, Forward());
+	}
+	else
+	{
+		const XMFLOAT3 flatForward = Vector3::Forward(GetTransform().rotation.y);
+		eye = Vector3::Add(position, flatForward, -HelicopterCameraDistance);
+		eye.y += HelicopterCameraHeight;
+		target = Vector3::Add(position, Forward(), HelicopterCameraLookAhead);
+		target.y += HelicopterCameraTargetHeight;
+	}
+	eye.y = (std::max)(eye.y, terrain.GetHeightAt(eye) + CameraGroundClearance);
+	m_spCamera->SetLookAt(eye, target, { 0, 1, 0 });
 }
 //-----------------------------------

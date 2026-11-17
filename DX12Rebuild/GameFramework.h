@@ -16,7 +16,6 @@ enum class EGameStage;
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
 class CUiScene;
-class CStageResources;
 //-----------------------------------
 
 //-----------------------------------
@@ -129,7 +128,6 @@ private:
 	void ResizeUi();
 	void ProcessSceneMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
-	std::shared_ptr<CStageResources> m_spStageResources;
 
 	std::shared_ptr<CGameScene> m_spHelicopterScene;
 	std::shared_ptr<CUiScene> m_spMainMenuScene;

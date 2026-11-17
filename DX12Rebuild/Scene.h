@@ -1,24 +1,25 @@
 #pragma once
 
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
 class CObjectBase;
-class CSkyboxObject;
 class CModelObject;
-class CGameFramework;
-class CDamageableObject;
-class CProjectileObject;
-class CUI;
-struct ProjectileData;
-//-----------------------------------
-class CMesh;
-class CShader;
-class CTextureShader;
-class CModel;
 class CTerrainObject;
-class CCamera;
+class CMeshObject;
+class CObstacleObject;
+class CDamageableObject;
+class CVehicleObject;
+class CEnemyTank;
+class CProjectileObject;
 class CTankPlayer;
+class CHelicopterPlayer;
+class CGameHud;
+class CUI;
+class CMesh;
+class CModel;
+class CShader;
+class CCamera;
+class CGameFramework;
 class CDescHeapAllocator;
+struct ProjectileData;
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
@@ -30,6 +31,11 @@ enum class EGameStage
 };
 //-----------------------------------
 
+// -------------------------------------------
+//
+// Scene
+//
+// -------------------------------------------
 //-----------------------------------
 //[직접 작성한 코드]
 class CScene
@@ -46,12 +52,15 @@ public:
 		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
 		CDescHeapAllocator* DescHeapAllocator = nullptr
 	);
-	void AddObject(std::unique_ptr<CModelObject>& upObject);
-	void AddObjects(std::unique_ptr<CModelObject>* upObjects, size_t size);
+
+	CObjectBase* AddObject(std::unique_ptr<CObjectBase> object);
+
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	void AddObjects(std::vector<std::unique_ptr<CModelObject>>& upObjects);
+	void RemoveObject(const CObjectBase* object);
 	//-----------------------------------
+	void AddObjects(std::unique_ptr<CModelObject>* upObjects, size_t size);
+	void AddObjects(std::vector<std::unique_ptr<CModelObject>>& upObjects);
 
 	std::shared_ptr<CCamera> GetCamera() { return m_spCamera; }
 	void WindowResized(int width, int height);
@@ -62,237 +71,280 @@ public:
 	virtual void Update(float deltaTime) {}
 	virtual void KeyPressed(WPARAM key, CGameFramework& framework) {}
 	virtual void Click(int x, int y, CGameFramework& framework) {}
+
 	virtual void CheckStageTransition(CGameFramework& framework) {}
 	//-----------------------------------
 
 	virtual void ReleaseUploadBuffers();
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
 	virtual void ReleaseObjects();
-	//-----------------------------------
 
 	virtual void DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
 
 protected:
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	void DrawObjects(const ComPtr<ID3D12GraphicsCommandList>& commandList, bool screenSpace);
+	//-----------------------------------
 	std::shared_ptr<CCamera>					m_spCamera;
 	std::shared_ptr<CShader>					m_spShader;
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
+
 	std::vector<std::unique_ptr<CObjectBase>>	m_vObjects;
-	//-----------------------------------
 };
 //-----------------------------------
 
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-class CStageResources
-{
-public:
-	CStageResources();
-	~CStageResources();
-	HRESULT Build(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CDescHeapAllocator& allocator);
-	void ReleaseUploadBuffers();
-
-	std::shared_ptr<CShader> spShader;
-	std::unique_ptr<CTerrainObject> upTerrain;
-	std::shared_ptr<CModel> spTank;
-	std::shared_ptr<CModel> spApache;
-	std::shared_ptr<CModel> spRocks[2];
-	std::unique_ptr<CSkyboxObject> upSkybox;
-	std::unique_ptr<CMesh> upBox;
-
-private:
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
-	HRESULT BuildVisuals(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
-	//-----------------------------------
-};
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
+// -------------------------------------------
+//
+// GameScene
+//
+// -------------------------------------------
 class CGameScene : public CScene
 {
 public:
-	//-----------------------------------
-	//[직접 작성한 코드]
+	CGameScene();
 	~CGameScene() override;
-	void DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
-	//-----------------------------------
 
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
-	HRESULT BuildObjects(ComPtr<ID3D12Device>& cpDevice,
-		ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator* DescHeapAllocator = nullptr) override;
+	HRESULT BuildObjects(ComPtr<ID3D12Device>& device, ComPtr<ID3D12GraphicsCommandList>& list,
+		CDescHeapAllocator* allocator = nullptr) override;
 	void ReleaseUploadBuffers() override;
 	void ReleaseObjects() override;
-	void ProcessInput(UCHAR* pKeyBuffer, float deltaTime) override;
-	void SetStageResources(const std::shared_ptr<CStageResources>& resources);
+
+	void DrawScene(ComPtr<ID3D12GraphicsCommandList>& list) override;
+
+	void ProcessInput(UCHAR* keys, float dt) override;
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
 	void Update(float dt) override;
+
 	void KeyPressed(WPARAM key, CGameFramework& framework) override;
 	void CheckStageTransition(CGameFramework& framework) override;
+
 	void BeginStage(EGameStage stage);
-	void StageKeyPressed(WPARAM key);
 
 	EGameStage GetStage() const { return m_stage; }
 	bool StageFinished() const { return m_state == EStageState::Finished; }
+	//-----------------------------------
 
 protected:
-	struct PlayerRules
-	{
-		int maxHealth;
-		float aimHeight;
-		float hitRadius;
-		float reload;
-		float shotSpeed;
-		float shotLifetime;
-		float shotClearance;
-		float muzzleOffset = 0.0f;
-		float homingDelay = 0.0f;
-		float homingTurnSpeed = 0.0f;
-		bool homing = false;
-	};
-
-	explicit CGameScene(const PlayerRules& rules);
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
 	virtual void ResetStage() = 0;
-	virtual void OnStageKeyPressed(WPARAM key) = 0;
-	virtual void UpdatePlayer(const UCHAR* keys, float dt) = 0;
-	virtual void UpdateStageCamera(const XMFLOAT3& aimDirection) = 0;
-	XMFLOAT3 PlayerPosition() const;
-	virtual void GetAimRay(XMFLOAT3& origin, XMFLOAT3& direction) const = 0;
-	virtual void DrawStageObjects(const ComPtr<ID3D12GraphicsCommandList>&) {}
+	virtual void ResolvePlayerMovement(const Transform& previous) {}
 
-	virtual bool TryAutoAim(const UCHAR*, float, XMFLOAT3&, XMFLOAT3&) { return false; }
-	virtual bool IsPlayerProtected() const { return false; }
 	virtual bool HasReachedExit() const { return false; }
 	virtual float VictoryHoldTime() const { return config::stage::VictoryDelay; }
-	virtual void UpdateHudExtras(float, const XMFLOAT4&) {}
 
-	enum EHudSlot { AimHud, AutoAttackHud, ShieldHud, HealthHudBegin };
-	void UpdateStageView();
-	void SetHudPlane(size_t index, float x, float y, float width, float height, const XMFLOAT4& color);
+	void SetPlayer(CVehicleObject* player);
+	const CTerrainObject& Terrain() const { return *m_pTerrain; }
 	XMFLOAT3 OnTerrain(float x, float z, float offset) const;
+
+	HRESULT BuildHud(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12GraphicsCommandList>& list,
+		CDescHeapAllocator& allocator);
+
+	std::shared_ptr<CModel> LoadModel(const ComPtr<ID3D12Device>& device,
+		const ComPtr<ID3D12GraphicsCommandList>& list, const char* path, const XMFLOAT3& offset = {});
+	std::shared_ptr<CModel> LoadTankModel(const ComPtr<ID3D12Device>& device,
+		const ComPtr<ID3D12GraphicsCommandList>& list);
+	std::shared_ptr<CModel> FindModel(const char* path) const;
+
+	CObjectBase* AddStageObject(std::unique_ptr<CObjectBase> object);
 	void AddTarget(const XMFLOAT3& position);
 	void AddEnemyTank(float x, float z, float playerStartZ);
-	void SetLockSettings(float minDot, float radius);
-	std::optional<XMFLOAT3> LockedAimPoint() const;
-	bool IsPlayerAlive() const;
-	virtual CDamageableObject& PlayerObject() const = 0;
-	void DrawStageBox(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const XMFLOAT3& position,
-		const XMFLOAT3& size, const XMFLOAT4& color, float yaw = 0.0f);
-
-	std::shared_ptr<CStageResources> m_spStageResources;
+	CMeshObject* AddStageBox(const XMFLOAT3& position, const XMFLOAT3& size, const XMFLOAT4& color);
 
 private:
 	enum class EStageState { Playing, Victory, Defeat, Finished };
 
-	void DrawStage(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
-	void DrawStageHud(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	void UpdateEnemies(float dt);
+
+	void UpdateProjectiles(float dt);
 	void SpawnProjectile(const XMFLOAT3& position, const ProjectileData& data);
 
-	XMFLOAT3 PlayerAimPoint() const;
-	void UpdateLock(const XMFLOAT3& origin, const XMFLOAT3& direction);
-	void UpdateEnemies(float dt);
-	void FirePlayer(const XMFLOAT3& origin, const XMFLOAT3& direction);
-	void UpdateProjectiles(float dt);
-	float TerrainHitFraction(const XMFLOAT3& start, const XMFLOAT3& end, float clearance) const;
-	void Win();
+	void ClearProjectiles();
 
-	std::vector<CDamageableObject*> m_vEnemies; // m_vObjects가 소유하는 객체의 참조.
-	std::vector<std::unique_ptr<CProjectileObject>> m_vProjectiles;
-	std::vector<std::unique_ptr<CUI>> m_vHud;
+	void ClearStageObjects();
+
+	void UpdateLockMarker();
+
+	void Win();
+	//-----------------------------------
+
+	// 모든 게임 오브젝트의 소유자는 CScene::m_vObjects이다.
+	CTerrainObject* m_pTerrain = nullptr;
+	CVehicleObject* m_pPlayer = nullptr;
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	CMeshObject* m_pLockMarker = nullptr;
+
+	std::vector<CDamageableObject*> m_vEnemies;
+	std::vector<CEnemyTank*> m_vAttackers;
+
+	std::vector<CProjectileObject*> m_vProjectiles;
+
+	std::vector<CObjectBase*> m_vStageObjects;
+
+	// 파일 경로별로 실제 사용한 모델만 보관한다. 오브젝트 인스턴스는 저장하지 않는다.
+	std::unordered_map<std::string, std::shared_ptr<CModel>> m_models;
+
+	std::unique_ptr<CMesh> m_upBoxMesh;
+
+	std::unique_ptr<CGameHud> m_upHud;
+
 	UCHAR m_keys[256]{};
-	const PlayerRules m_rules;
 
 	EGameStage m_stage = EGameStage::HelicopterTargets;
 	EStageState m_state = EStageState::Playing;
 	float m_fResultTimer = 0.0f;
-
-	float m_fReload = 0.0f;
-	int m_nLockedEnemy = -1;
-	float m_fLockMinDot = 0.0f;
-	float m_fLockRadius = 0.0f;
-	bool m_bFireRequested = false;
-	bool m_bLockPinned = false;
+	//-----------------------------------
 };
-//-----------------------------------
 
+// -------------------------------------------
+//
+// TankGameScene
+//
+// -------------------------------------------
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
 class CTankGameScene final : public CGameScene
 {
 public:
-	CTankGameScene();
 	~CTankGameScene() override;
-	HRESULT BuildObjects(
-		ComPtr<ID3D12Device>& cpDevice,
-		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CDescHeapAllocator* DescHeapAllocator = nullptr
-	) override;
-	void ReleaseUploadBuffers() override;
+
+	HRESULT BuildObjects(ComPtr<ID3D12Device>& device, ComPtr<ID3D12GraphicsCommandList>& list,
+		CDescHeapAllocator* allocator = nullptr) override;
 	void ReleaseObjects() override;
 
 private:
-	struct Obstacle
-	{
-		BoundingOrientedBox footprint;
-	};
-
 	void ResetStage() override;
-	void OnStageKeyPressed(WPARAM key) override;
-	void UpdatePlayer(const UCHAR* keys, float dt) override;
-	void UpdateStageCamera(const XMFLOAT3& aimDirection) override;
-	CDamageableObject& PlayerObject() const override;
-	void GetAimRay(XMFLOAT3& origin, XMFLOAT3& direction) const override;
-	bool TryAutoAim(const UCHAR* keys, float dt, XMFLOAT3& origin, XMFLOAT3& direction) override;
-	bool IsPlayerProtected() const override { return m_bShield; }
-	void UpdateHudExtras(float aspectScale, const XMFLOAT4& reticleColor) override;
 
-	CTankPlayer* m_pPlayer = nullptr; // m_vObjects가 소유한다.
-	std::vector<Obstacle> m_vObstacles;
-	BoundingBox m_tankBounds;
-	BoundingBox m_rockBounds[2];
-	bool m_bAutoAttack = config::stage::TankAutoAttackAtStart;
-	bool m_bShield = false;
+	void ResolvePlayerMovement(const Transform& previous) override;
+
+	CTankPlayer* m_pPlayer = nullptr;
+
+	std::vector<CObstacleObject*> m_vObstacles;
 };
 //-----------------------------------
 
+// -------------------------------------------
+//
+// HelicopterGameScene
+//
+// -------------------------------------------
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
 class CHelicopterGameScene final : public CGameScene
 {
 public:
-	CHelicopterGameScene();
 	~CHelicopterGameScene() override;
-	HRESULT BuildObjects(ComPtr<ID3D12Device>& cpDevice, ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CDescHeapAllocator* DescHeapAllocator = nullptr) override;
+
+	HRESULT BuildObjects(ComPtr<ID3D12Device>& device, ComPtr<ID3D12GraphicsCommandList>& list,
+		CDescHeapAllocator* allocator = nullptr) override;
 	void ReleaseObjects() override;
 
 private:
 	void ResetStage() override;
-	void OnStageKeyPressed(WPARAM key) override;
-	void UpdatePlayer(const UCHAR* keys, float dt) override;
-	void UpdateStageCamera(const XMFLOAT3&) override;
-	CDamageableObject& PlayerObject() const override;
-	void GetAimRay(XMFLOAT3& origin, XMFLOAT3& direction) const override;
+
 	bool HasReachedExit() const override;
 	float VictoryHoldTime() const override;
-	void DrawStageObjects(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 
 	bool IsTargetStage() const { return GetStage() == EGameStage::HelicopterTargets; }
-	XMFLOAT3 HelicopterForward() const;
-	void UpdateHelicopterPose();
 
-	CDamageableObject* m_pStageHelicopter = nullptr; // m_vObjects가 소유한다.
-	Transform m_helicopterPose;
-	XMFLOAT3 m_exitPosition{};
-	XMFLOAT3 m_mainRotorAxis{ 0.0f, 1.0f, 0.0f };
-	XMFLOAT3 m_mainRotorOffset{};
-	XMFLOAT3 m_mainHubOffset{};
-	XMFLOAT3 m_tailRotorAxis{ 1.0f, 0.0f, 0.0f };
-	XMFLOAT3 m_tailRotorOffset{};
-	float m_fRotorTime = 0.0f;
-	bool m_bStageFirstPerson = false;
+	CHelicopterPlayer* m_pPlayer = nullptr;
+
+	CMeshObject* m_pExitMarker = nullptr;
+};
+//-----------------------------------
+
+// -------------------------------------------
+//
+// UiScene
+//
+// -------------------------------------------
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+class CUiScene : public CScene
+{
+public:
+	explicit CUiScene(const std::shared_ptr<CShader>& spShader);
+
+	HRESULT BuildObjects(
+		ComPtr<ID3D12Device>& cpDevice,
+		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+		CDescHeapAllocator* DescHeapAllocator = nullptr) override;
+
+	void ReleaseObjects() override;
+
+	void DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+
+	void ResizeUi(int width, int height);
+
+	void Click(int x, int y, CGameFramework& framework) override;
+
+protected:
+	virtual void BuildUi() = 0;
+
+	void AddUi(std::unique_ptr<CUI> upUi);
+
+private:
+	std::vector<CUI*> m_vUiObjects; // m_vObjects가 소유하며 클릭 처리에서만 참조한다.
+
+	float m_fCanvasPixels = 1.0f;
+	float m_fViewWidth = 1.0f;
+	float m_fViewHeight = 1.0f;
+
+	//실제 시간값 아님
+	float m_fTime = 0.0f;
+};
+//-----------------------------------
+
+// -------------------------------------------
+//
+// MainMenuScene
+//
+// -------------------------------------------
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+class CMainMenuScene : public CUiScene
+{
+public:
+	using CUiScene::CUiScene;
+
+private:
+	void BuildUi() override;
+};
+//-----------------------------------
+
+// -------------------------------------------
+//
+// StageSelectScene
+//
+// -------------------------------------------
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+class CStageSelectScene : public CUiScene
+{
+public:
+	using CUiScene::CUiScene;
+
+private:
+	void BuildUi() override;
+};
+//-----------------------------------
+
+// -------------------------------------------
+//
+// PortingTutorialScene
+//
+// -------------------------------------------
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+class CPortingTutorialScene : public CUiScene
+{
+public:
+	using CUiScene::CUiScene;
+
+private:
+	void BuildUi() override;
+
+	void KeyPressed(WPARAM key, CGameFramework& framework) override;
 };
 //-----------------------------------

@@ -1,16 +1,93 @@
 #include "pch.h"
 #include "Scene.h"
 #include "GameObject.h"
-#include "Mesh.h"
-#include "Shader.h"
-#include "Texture.h"
 #include "Player.h"
 #include "Camera.h"
+#include "Shader.h"
+#include "Texture.h"
+#include "GameFramework.h"
+
+using namespace config::stage;
+
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-#include "UiScene.h"
-#include "GameFramework.h"
+namespace
+{
+	class COpenStageSelectButton : public CMaskedUI
+	{
+	public:
+		using CMaskedUI::CMaskedUI;
+
+		bool OnClick(CGameFramework& framework) override
+		{
+			framework.OpenStageSelect();
+			return true;
+		}
+	};
+
+	class COpenTutorialButton final : public CUI
+	{
+	public:
+		using CUI::CUI;
+
+		bool OnClick(CGameFramework& framework) override
+		{
+			framework.OpenTutorial();
+			return true;
+		}
+	};
+
+	class CStageButton final : public CUI
+	{
+	public:
+		CStageButton(const XMFLOAT4& bounds, const XMFLOAT4& color, EGameStage stage, const wchar_t* textureFile)
+			: CUI(bounds, color, textureFile), m_stage(stage)
+		{
+		}
+
+		bool OnClick(CGameFramework& framework) override
+		{
+			framework.EnterStage(m_stage);
+			return true;
+		}
+
+	private:
+		EGameStage m_stage;
+	};
+
+	class CExitButton final : public CUI
+	{
+	public:
+		using CUI::CUI;
+
+		bool OnClick(CGameFramework& framework) override
+		{
+			framework.RequestExit();
+			return true;
+		}
+	};
+
+	class CTutorialReturnButton final : public CUI
+	{
+	public:
+		using CUI::CUI;
+
+		bool OnClick(CGameFramework& framework) override
+		{
+			framework.OpenStageSelect();
+			return true;
+		}
+
+		bool HitTest(float, float) const override { return true; }
+	};
+}
 //-----------------------------------
+
+// -------------------------------------------
+//
+// Scene
+//
+// -------------------------------------------
 
 CScene::CScene()
 {
@@ -49,22 +126,32 @@ HRESULT CScene::BuildObjects(
 	return S_OK;
 }
 
-void CScene::AddObject(std::unique_ptr<CModelObject>& upObject)
+CObjectBase* CScene::AddObject(std::unique_ptr<CObjectBase> object)
 {
-	m_vObjects.push_back(std::move(upObject));
+	CObjectBase* result = object.get();
+	m_vObjects.push_back(std::move(object));
+	return result;
 }
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CScene::RemoveObject(const CObjectBase* object)
+{
+	std::erase_if(m_vObjects, [object](const auto& owned) { return owned.get() == object; });
+}
+//-----------------------------------
 
 void CScene::AddObjects(std::unique_ptr<CModelObject>* upObjects, size_t size)
 {
 	for (int i = 0; i < size; ++i)
 	{
-		AddObject(upObjects[i]);
+		AddObject(std::move(upObjects[i]));
 	}
 }
 
 void CScene::AddObjects(std::vector<std::unique_ptr<CModelObject>>& upObjects)
 {
-	for (auto& object : upObjects) AddObject(object);
+	for (auto& object : upObjects) AddObject(std::move(object));
 }
 
 void CScene::WindowResized(int width, int height)
@@ -78,6 +165,10 @@ void CScene::ProcessInput(UCHAR* pKeyBuffer, float deltaTime)
 
 void CScene::ReleaseUploadBuffers()
 {
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	for (auto& object : m_vObjects) object->ReleaseUploadBuffer();
+	//-----------------------------------
 }
 
 void CScene::ReleaseObjects()
@@ -89,7 +180,7 @@ void CScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 {
 	m_spShader->SetGraphicsRootSignature(cpCommandList);
 	m_spShader->SetPipelineState(cpCommandList, ERenderState::Default);
-	
+
 	//기본 타일링 수치 설정
 	float defaultTiling = 1.0f;
 	cpCommandList->SetGraphicsRoot32BitConstants(1, 1, &defaultTiling, 4);
@@ -102,213 +193,64 @@ void CScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 	sceneInfo.viewSky = Matrix4x4::Transpose(sceneInfo.viewSky);
 	m_spShader->SetSceneData(cpCommandList, sceneInfo);
 
-	for (auto& upObject : m_vObjects)
-	{
-		upObject->DrawObject(cpCommandList);
-	}
-}
-
-//===============================================================================================
-//===============================================================================================
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-namespace
-{
-	bool Down(const UCHAR* keys, int key)
-	{
-		return (keys[key] & 0x80) != 0;
-	}
-//-----------------------------------
-
-	DWORD ReadTankControls(const UCHAR* keys)
-	{
-		DWORD input = 0;
-		if (Down(keys, 'W')) input |= DIR_FORWARD;
-		if (Down(keys, 'S')) input |= DIR_BACKWARD;
-		if (Down(keys, 'A')) input |= DIR_LEFT;
-		if (Down(keys, 'D')) input |= DIR_RIGHT;
-		if (Down(keys, VK_UP)) input |= CANNON_UP;
-		if (Down(keys, VK_DOWN)) input |= CANNON_DOWN;
-		if (Down(keys, VK_LEFT)) input |= TURRET_LEFT;
-		if (Down(keys, VK_RIGHT)) input |= TURRET_RIGHT;
-		return input;
-	}
-}
-
-using namespace config::stage;
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-CStageResources::CStageResources() = default;
-CStageResources::~CStageResources() = default;
-//-----------------------------------
-
-CGameScene::CGameScene(const PlayerRules& rules)
-	: m_rules(rules)
-{
-}
-
-CGameScene::~CGameScene()
-{}
-
-
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-HRESULT CStageResources::Build(ComPtr<ID3D12Device>& cpDevice,
-	ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator& allocator)
-{
-	spShader = std::make_shared<CShader>();
-	HRESULT shaderResult = spShader->CreateShader(cpDevice, cpCommandList, allocator);
-	if (FAILED(shaderResult)) return shaderResult;
-	//-----------------------------------
-	//[직접 작성한 코드]
-	upTerrain = std::make_unique<CTerrainObject>();
-	auto spHeightmap = std::make_shared<CHeightMapImage>(L"../Resources/Cheongsando.raw", TerrainSamples, TerrainSamples);
-	upTerrain->SetHeightMap(spHeightmap);
-	HRESULT hr = upTerrain->GenerateTerrain(cpDevice, cpCommandList, &allocator, true);
-	if (FAILED(hr)) return hr;
-
-	//auto spNormalmap = std::make_shared<CNormalMapImage>(L"../Resources/Cheongsando.raw", TerrainSamples, TerrainSamples);
-
-	upTerrain->SetScale(TerrainHorizontalScale, TerrainVerticalScale, TerrainHorizontalScale);
-
-	spTank = std::make_shared<CModel>();
-	auto spMaterial = std::make_shared<CMaterial>(spShader);
-	if (!spTank->LoadModelData(cpDevice, cpCommandList, "../Resources/AbramsTank.txt", spMaterial))
-		return E_FAIL;
-
-	upSkybox = std::make_unique<CSkyboxObject>();
-	hr = upSkybox->GenerateSkyBox(cpDevice, cpCommandList, allocator);
-	if (FAILED(hr)) return hr;
-	//-----------------------------------
-
-	CTankPlayer::PrepareModel(spTank);
-	return BuildVisuals(cpDevice, cpCommandList);
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice,
-	ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator* allocator)
-{
-	if (!m_spStageResources) return E_UNEXPECTED;
-	if (!allocator) return E_INVALIDARG;
-	m_vObjects.clear();
-	m_vEnemies.clear();
-	m_vProjectiles.clear();
-	m_vHud.clear();
-	std::vector<const wchar_t*> textures
-	{
-		L"../Resources/UI/Aim.png",
-		L"../Resources/UI/AutoShoot.png",
-		L"../Resources/UI/Shield.png"
-	};
-	for (int i = 0; i < m_rules.maxHealth; ++i) textures.push_back(L"../Resources/UI/HealthBar.png");
-	textures.push_back(L"../Resources/UI/Victory!.png");
-	textures.push_back(L"../Resources/UI/Defeat.png");
-	for (const wchar_t* file : textures)
-	{
-		auto upUi = std::make_unique<CUI>(XMFLOAT4{ 0, 0, 1, 1 }, XMFLOAT4{ 1, 1, 1, 1 }, file);
-		const HRESULT hr = upUi->BuildMesh(cpDevice, cpCommandList, allocator);
-		if (FAILED(hr)) return hr;
-		m_vHud.push_back(std::move(upUi));
-	}
-	return S_OK;
-}
-//-----------------------------------
-
-
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CGameScene::SetStageResources(const std::shared_ptr<CStageResources>& resources)
-{
-	m_spStageResources = resources;
-	m_spShader = resources->spShader;
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CGameScene::ReleaseUploadBuffers()
-{
-	for (auto& ui : m_vHud) ui->ReleaseUploadBuffer();
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CGameScene::ReleaseObjects()
-{
-	m_vEnemies.clear();
-	m_vProjectiles.clear();
-	m_vHud.clear();
-	CScene::ReleaseObjects();
-	m_spStageResources.reset();
-	m_spShader.reset();
-}
-//-----------------------------------
-
-//-----------------------------------
-//[직접 작성한 코드]
-void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
-{
-	m_spShader->SetGraphicsRootSignature(cpCommandList);
-	m_spShader->SetPipelineState(cpCommandList, ERenderState::Default);
-
-	CB_SceneInfo sceneInfo;
-	sceneInfo.view = Matrix4x4::Transpose(m_spCamera->GetView());
-	sceneInfo.proj = Matrix4x4::Transpose(m_spCamera->GetProj());
-	sceneInfo.viewSky = m_spCamera->GetView();
-	sceneInfo.viewSky._41 = sceneInfo.viewSky._42 = sceneInfo.viewSky._43 = 0.0f;
-	sceneInfo.viewSky = Matrix4x4::Transpose(sceneInfo.viewSky);
-	m_spShader->SetSceneData(cpCommandList, sceneInfo);
-
-	//Skybox
-	m_spShader->SetPipelineState(cpCommandList, ERenderState::Skybox);
-	m_spStageResources->upSkybox->DrawObject(cpCommandList);
-
-	//Terrain
-	m_spShader->SetPipelineState(cpCommandList, ERenderState::NormalMap);
-	XMFLOAT4X4 temp = Matrix4x4::Transpose(Matrix4x4::Identity());
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &temp, 0);
-	XMFLOAT4 color{ 1, 1, 1, 1 };
-	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &color, 0);
-	m_spStageResources->upTerrain->DrawObject(cpCommandList);
-
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	DrawStage(cpCommandList);
+	DrawObjects(cpCommandList, false);
+	const XMFLOAT4X4 identity = Matrix4x4::Identity();
+	m_spShader->SetSceneData(cpCommandList, CB_SceneInfo{ identity, identity, identity }, true);
+	DrawObjects(cpCommandList, true);
 	//-----------------------------------
 }
-//-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-HRESULT CStageResources::BuildVisuals(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+void CScene::DrawObjects(const ComPtr<ID3D12GraphicsCommandList>& list, bool screenSpace)
 {
-	const auto loadModel = [&](std::shared_ptr<CModel>& model, const char* path, const XMFLOAT3& offset)
+	for (const auto& object : m_vObjects)
 	{
-		model = std::make_shared<CModel>();
-		auto material = std::make_shared<CMaterial>(spShader);
-		std::string error;
-		if (!model->LoadModelData(cpDevice, cpCommandList, path, material, &error))
-		{
-			const std::string message = std::string(path) + ": " + error + "\n";
-			OutputDebugStringA(message.c_str());
-			return false;
-		}
-		const auto& root = model->getData().front().name;
-		model->SetFrameLocal(root, Matrix4x4::Multiply(model->GetFrameMatrix(root), Matrix4x4::Translation(offset)));
-		return true;
-	};
-	if (!loadModel(spApache, "../Resources/Apache.txt", { -2.1725f, -3.0716f, 21.0388f }) ||
-		!loadModel(spRocks[0], "../Resources/Rock.txt", { -2.9746f, -0.098f, -2.0176f }) ||
-		!loadModel(spRocks[1], "../Resources/Rock2.txt", { -2.9407f, -0.098f, -3.3343f })) return E_FAIL;
+		if (object->IsScreenSpace() != screenSpace) continue;
+		m_spShader->SetPipelineState(list, object->GetRenderState());
+		const float tiling = 1.0f;
+		list->SetGraphicsRoot32BitConstants(1, 1, &tiling, 4);
+		object->DrawObject(list);
+	}
+}
+//-----------------------------------
 
+// -------------------------------------------
+//
+// GameScene
+//
+// -------------------------------------------
+
+CGameScene::CGameScene() = default;
+
+CGameScene::~CGameScene()
+{
+	ReleaseObjects();
+}
+
+HRESULT CGameScene::BuildObjects(ComPtr<ID3D12Device>& device,
+	ComPtr<ID3D12GraphicsCommandList>& list, CDescHeapAllocator* allocator)
+{
+	if (!allocator) return E_INVALIDARG;
+	if (!m_spShader) return E_UNEXPECTED;
+	auto skybox = std::make_unique<CSkyboxObject>();
+	HRESULT hr = skybox->GenerateSkyBox(device, list, *allocator);
+	if (FAILED(hr)) return hr;
+	AddObject(std::move(skybox));
+
+	//-----------------------------------
+	//[직접 작성한 코드]
+	auto terrain = std::make_unique<CTerrainObject>();
+	auto heightmap = std::make_shared<CHeightMapImage>(L"../Resources/Cheongsando.raw", TerrainSamples, TerrainSamples);
+	terrain->SetHeightMap(heightmap);
+	hr = terrain->GenerateTerrain(device, list, allocator, true);
+	if (FAILED(hr)) return hr;
+	terrain->SetScale(TerrainHorizontalScale, TerrainVerticalScale, TerrainHorizontalScale);
+	//-----------------------------------
+	m_pTerrain = terrain.get();
+	AddObject(std::move(terrain));
 	MeshData<VertexTexcoord> cube;
 	const XMFLOAT3 corners[] =
 	{
@@ -321,100 +263,159 @@ HRESULT CStageResources::BuildVisuals(const ComPtr<ID3D12Device>& cpDevice, cons
 		0, 1, 2, 0, 2, 3, 4, 7, 6, 4, 6, 5, 0, 4, 5, 0, 5, 1,
 		3, 2, 6, 3, 6, 7, 1, 5, 6, 1, 6, 2, 0, 3, 7, 0, 7, 4
 	};
-	upBox = std::make_unique<CMesh>();
-	return upBox->CreateBuffer(cpDevice, cpCommandList, cube);
+	m_upBoxMesh = std::make_unique<CMesh>();
+	hr = m_upBoxMesh->CreateBuffer(device, list, cube);
+	if (FAILED(hr)) return hr;
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	auto marker = std::make_unique<CMeshObject>(*m_upBoxMesh, XMFLOAT4{ 1, 1, 1, 1 });
+	marker->SetVisible(false);
+	m_pLockMarker = marker.get();
+	AddObject(std::move(marker));
+	//-----------------------------------
+	return S_OK;
+}
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CGameScene::SetPlayer(CVehicleObject* player)
+{
+	m_pPlayer = player;
+	m_pPlayer->SetCamera(m_spCamera);
 }
 //-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CGameScene::DrawStageBox(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const XMFLOAT3& position,
-	const XMFLOAT3& size, const XMFLOAT4& color, float yaw)
+HRESULT CGameScene::BuildHud(const ComPtr<ID3D12Device>& device,
+	const ComPtr<ID3D12GraphicsCommandList>& list, CDescHeapAllocator& allocator)
 {
-	Transform pose;
-	pose.position = position;
-	pose.rotation.y = yaw;
-	pose.scale = size;
-	const XMFLOAT4X4 matrix = Matrix4x4::Transpose(pose.getMatrix());
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &matrix, 0);
-	const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(matrix);
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
-	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &color, 0);
-	m_spStageResources->upBox->DrawMesh(cpCommandList);
+	m_upHud = std::make_unique<CGameHud>();
+	return m_upHud->Build(*this, m_pPlayer->GetMaxHealth(), device, list, allocator);
 }
 //-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CGameScene::UpdateStageView()
+std::shared_ptr<CModel> CGameScene::FindModel(const char* path) const
 {
-	XMFLOAT3 aimOrigin, aimDirection;
-	GetAimRay(aimOrigin, aimDirection);
-	UpdateStageCamera(aimDirection);
+	const auto found = m_models.find(path);
+	return found != m_models.end() ? found->second : nullptr;
 }
 //-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CGameScene::DrawStageHud(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+std::shared_ptr<CModel> CGameScene::LoadModel(const ComPtr<ID3D12Device>& device,
+	const ComPtr<ID3D12GraphicsCommandList>& list, const char* path, const XMFLOAT3& offset)
 {
-	m_spShader->SetPipelineState(cpCommandList, ERenderState::UI);
-	const XMFLOAT4X4 projection = m_spCamera->GetProj();
-	const XMFLOAT4X4 identity = Matrix4x4::Identity();
-	const CB_SceneInfo sceneInfo{ identity, identity, identity };
-	m_spShader->SetSceneData(cpCommandList, sceneInfo, true);
-
-	const float aspectScale = projection._11 / projection._22;
-	const XMFLOAT4 white{ 1, 1, 1, 1 };
-	const XMFLOAT4 lockColor = m_bLockPinned ? XMFLOAT4{ .18f, .96f, 1, 1 } : XMFLOAT4{ 1, .86f, .08f, 1 };
-	const XMFLOAT4 reticleColor = m_nLockedEnemy < 0 ? white : lockColor;
-	for (auto& ui : m_vHud) ui->SetVisible(false);
-	SetHudPlane(AimHud, 0, 0, ReticleSize * aspectScale, ReticleSize, reticleColor);
-	for (int i = 0; i < m_rules.maxHealth; ++i)
+	if (auto model = FindModel(path)) return model;
+	auto model = std::make_shared<CModel>();
+	auto material = std::make_shared<CMaterial>(m_spShader);
+	std::string error;
+	if (!model->LoadModelData(device, list, path, material, &error))
 	{
-		const XMFLOAT4 color = i < PlayerObject().GetHealth() ? white : XMFLOAT4{ .25f, .25f, .25f, 1 };
-		SetHudPlane(HealthHudBegin + i, -.87f + i * .065f * aspectScale, .86f, .055f * (259.0f / 260.0f) * aspectScale, .055f, color);
+		OutputDebugStringA((std::string(path) + ": " + error + "\n").c_str());
+		return nullptr;
 	}
-	UpdateHudExtras(aspectScale, reticleColor);
-	if (m_state == EStageState::Victory || m_state == EStageState::Defeat)
-	{
-		const size_t result = HealthHudBegin + m_rules.maxHealth + (m_state == EStageState::Defeat ? 1 : 0);
-		const float imageWidth = m_state == EStageState::Victory ? 1151.0f : 1027.0f;
-		SetHudPlane(result, 0, .45f, .65f * aspectScale, .65f * 463.0f / imageWidth, white);
-	}
-	for (auto& ui : m_vHud) ui->DrawObject(cpCommandList);
+	const auto& root = model->getData().front().name;
+	model->SetFrameLocal(root, Matrix4x4::Multiply(model->GetFrameMatrix(root), Matrix4x4::Translation(offset)));
+	m_models.emplace(path, model);
+	return model;
 }
 //-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CGameScene::DrawStage(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+std::shared_ptr<CModel> CGameScene::LoadTankModel(const ComPtr<ID3D12Device>& device,
+	const ComPtr<ID3D12GraphicsCommandList>& list)
 {
-	m_spShader->SetPipelineState(cpCommandList, ERenderState::Default);
-	DrawStageObjects(cpCommandList);
-	for (const auto& object : m_vObjects) object->DrawObject(cpCommandList);
-	if (m_nLockedEnemy >= 0)
-	{
-		const auto& enemy = *m_vEnemies[m_nLockedEnemy];
-		if (enemy.IsAlive())
-		{
-			XMFLOAT3 marker = enemy.GetPosition();
-			marker.y += enemy.GetMarkerHeight();
-			const XMFLOAT4 color = m_bLockPinned ? XMFLOAT4{ .18f, .96f, 1, 1 } : XMFLOAT4{ 1, .86f, .08f, 1 };
-			DrawStageBox(cpCommandList, marker, { .6f, .28f, .6f }, color);
-		}
-	}
-	for (const auto& shot : m_vProjectiles) shot->DrawObject(cpCommandList);
-	DrawStageHud(cpCommandList);
+	constexpr const char* path = "../Resources/AbramsTank.txt";
+	if (auto model = FindModel(path)) return model;
+	auto model = LoadModel(device, list, path);
+	if (model) CTankObject::PrepareModel(model);
+	return model;
 }
 //-----------------------------------
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CGameScene::ReleaseUploadBuffers()
+{
+	CScene::ReleaseUploadBuffers();
+	for (auto& entry : m_models) entry.second->ReleaseUploadBuffer();
+	if (m_upBoxMesh) m_upBoxMesh->ReleaseUploadBuffer();
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CGameScene::ReleaseObjects()
+{
+	if (m_pPlayer) m_pPlayer->ResetCombat();
+	m_vEnemies.clear();
+	m_vAttackers.clear();
+	m_vProjectiles.clear();
+	m_vStageObjects.clear();
+	m_upHud.reset();
+	m_pPlayer = nullptr;
+	m_pTerrain = nullptr;
+	m_pLockMarker = nullptr;
+	CScene::ReleaseObjects();
+	m_models.clear();
+	m_upBoxMesh.reset();
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CGameScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& list)
+{
+	if (m_upHud)
+	{
+		const auto projection = m_spCamera->GetProj();
+		m_upHud->Update(*m_pPlayer, m_state == EStageState::Victory, m_state == EStageState::Defeat,
+			projection._11 / projection._22);
+	}
+	CScene::DrawScene(list);
+}
+//-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
 XMFLOAT3 CGameScene::OnTerrain(float x, float z, float offset) const
 {
-	return { x, m_spStageResources->upTerrain->GetHeightAt(x, z) + offset, z };
+	return { x, Terrain().GetHeightAt(x, z) + offset, z };
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+CObjectBase* CGameScene::AddStageObject(std::unique_ptr<CObjectBase> object)
+{
+	m_vStageObjects.push_back(object.get());
+	return AddObject(std::move(object));
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CGameScene::ClearProjectiles()
+{
+	for (auto* shot : m_vProjectiles) RemoveObject(shot);
+	m_vProjectiles.clear();
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CGameScene::ClearStageObjects()
+{
+	ClearProjectiles();
+	m_vEnemies.clear();
+	m_vAttackers.clear();
+	for (auto* object : m_vStageObjects) RemoveObject(object);
+	m_vStageObjects.clear();
 }
 //-----------------------------------
 
@@ -424,205 +425,15 @@ void CGameScene::BeginStage(EGameStage stage)
 {
 	m_stage = stage;
 	m_state = EStageState::Playing;
-	m_bFireRequested = false;
-	m_bLockPinned = false;
-	m_nLockedEnemy = -1;
-	PlayerObject().SetCombatInfo(m_rules.maxHealth, m_rules.aimHeight, m_rules.hitRadius,
-		m_rules.hitRadius, 0.0f, m_rules.aimHeight);
+	m_fResultTimer = 0.0f;
+	m_pPlayer->ResetCombat();
 	std::fill(std::begin(m_keys), std::end(m_keys), UCHAR{});
-	m_fReload = m_fResultTimer = 0.0f;
-	m_vEnemies.clear();
-	m_vProjectiles.clear();
-	// 플레이어 인스턴스는 보존하고 스테이지에 배치한 나머지 객체를 제거한다.
-	const auto* player = &PlayerObject();
-	std::erase_if(m_vObjects, [player](const auto& object) { return object.get() != player; });
-
+	ClearStageObjects();
+	m_pLockMarker->SetVisible(false);
 	ResetStage();
-	const XMFLOAT4X4 projection = m_spCamera->GetProj();
+	const auto projection = m_spCamera->GetProj();
 	m_spCamera->SetPerspective(CameraFovDegrees, projection._22 / projection._11, CameraNear, CameraFar);
-	UpdateStageView();
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CGameScene::StageKeyPressed(WPARAM key)
-{
-	if (m_state != EStageState::Playing) return;
-	if (key == 'P')
-	{
-		Win();
-		return;
-	}
-	if (key == VK_SPACE) m_bFireRequested = true;
-	if (key == 'Q' && m_nLockedEnemy >= 0) m_bLockPinned = !m_bLockPinned;
-	OnStageKeyPressed(key);
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-XMFLOAT3 CGameScene::PlayerAimPoint() const
-{
-	return PlayerObject().GetAimPoint();
-}
-//-----------------------------------
-
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CGameScene::UpdateLock(const XMFLOAT3& origin, const XMFLOAT3& direction)
-{
-	if (m_bLockPinned && m_nLockedEnemy >= 0 && m_vEnemies[m_nLockedEnemy]->IsAlive()) return;
-	m_bLockPinned = false;
-	m_nLockedEnemy = -1;
-	int directlyHit = -1;
-	float bestScore = -1.0f;
-	const float maxDistance = m_rules.shotSpeed * m_rules.shotLifetime;
-	const XMFLOAT3 rayEnd = Vector3::Add(origin, direction, maxDistance);
-	float nearest = (std::min)(1.0f, TerrainHitFraction(origin, rayEnd, LockTerrainClearance));
-	for (size_t i = 0; i < m_vEnemies.size(); ++i)
-	{
-		const auto& enemy = *m_vEnemies[i];
-		if (!enemy.IsAlive()) continue;
-		const XMFLOAT3 aim = enemy.GetAimPoint();
-		const float hit = Collision::SegmentSphereFraction(origin, rayEnd, aim, m_fLockRadius);
-		if (hit < nearest)
-		{
-			directlyHit = static_cast<int>(i);
-			nearest = hit;
-		}
-		const XMFLOAT3 delta = Vector3::Subtract(aim, origin);
-		const float distance = Vector3::Length(delta);
-		const float dot = Vector3::DotProduct(direction, Vector3::Normalize(delta));
-		const float score = dot - distance * LockDistancePenalty;
-		if (distance > maxDistance || dot < m_fLockMinDot || score <= bestScore ||
-			TerrainHitFraction(origin, aim, LockTerrainClearance) < 1.0f) continue;
-		m_nLockedEnemy = static_cast<int>(i);
-		bestScore = score;
-	}
-	if (directlyHit >= 0) m_nLockedEnemy = directlyHit;
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CGameScene::UpdateEnemies(float dt)
-{
-	const XMFLOAT3 target = PlayerAimPoint();
-	for (auto* enemy : m_vEnemies)
-	{
-		if (!enemy->IsAlive()) continue;
-		XMFLOAT3 muzzle, direction;
-		if (!enemy->TryFire(target, dt, muzzle, direction)) continue;
-		if (TerrainHitFraction(muzzle, target, TankShellClearance) < 1.0f) continue;
-		SpawnProjectile(muzzle, {
-			.direction = direction,
-			.speed = TankShellSpeed,
-			.lifetime = TankShellLifetime,
-			.clearance = TankShellClearance,
-			.enemyOwned = true
-		});
-		enemy->Reload();
-	}
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CGameScene::FirePlayer(const XMFLOAT3& origin, const XMFLOAT3& direction)
-{
-	if (m_fReload > 0.0f) return;
-	SpawnProjectile(origin, {
-		.direction = direction,
-		.speed = m_rules.shotSpeed,
-		.lifetime = m_rules.shotLifetime,
-		.clearance = m_rules.shotClearance,
-		.homingDelay = m_rules.homingDelay,
-		.homingTurnSpeed = m_rules.homingTurnSpeed,
-		.target = m_rules.homing ? m_nLockedEnemy : -1
-	});
-	m_fReload = m_rules.reload;
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-float CGameScene::TerrainHitFraction(const XMFLOAT3& start, const XMFLOAT3& end, float clearance) const
-{
-	const float distance = Vector3::Length(Vector3::Subtract(end, start));
-	const int steps = (std::max)(1, static_cast<int>(std::ceil(distance / TerrainRaySampleSpacing)));
-	for (int i = 0; i <= steps; ++i)
-	{
-		const float t = static_cast<float>(i) / steps;
-		const XMFLOAT3 point = Vector3::Lerp(start, end, t);
-		if (std::abs(point.x) > TerrainEdge || std::abs(point.z) > TerrainEdge ||
-			point.y <= m_spStageResources->upTerrain->GetHeightAt(point) + clearance) return t;
-	}
-	return 2.0f;
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CGameScene::UpdateProjectiles(float dt)
-{
-	for (auto& upShot : m_vProjectiles)
-	{
-		auto& shot = *upShot;
-		std::optional<XMFLOAT3> target;
-		if (shot.flight.target >= 0 && m_vEnemies[shot.flight.target]->IsAlive())
-			target = m_vEnemies[shot.flight.target]->GetAimPoint();
-		const float stepTime = shot.AdvanceTime(dt, target);
-		const XMFLOAT3 end = shot.NextPosition(stepTime);
-		float closest = TerrainHitFraction(shot.Position(), end, shot.flight.clearance);
-		int hitEnemy = -1;
-		if (shot.flight.enemyOwned)
-		{
-			const float hit = PlayerObject().GetHitFraction(shot.Position(), end, false);
-			if (hit <= 1.0f && hit < closest)
-			{
-				closest = hit;
-				const bool wasAlive = IsPlayerAlive();
-				if (!IsPlayerProtected()) PlayerObject().ApplyDamage();
-				if (wasAlive && !IsPlayerAlive())
-				{
-					m_state = EStageState::Defeat;
-					m_fResultTimer = DefeatDelay;
-					m_bLockPinned = false;
-					m_nLockedEnemy = -1;
-				}
-			}
-		}
-		else
-		{
-			for (size_t i = 0; i < m_vEnemies.size(); ++i)
-			{
-				auto& enemy = *m_vEnemies[i];
-				if (!enemy.IsAlive()) continue;
-				const float hit = enemy.GetHitFraction(shot.Position(), end, shot.flight.target >= 0);
-				if (hit <= 1.0f && hit < closest)
-				{
-					closest = hit;
-					hitEnemy = static_cast<int>(i);
-				}
-			}
-		}
-		if (hitEnemy >= 0) m_vEnemies[hitEnemy]->ApplyDamage();
-		if (closest <= 1.0f) shot.flight.lifetime = 0.0f;
-		shot.Position() = end;
-	}
-	std::erase_if(m_vProjectiles, [](const std::unique_ptr<CProjectileObject>& shot) { return shot->flight.lifetime <= 0.0f; });
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CGameScene::Win()
-{
-	m_fResultTimer = VictoryHoldTime();
-	m_state = m_fResultTimer > 0.0f ? EStageState::Victory : EStageState::Finished;
-	m_vProjectiles.clear();
+	m_pPlayer->UpdateCamera(Terrain());
 }
 //-----------------------------------
 
@@ -636,12 +447,33 @@ void CGameScene::ProcessInput(UCHAR* keys, float)
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
+void CGameScene::KeyPressed(WPARAM key, CGameFramework& framework)
+{
+	if (key == VK_ESCAPE) { framework.OpenStageSelect(); return; }
+	if (m_state != EStageState::Playing) return;
+	if (key == 'P') { Win(); return; }
+	m_pPlayer->KeyPressed(key);
+	m_pPlayer->UpdateCamera(Terrain());
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CGameScene::CheckStageTransition(CGameFramework& framework)
+{
+	if (!StageFinished()) return;
+	if (m_stage == EGameStage::HelicopterTargets) framework.EnterStage(EGameStage::TankBattle);
+	else framework.OpenStageSelect();
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 void CGameScene::Update(float dt)
 {
-	const UCHAR* keys = m_keys;
 	dt = std::clamp(dt, 0.0f, MaxTimeStep);
 	if (m_state == EStageState::Finished) return;
-	if (m_state == EStageState::Victory || m_state == EStageState::Defeat)
+	if (m_state != EStageState::Playing)
 	{
 		m_fResultTimer -= dt;
 		if (m_fResultTimer <= 0.0f)
@@ -652,23 +484,115 @@ void CGameScene::Update(float dt)
 		return;
 	}
 
-	UpdatePlayer(keys, dt);
-	m_fReload = (std::max)(0.0f, m_fReload - dt);
-	XMFLOAT3 origin, direction;
-	GetAimRay(origin, direction);
-	origin = Vector3::Add(origin, direction, m_rules.muzzleOffset);
-	UpdateLock(origin, direction);
-
-	const bool automaticShot = TryAutoAim(keys, dt, origin, direction);
-	if (m_bFireRequested || automaticShot) FirePlayer(origin, direction);
-	m_bFireRequested = false;
+	const Transform previous = m_pPlayer->GetTransform();
+	m_pPlayer->ProcessControls(m_keys, dt, Terrain());
+	ResolvePlayerMovement(previous);
+	m_pPlayer->UpdateTargeting(m_vEnemies, Terrain());
+	XMFLOAT3 origin;
+	ProjectileData projectile;
+	if (m_pPlayer->TryPlayerFire(dt, origin, projectile)) SpawnProjectile(origin, projectile);
 	UpdateEnemies(dt);
 	UpdateProjectiles(dt);
+	UpdateLockMarker();
 
 	const bool allDestroyed = std::none_of(m_vEnemies.begin(), m_vEnemies.end(),
 		[](const CDamageableObject* enemy) { return enemy->IsAlive(); });
-	if (IsPlayerAlive() && (allDestroyed || HasReachedExit())) Win();
-	UpdateStageView();
+	if (m_pPlayer->IsAlive() && (allDestroyed || HasReachedExit())) Win();
+	m_pPlayer->UpdateCamera(Terrain());
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CGameScene::UpdateEnemies(float dt)
+{
+	const XMFLOAT3 target = m_pPlayer->GetAimPoint();
+	for (auto* enemy : m_vAttackers)
+	{
+		if (!enemy->IsAlive() || !enemy->UpdateAttack(target, dt, Terrain())) continue;
+		XMFLOAT3 origin;
+		ProjectileData projectile;
+		if (enemy->FireWeapon(origin, projectile)) SpawnProjectile(origin, projectile);
+	}
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CGameScene::SpawnProjectile(const XMFLOAT3& position, const ProjectileData& data)
+{
+	auto shot = std::make_unique<CProjectileObject>(*m_upBoxMesh, position, data);
+	m_vProjectiles.push_back(shot.get());
+	AddObject(std::move(shot));
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CGameScene::UpdateProjectiles(float dt)
+{
+	for (auto* shot : m_vProjectiles)
+	{
+		const XMFLOAT3 start = shot->GetPosition();
+		shot->Advance(dt);
+		const XMFLOAT3 end = shot->GetPosition();
+		float closest = Terrain().GetHitFraction(start, end, shot->GetClearance());
+		CDamageableObject* hitObject = nullptr;
+		if (shot->IsEnemyOwned())
+		{
+			const float hit = m_pPlayer->GetHitFraction(start, end, false);
+			if (hit <= 1.0f && hit < closest) { closest = hit; hitObject = m_pPlayer; }
+		}
+		else
+		{
+			for (auto* enemy : m_vEnemies)
+			{
+				if (!enemy->IsAlive()) continue;
+				const float hit = enemy->GetHitFraction(start, end, shot->IsHoming());
+				if (hit <= 1.0f && hit < closest) { closest = hit; hitObject = enemy; }
+			}
+		}
+		if (hitObject) hitObject->ApplyDamage();
+		if (closest <= 1.0f) shot->Expire();
+	}
+	std::erase_if(m_vProjectiles, [this](const CProjectileObject* shot)
+	{
+		if (!shot->IsExpired()) return false;
+		RemoveObject(shot);
+		return true;
+	});
+	if (!m_pPlayer->IsAlive())
+	{
+		m_state = EStageState::Defeat;
+		m_fResultTimer = DefeatDelay;
+		m_pLockMarker->SetVisible(false);
+		m_pPlayer->ClearTargeting();
+	}
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CGameScene::UpdateLockMarker()
+{
+	const auto* target = m_pPlayer->GetLockedTarget();
+	m_pLockMarker->SetVisible(target && target->IsAlive() && m_state == EStageState::Playing);
+	if (!target) return;
+	XMFLOAT3 position = target->GetPosition();
+	position.y += target->GetMarkerHeight();
+	m_pLockMarker->SetPosition(position);
+	m_pLockMarker->SetScale(.6f, .28f, .6f);
+	m_pLockMarker->SetColor(m_pPlayer->IsLockPinned() ? XMFLOAT4{ .18f, .96f, 1, 1 } : XMFLOAT4{ 1, .86f, .08f, 1 });
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CGameScene::Win()
+{
+	m_fResultTimer = VictoryHoldTime();
+	m_state = m_fResultTimer > 0.0f ? EStageState::Victory : EStageState::Finished;
+	ClearProjectiles();
 }
 //-----------------------------------
 
@@ -676,10 +600,10 @@ void CGameScene::Update(float dt)
 //[아래 코드는 AI로 구현됨]
 void CGameScene::AddTarget(const XMFLOAT3& position)
 {
-	auto object = std::make_unique<CTargetObject>(*m_spStageResources->upBox);
-	object->SetPosition(position);
-	m_vEnemies.push_back(object.get());
-	m_vObjects.push_back(std::move(object));
+	auto target = std::make_unique<CTargetObject>(*m_upBoxMesh);
+	target->SetPosition(position);
+	m_vEnemies.push_back(target.get());
+	AddStageObject(std::move(target));
 }
 //-----------------------------------
 
@@ -687,48 +611,34 @@ void CGameScene::AddTarget(const XMFLOAT3& position)
 //[아래 코드는 AI로 구현됨]
 void CGameScene::AddEnemyTank(float x, float z, float playerStartZ)
 {
-	auto enemyTank = std::make_unique<CEnemyTank>();
-	enemyTank->UsePreparedTankModel(m_spStageResources->spTank);
-	enemyTank->ResetStagePose(OnTerrain(x, z, TankGroundOffset), std::atan2(-x, playerStartZ - z));
-	enemyTank->FollowStageSlope(*m_spStageResources->upTerrain);
-	m_vEnemies.push_back(enemyTank.get());
-	m_vObjects.push_back(std::move(enemyTank));
+	auto enemy = std::make_unique<CEnemyTank>();
+	enemy->UsePreparedTankModel(FindModel("../Resources/AbramsTank.txt"));
+	enemy->ResetStagePose(OnTerrain(x, z, TankGroundOffset), std::atan2(-x, playerStartZ - z));
+	enemy->FollowStageSlope(Terrain());
+	m_vEnemies.push_back(enemy.get());
+	m_vAttackers.push_back(enemy.get());
+	AddStageObject(std::move(enemy));
 }
 //-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CGameScene::SetLockSettings(float minDot, float radius)
+CMeshObject* CGameScene::AddStageBox(const XMFLOAT3& position, const XMFLOAT3& size, const XMFLOAT4& color)
 {
-	m_fLockMinDot = minDot;
-	m_fLockRadius = radius;
+	auto box = std::make_unique<CMeshObject>(*m_upBoxMesh, color);
+	box->SetPosition(position);
+	box->SetScale(size);
+	CMeshObject* result = box.get();
+	AddStageObject(std::move(box));
+	return result;
 }
 //-----------------------------------
 
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-std::optional<XMFLOAT3> CGameScene::LockedAimPoint() const
-{
-	if (m_nLockedEnemy < 0) return std::nullopt;
-	return m_vEnemies[m_nLockedEnemy]->GetAimPoint();
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-CTankGameScene::CTankGameScene()
-	: CGameScene(PlayerRules{
-		.maxHealth = PlayerTankHealth,
-		.aimHeight = TankAimHeight,
-		.hitRadius = TankHitRadius,
-		.reload = TankReload,
-		.shotSpeed = TankShellSpeed,
-		.shotLifetime = TankShellLifetime,
-		.shotClearance = TankShellClearance
-	})
-{
-}
-//-----------------------------------
+// -------------------------------------------
+//
+// TankGameScene
+//
+// -------------------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
@@ -737,42 +647,29 @@ CTankGameScene::~CTankGameScene() = default;
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-HRESULT CTankGameScene::BuildObjects(
-	ComPtr<ID3D12Device>& cpDevice,
-	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	CDescHeapAllocator* DescHeapAllocator)
+HRESULT CTankGameScene::BuildObjects(ComPtr<ID3D12Device>& device,
+	ComPtr<ID3D12GraphicsCommandList>& list, CDescHeapAllocator* allocator)
 {
-	const HRESULT hr = CGameScene::BuildObjects(cpDevice, cpCommandList, DescHeapAllocator);
+	HRESULT hr = CGameScene::BuildObjects(device, list, allocator);
 	if (FAILED(hr)) return hr;
-
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
-	auto upPlayer = std::make_unique<CTankPlayer>();
-	m_pPlayer = upPlayer.get();
-	m_pPlayer->UsePreparedTankModel(m_spStageResources->spTank);
-	m_vObjects.push_back(std::move(upPlayer));
-	//-----------------------------------
-
-	const auto tankBounds = m_spStageResources->spTank->GetModelBounds();
-	if (!tankBounds) return E_FAIL;
-	m_tankBounds = *tankBounds;
-
-	for (size_t i = 0; i < std::size(m_rockBounds); ++i)
+	auto tank = LoadTankModel(device, list);
+	if (!tank || !tank->GetModelBounds()) return E_FAIL;
+	const struct { const char* path; XMFLOAT3 offset; } rocks[] =
 	{
-		const auto bounds = m_spStageResources->spRocks[i]->GetModelBounds();
-		if (!bounds) return E_FAIL;
-		m_rockBounds[i] = *bounds;
+		{ "../Resources/Rock.txt", { -2.9746f, -0.098f, -2.0176f } },
+		{ "../Resources/Rock2.txt", { -2.9407f, -0.098f, -3.3343f } }
+	};
+	for (const auto& rock : rocks)
+	{
+		auto model = LoadModel(device, list, rock.path, rock.offset);
+		if (!model || !model->GetModelBounds()) return E_FAIL;
 	}
-	return m_pPlayer->CreateCannonTestMesh(cpDevice, cpCommandList);
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CTankGameScene::ReleaseUploadBuffers()
-{
-	CGameScene::ReleaseUploadBuffers();
-	if (m_pPlayer) m_pPlayer->ReleaseCannonTestUploadBuffer();
+	auto player = std::make_unique<CTankPlayer>();
+	player->UsePreparedTankModel(tank);
+	m_pPlayer = player.get();
+	SetPlayer(m_pPlayer);
+	AddObject(std::move(player));
+	return BuildHud(device, list, *allocator);
 }
 //-----------------------------------
 
@@ -780,8 +677,8 @@ void CTankGameScene::ReleaseUploadBuffers()
 //[아래 코드는 AI로 구현됨]
 void CTankGameScene::ReleaseObjects()
 {
-	m_pPlayer = nullptr;
 	m_vObstacles.clear();
+	m_pPlayer = nullptr;
 	CGameScene::ReleaseObjects();
 }
 //-----------------------------------
@@ -790,10 +687,7 @@ void CTankGameScene::ReleaseObjects()
 //[아래 코드는 AI로 구현됨]
 void CTankGameScene::ResetStage()
 {
-	m_bAutoAttack = TankAutoAttackAtStart;
-	m_bShield = false;
 	m_vObstacles.clear();
-	SetLockSettings(TankLockMinDot, TankHitRadius);
 
 	const auto& spawn = Level2Spawn;
 	const float startZ = -UsableHalf * spawn.startDepth;
@@ -826,14 +720,15 @@ void CTankGameScene::ResetStage()
 		pose.scale = { scale, scale, scale };
 		//-----------------------------------
 		//[아래 코드는 AI로 구현됨]
-		const size_t variant = i % std::size(m_rockBounds);
-		m_vObstacles.push_back({ Collision::MakeFootprint(m_rockBounds[variant], pose) });
-		auto object = std::make_unique<CModelObject>();
-		object->SetModel(m_spStageResources->spRocks[variant]);
+		const char* path = i % 2 == 0 ? "../Resources/Rock.txt" : "../Resources/Rock2.txt";
+		auto model = FindModel(path);
+		auto object = std::make_unique<CObstacleObject>();
+		object->SetModel(model);
 		object->SetPosition(pose.position);
 		object->SetRotation(pose.rotation);
 		object->SetScale(pose.scale);
-		m_vObjects.push_back(std::move(object));
+		m_vObstacles.push_back(object.get());
+		AddStageObject(std::move(object));
 		//-----------------------------------
 	}
 }
@@ -841,124 +736,34 @@ void CTankGameScene::ResetStage()
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CTankGameScene::OnStageKeyPressed(WPARAM key)
+void CTankGameScene::ResolvePlayerMovement(const Transform& previous)
 {
-	if (key == 'T') m_bAutoAttack = !m_bAutoAttack;
-	if (key == 'H') m_bShield = !m_bShield;
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-CDamageableObject& CTankGameScene::PlayerObject() const
-{
-	return *m_pPlayer;
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CTankGameScene::GetAimRay(XMFLOAT3& origin, XMFLOAT3& direction) const
-{
-	m_pPlayer->GetStageCannonRay(origin, direction);
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-bool CTankGameScene::TryAutoAim(const UCHAR* keys, float dt, XMFLOAT3& origin, XMFLOAT3& direction)
-{
-	constexpr DWORD manualAimMask = CANNON_UP | CANNON_DOWN | TURRET_LEFT | TURRET_RIGHT;
-	if (!m_bAutoAttack || (ReadTankControls(keys) & manualAimMask) != 0) return false;
-	const auto aim = LockedAimPoint();
-	if (!aim) return false;
-
-	const bool aimed = m_pPlayer->AimStageCannon(*aim, dt);
-	GetAimRay(origin, direction);
-	return aimed;
-}
-//-----------------------------------
-
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CTankGameScene::UpdateHudExtras(float aspectScale, const XMFLOAT4& reticleColor)
-{
-	if (m_bAutoAttack)
-		SetHudPlane(AutoAttackHud, 0, 0, ReticleSize * aspectScale, ReticleSize, reticleColor);
-	const XMFLOAT4 shieldColor = m_bShield ? XMFLOAT4{ 1, 1, 1, 1 } : XMFLOAT4{ .25f, .25f, .25f, 1 };
-	SetHudPlane(ShieldHud, -.87f, .77f, .07f * (266.0f / 268.0f) * aspectScale, .07f, shieldColor);
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CTankGameScene::UpdatePlayer(const UCHAR* keys, float dt)
-{
-	const DWORD input = ReadTankControls(keys);
-	if (input)
+	const Transform& candidate = m_pPlayer->GetTransform();
+	const auto previousBounds = m_pPlayer->GetFootprint(previous);
+	const auto candidateBounds = m_pPlayer->GetFootprint(candidate);
+	bool collision = std::abs(candidate.position.x) > MovementLimit || std::abs(candidate.position.z) > MovementLimit;
+	for (const auto* obstacle : m_vObstacles)
 	{
-		const Transform previous = m_pPlayer->GetTransform();
-		m_pPlayer->ApplyControls(input, dt, m_spStageResources->upTerrain.get());
-		const Transform& candidate = m_pPlayer->GetTransform();
-
-		const BoundingOrientedBox previousBounds = Collision::MakeFootprint(m_tankBounds, previous);
-		const BoundingOrientedBox candidateBounds = Collision::MakeFootprint(m_tankBounds, candidate);
-		bool collision = std::abs(candidate.position.x) > MovementLimit || std::abs(candidate.position.z) > MovementLimit;
-		for (const Obstacle& obstacle : m_vObstacles)
-		{
-			if (collision) break;
-			if (!candidateBounds.Intersects(obstacle.footprint)) continue;
-
-			const XMFLOAT3& center = obstacle.footprint.Center;
-			const float oldDistance = Vector3::LengthSquared(Vector3::Subtract(previousBounds.Center, center));
-			const float newDistance = Vector3::LengthSquared(Vector3::Subtract(candidateBounds.Center, center));
-			collision = !previousBounds.Intersects(obstacle.footprint) || newDistance < oldDistance;
-		}
-		if (collision)
-		{
-			m_pPlayer->SetPosition(previous.position);
-			m_pPlayer->SetRotation(previous.rotation);
-		}
+		if (collision) break;
+		const auto footprint = obstacle->GetFootprint();
+		if (!candidateBounds.Intersects(footprint)) continue;
+		const float oldDistance = Vector3::LengthSquared(Vector3::Subtract(previousBounds.Center, footprint.Center));
+		const float newDistance = Vector3::LengthSquared(Vector3::Subtract(candidateBounds.Center, footprint.Center));
+		collision = !previousBounds.Intersects(footprint) || newDistance < oldDistance;
 	}
-	m_pPlayer->FollowStageSlope(*m_spStageResources->upTerrain);
+	if (collision)
+	{
+		m_pPlayer->SetPosition(previous.position);
+		m_pPlayer->SetRotation(previous.rotation);
+	}
 }
 //-----------------------------------
 
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CTankGameScene::UpdateStageCamera(const XMFLOAT3& aimDirection)
-{
-	const Transform& tank = m_pPlayer->GetTransform();
-	const XMFLOAT3 forward = m_pPlayer->GetTurretHeading();
-	XMFLOAT3 eye = Vector3::Add(tank.position, forward, -TankCameraDistance);
-	eye.y += TankCameraHeight;
-	eye.y = (std::max)(eye.y, m_spStageResources->upTerrain->GetHeightAt(eye) + CameraGroundClearance);
-	// 충돌 거리와 무관하게 카메라의 시선을 포신 방향과 평행하게 유지한다.
-	const XMFLOAT3 target = Vector3::Add(eye, aimDirection);
-	m_spCamera->SetLookAt(eye, target, { 0, 1, 0 });
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-CHelicopterGameScene::CHelicopterGameScene()
-	: CGameScene(PlayerRules{
-		.maxHealth = HelicopterHealth,
-		.aimHeight = 0.0f,
-		.hitRadius = HelicopterHitRadius,
-		.reload = HelicopterReload,
-		.shotSpeed = HelicopterMissileSpeed,
-		.shotLifetime = HelicopterMissileLifetime,
-		.shotClearance = HelicopterMissileClearance,
-		.muzzleOffset = HelicopterMissileOffset,
-		.homingDelay = HelicopterHomingDelay,
-		.homingTurnSpeed = HelicopterHomingTurnSpeed,
-		.homing = true
-	})
-{
-}
-//-----------------------------------
+// -------------------------------------------
+//
+// HelicopterGameScene
+//
+// -------------------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
@@ -967,31 +772,20 @@ CHelicopterGameScene::~CHelicopterGameScene() = default;
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-HRESULT CHelicopterGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice,
-	ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator* allocator)
+HRESULT CHelicopterGameScene::BuildObjects(ComPtr<ID3D12Device>& device,
+	ComPtr<ID3D12GraphicsCommandList>& list, CDescHeapAllocator* allocator)
 {
-	const HRESULT hr = CGameScene::BuildObjects(cpDevice, cpCommandList, allocator);
+	HRESULT hr = CGameScene::BuildObjects(device, list, allocator);
 	if (FAILED(hr)) return hr;
-	auto upPlayer = std::make_unique<CDamageableObject>();
-	m_pStageHelicopter = upPlayer.get();
-	m_vObjects.push_back(std::move(upPlayer));
-	auto& model = m_spStageResources->spApache;
-	m_pStageHelicopter->SetModel(model);
-	m_pStageHelicopter->SetScale(ApacheScale);
-
-	const XMFLOAT4X4 mainRotor = model->GetFrameMatrix("rotor");
-	const XMFLOAT4X4 mainHub = model->GetFrameMatrix("black_m_6");
-	m_mainRotorAxis = Vector3::TransformNormal({ 0.0f, 1.0f, 0.0f }, mainRotor);
-	// 날개 프레임 좌표로 환산한 허브 회전축의 중심.
-	m_mainRotorOffset = Vector3::TransformNormal({ 0.115010f, 0.0f, -0.696087f }, mainRotor);
-	const XMFLOAT3 hubToBladeOrigin{ mainRotor._41 - mainHub._41, mainRotor._42 - mainHub._42, mainRotor._43 - mainHub._43 };
-	m_mainHubOffset = Vector3::Add(hubToBladeOrigin, m_mainRotorOffset);
-
-	const XMFLOAT4X4 tailRotor = model->GetFrameMatrix("black_m_7");
-	m_tailRotorAxis = Vector3::TransformNormal({ 0.0f, -1.0f, 0.0f }, tailRotor);
-	// black_m_7 허브 단면의 중심. 로컬 Y 방향이 회전축이다.
-	m_tailRotorOffset = Vector3::TransformNormal({ -0.758458f, 0.0f, -0.058565f }, tailRotor);
-	return S_OK;
+	if (!LoadTankModel(device, list)) return E_FAIL;
+	auto model = LoadModel(device, list, "../Resources/Apache.txt", { -2.1725f, -3.0716f, 21.0388f });
+	if (!model) return E_FAIL;
+	auto player = std::make_unique<CHelicopterPlayer>();
+	player->SetModel(model);
+	m_pPlayer = player.get();
+	SetPlayer(m_pPlayer);
+	AddObject(std::move(player));
+	return BuildHud(device, list, *allocator);
 }
 //-----------------------------------
 
@@ -999,7 +793,8 @@ HRESULT CHelicopterGameScene::BuildObjects(ComPtr<ID3D12Device>& cpDevice,
 //[아래 코드는 AI로 구현됨]
 void CHelicopterGameScene::ReleaseObjects()
 {
-	m_pStageHelicopter = nullptr;
+	m_pPlayer = nullptr;
+	m_pExitMarker = nullptr;
 	CGameScene::ReleaseObjects();
 }
 //-----------------------------------
@@ -1008,18 +803,24 @@ void CHelicopterGameScene::ReleaseObjects()
 //[아래 코드는 AI로 구현됨]
 void CHelicopterGameScene::ResetStage()
 {
-	m_fRotorTime = 0.0f;
-	m_bStageFirstPerson = false;
+	m_pExitMarker = nullptr;
 	const bool targetStage = IsTargetStage();
-	SetLockSettings(targetStage ? Level1LockMinDot : Level3LockMinDot, targetStage ? TargetLockRadius : Level3LockHitRadius);
-
 	const auto& spawn = targetStage ? Level1Spawn : Level3Spawn;
 	const float startZ = -UsableHalf * spawn.startDepth;
-	m_helicopterPose.position = OnTerrain(0.0f, startZ, HelicopterMinClearance);
-	m_helicopterPose.rotation = { 0.0f, 0.0f, 0.0f };
-	if (targetStage) m_exitPosition = OnTerrain(0.0f, UsableHalf * ExitDepth, ExitHeight);
-
-	UpdateHelicopterPose();
+	m_pPlayer->ResetStagePose(OnTerrain(0.0f, startZ, HelicopterMinClearance), targetStage);
+	if (targetStage)
+	{
+		const XMFLOAT3 position = OnTerrain(0.0f, UsableHalf * ExitDepth, ExitHeight);
+		const XMFLOAT4 green{ .20f, 1, .35f, 1 };
+		for (const float side : { -1.0f, 1.0f })
+		{
+			AddStageBox({ position.x, position.y + .2f, position.z + side * ExitRadius },
+				{ 2.0f * ExitRadius, .35f, .35f }, green);
+			AddStageBox({ position.x + side * ExitRadius, position.y + .2f, position.z },
+				{ .35f, .35f, 2.0f * ExitRadius }, green);
+		}
+		m_pExitMarker = AddStageBox({ position.x, position.y + 4.0f, position.z }, { .4f, 8.0f, .4f }, green);
+	}
 	const int count = targetStage ? Level1TargetCount : Level3TankCount;
 	for (int i = 0; i < count; ++i)
 	{
@@ -1035,54 +836,13 @@ void CHelicopterGameScene::ResetStage()
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CHelicopterGameScene::OnStageKeyPressed(WPARAM key)
-{
-	if (GetStage() != EGameStage::HelicopterBattle) return;
-
-	const bool wasFirstPerson = m_bStageFirstPerson;
-	if (key == 'V') m_bStageFirstPerson = !m_bStageFirstPerson;
-	else if (key == '1') m_bStageFirstPerson = true;
-	else if (key == '3') m_bStageFirstPerson = false;
-	if (wasFirstPerson != m_bStageFirstPerson)
-	{
-		UpdateHelicopterPose();
-		UpdateStageView();
-	}
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-XMFLOAT3 CHelicopterGameScene::HelicopterForward() const
-{
-	return Vector3::Forward(m_helicopterPose.rotation.y, m_helicopterPose.rotation.x);
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-CDamageableObject& CHelicopterGameScene::PlayerObject() const
-{
-	return *m_pStageHelicopter;
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CHelicopterGameScene::GetAimRay(XMFLOAT3& origin, XMFLOAT3& direction) const
-{
-	origin = m_helicopterPose.position;
-	direction = HelicopterForward();
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
 bool CHelicopterGameScene::HasReachedExit() const
 {
-	if (!IsTargetStage()) return false;
-	const float x = m_helicopterPose.position.x - m_exitPosition.x;
-	const float z = m_helicopterPose.position.z - m_exitPosition.z;
+	if (!m_pExitMarker) return false;
+	const auto position = m_pPlayer->GetPosition();
+	const auto exit = m_pExitMarker->GetPosition();
+	const float x = position.x - exit.x;
+	const float z = position.z - exit.z;
 	return x * x + z * z <= ExitRadius * ExitRadius;
 }
 //-----------------------------------
@@ -1095,150 +855,204 @@ float CHelicopterGameScene::VictoryHoldTime() const
 }
 //-----------------------------------
 
+// -------------------------------------------
+//
+// UiScene
+//
+// -------------------------------------------
+
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CHelicopterGameScene::DrawStageObjects(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+CUiScene::CUiScene(const std::shared_ptr<CShader>& spShader)
 {
-	if (!IsTargetStage()) return;
+	m_spShader = spShader;
+}
+//-----------------------------------
 
-	const XMFLOAT3& exitPosition = m_exitPosition;
-	const XMFLOAT4 green{ .20f, 1, .35f, 1 };
-	for (const float side : { -1.0f, 1.0f })
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+HRESULT CUiScene::BuildObjects(
+	ComPtr<ID3D12Device>& cpDevice,
+	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+	CDescHeapAllocator* DescHeapAllocator)
+{
+	ReleaseObjects();
+	BuildUi();
+	for (const auto& upUi : m_vUiObjects)
 	{
-		DrawStageBox(cpCommandList, { exitPosition.x, exitPosition.y + .2f, exitPosition.z + side * ExitRadius },
-			{ 2.0f * ExitRadius, .35f, .35f }, green);
-		DrawStageBox(cpCommandList, { exitPosition.x + side * ExitRadius, exitPosition.y + .2f, exitPosition.z },
-			{ .35f, .35f, 2.0f * ExitRadius }, green);
+		const HRESULT hr = upUi->BuildMesh(cpDevice, cpCommandList, DescHeapAllocator);
+		if (FAILED(hr)) return hr;
 	}
-	DrawStageBox(cpCommandList, { exitPosition.x, exitPosition.y + 4.0f, exitPosition.z }, { .4f, 8.0f, .4f }, green);
+	return S_OK;
 }
 //-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CHelicopterGameScene::UpdatePlayer(const UCHAR* keys, float dt)
+void CUiScene::ReleaseObjects()
 {
-	m_fRotorTime += dt;
-	const int turn = Down(keys, 'D') - Down(keys, 'A');
-	const int lift = Down(keys, VK_UP) - Down(keys, VK_DOWN);
-	const int drive = Down(keys, 'W') - Down(keys, 'S');
-	const float yaw = XMScalarModAngle(m_helicopterPose.rotation.y + turn * HelicopterYawSpeed * dt);
-	const float wantedPitch = -drive * HelicopterPitchLimit;
-	const float pitchStep = HelicopterPitchSpeed * dt;
-	m_helicopterPose.rotation.x += std::clamp(wantedPitch - m_helicopterPose.rotation.x, -pitchStep, pitchStep);
-	XMFLOAT3 position = Vector3::Add(m_helicopterPose.position, Vector3::Forward(yaw), drive * HelicopterDriveSpeed * dt);
-	position.x = std::clamp(position.x, -MovementLimit, MovementLimit);
-	position.z = std::clamp(position.z, -MovementLimit, MovementLimit);
-	const float minimum = m_spStageResources->upTerrain->GetHeightAt(position) + HelicopterMinClearance;
-	position.y = std::clamp(position.y + lift * HelicopterLiftSpeed * dt, minimum, minimum + HelicopterAltitudeRange);
-	m_helicopterPose.position = position;
-	m_helicopterPose.rotation.y = yaw;
-	UpdateHelicopterPose();
+	m_vUiObjects.clear();
+	CScene::ReleaseObjects();
 }
 //-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CHelicopterGameScene::UpdateHelicopterPose()
+void CUiScene::ResizeUi(int width, int height)
 {
-	m_pStageHelicopter->SetVisible(!m_bStageFirstPerson);
-	m_pStageHelicopter->SetPosition(m_helicopterPose.position);
-	m_pStageHelicopter->SetRotation(m_helicopterPose.rotation.x * HelicopterBodyPitchFactor, m_helicopterPose.rotation.y, 0.0f);
+	if (width <= 0 || height <= 0) return;
 
-	const float rotorAngle = m_fRotorTime * HelicopterRotorSpeed;
-	const float mainAngle = XMScalarModAngle(rotorAngle * MainRotorSpeedFactor);
-	m_pStageHelicopter->SetFrameTransform("rotor", Matrix4x4::RotationAroundAxis(m_mainRotorAxis, mainAngle, m_mainRotorOffset));
-	m_pStageHelicopter->SetFrameTransform("black_m_6", Matrix4x4::RotationAroundAxis(m_mainRotorAxis, mainAngle, m_mainHubOffset));
-
-	const float tailAngle = XMScalarModAngle(rotorAngle * TailRotorSpeedFactor);
-	m_pStageHelicopter->SetFrameTransform("black_m_7", Matrix4x4::RotationAroundAxis(m_tailRotorAxis, tailAngle, m_tailRotorOffset));
-
+	m_fCanvasPixels = static_cast<float>(width < height ? width : height);
+	m_fViewWidth = static_cast<float>(width) / m_fCanvasPixels;
+	m_fViewHeight = static_cast<float>(height) / m_fCanvasPixels;
 }
 //-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CHelicopterGameScene::UpdateStageCamera(const XMFLOAT3&)
+void CUiScene::Click(int x, int y, CGameFramework& framework)
 {
-	const XMFLOAT3 position = m_helicopterPose.position;
-	XMFLOAT3 eye;
-	XMFLOAT3 target;
-	if (m_bStageFirstPerson)
+	const float uiX = static_cast<float>(x) / m_fCanvasPixels - m_fViewWidth * 0.5f;
+	const float uiY = m_fViewHeight * 0.5f - static_cast<float>(y) / m_fCanvasPixels;
+	for (const auto& upUi : m_vUiObjects)
 	{
-		const XMFLOAT3 apacheCockpit{ 0.0f, 1.7f, 34.0f };
-		eye = Vector3::TransformCoord(apacheCockpit, m_pStageHelicopter->GetTransform().getMatrix());
-		target = Vector3::Add(eye, HelicopterForward());
+		if (upUi->HitTest(uiX, uiY) && upUi->OnClick(framework)) return;
 	}
-	else
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CUiScene::DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+{
+	//---------------------------------------
+	//[직접 작성한 코드]
+	m_spShader->SetGraphicsRootSignature(cpCommandList);
+	//---------------------------------------
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	m_spShader->SetPipelineState(cpCommandList, ERenderState::UI);
+	//-----------------------------------
+	const XMFLOAT4X4 view = Matrix4x4::Identity();
+	const XMFLOAT4X4 projection = Matrix4x4::Transpose(Matrix4x4::OrthographicLH(m_fViewWidth, m_fViewHeight, 0.0f, 1.0f));
+	const XMFLOAT4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
+
+	//---------------------------------------
+	//[직접 작성한 코드]
+	//실제 시간값이 아직 아님에 주의
+	m_fTime += 0.001f;
+	//---------------------------------------
+	const CB_SceneInfo sceneInfo{ view, projection, view, m_fTime };
+	m_spShader->SetSceneData(cpCommandList, sceneInfo);
+	const float tiling = 1.0f;
+	cpCommandList->SetGraphicsRoot32BitConstants(1, 1, &tiling, 4);
+	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &color, 0);
+	DrawObjects(cpCommandList, true);
+}
+//-----------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CUiScene::AddUi(std::unique_ptr<CUI> upUi)
+{
+	m_vUiObjects.push_back(upUi.get());
+	AddObject(std::move(upUi));
+}
+//-----------------------------------
+
+// -------------------------------------------
+//
+// MainMenuScene
+//
+// -------------------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CMainMenuScene::BuildUi()
+{
+	const XMFLOAT4 white{ 1, 1, 1, 1 };
+	const float titleHeight = .60f * 513.0f / 3300.0f;
+	const float playHeight = .24f * 273.0f / 660.0f;
+	const XMFLOAT4 title{ .20f, .36f - titleHeight * .5f, .80f, .36f + titleHeight * .5f };
+	const XMFLOAT4 play{ .38f, .54f - playHeight * .5f, .62f, .54f + playHeight * .5f };
+	AddUi(std::make_unique<CUI>(title, white, L"../Resources/UI/Title.png"));
+	AddUi(std::make_unique<COpenStageSelectButton>(play, white,
+		L"../Resources/UI/PlayTex.png", L"../Resources/UI/PlayMask2.png"));
+}
+//-----------------------------------
+
+// -------------------------------------------
+//
+// StageSelectScene
+//
+// -------------------------------------------
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+void CStageSelectScene::BuildUi()
+{
+	const XMFLOAT4 white{ 1, 1, 1, 1 };
+	const float headingHeight = .30f * 463.0f / 1908.0f;
+	AddUi(std::make_unique<CUI>(XMFLOAT4{ .35f, .235f - headingHeight * .5f, .65f, .235f + headingHeight * .5f },
+		white, L"../Resources/UI/SelectStage.png"));
+
+	constexpr float firstCenter = .33188919f;
+	constexpr float spacing = .076414005f;
+	// PNG 원본 크기에 공통 배율을 적용해 글자와 이미지의 비율을 보존한다.
+	const XMFLOAT2 imageSizes[]
 	{
-		const XMFLOAT3 flatForward = Vector3::Forward(m_pStageHelicopter->GetTransform().rotation.y);
-		eye = Vector3::Add(position, flatForward, -HelicopterCameraDistance);
-		eye.y += HelicopterCameraHeight;
-		target = Vector3::Add(position, HelicopterForward(), HelicopterCameraLookAhead);
-		target.y += HelicopterCameraTargetHeight;
+		{ 1827, 463 }, // Howtoplay
+		{ 1827, 276 }, // TargetPractice
+		{ 1827, 463 }, // TankBattle
+		{ 2194, 463 }, // HelicopterBattle
+		{ 1549, 463 }, // StartGame
+		{ 690, 463 }   // Exit
+	};
+	constexpr float imageScale = .07f / 463.0f;
+	XMFLOAT4 buttons[6];
+	for (int i = 0; i < 6; ++i)
+	{
+		const float y = firstCenter + i * spacing;
+		const float halfWidth = imageSizes[i].x * imageScale * .5f;
+		const float halfHeight = imageSizes[i].y * imageScale * .5f;
+		buttons[i] = { .5f - halfWidth, y - halfHeight, .5f + halfWidth, y + halfHeight };
 	}
-	eye.y = (std::max)(eye.y, m_spStageResources->upTerrain->GetHeightAt(eye) + CameraGroundClearance);
-	m_spCamera->SetLookAt(eye, target, { 0, 1, 0 });
+	AddUi(std::make_unique<COpenTutorialButton>(buttons[0], white, L"../Resources/UI/Howtoplay.png"));
+	AddUi(std::make_unique<CStageButton>(buttons[1], white, EGameStage::HelicopterTargets, L"../Resources/UI/TargetPractice.png"));
+	AddUi(std::make_unique<CStageButton>(buttons[2], white, EGameStage::TankBattle, L"../Resources/UI/TankBattle.png"));
+	AddUi(std::make_unique<CStageButton>(buttons[3], white, EGameStage::HelicopterBattle, L"../Resources/UI/HelicopterBattle.png"));
+	AddUi(std::make_unique<CStageButton>(buttons[4], white, EGameStage::HelicopterTargets, L"../Resources/UI/StartGame.png"));
+	AddUi(std::make_unique<CExitButton>(buttons[5], white, L"../Resources/UI/Exit.png"));
 }
 //-----------------------------------
 
+// -------------------------------------------
+//
+// PortingTutorialScene
+//
+// -------------------------------------------
+
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CStageResources::ReleaseUploadBuffers()
+void CPortingTutorialScene::BuildUi()
 {
-	upTerrain->ReleaseUploadBuffer();
-	spTank->ReleaseUploadBuffer();
-	spApache->ReleaseUploadBuffer();
-	for (auto& model : spRocks) model->ReleaseUploadBuffer();
-	upBox->ReleaseUploadBuffer();
-	upSkybox->ReleaseUploadBuffer();
+	const XMFLOAT4 white{ 1, 1, 1, 1 };
+	const float cardHeight = .82f;
+	const float cardWidth = cardHeight * 939.0f / 1814.0f;
+	const float returnWidth = .70f;
+	const float returnHeight = returnWidth * 174.0f / 1404.0f;
+	const XMFLOAT4 card{ .5f - cardWidth * .5f, .06f, .5f + cardWidth * .5f, .06f + cardHeight };
+	const XMFLOAT4 hint{ .5f - returnWidth * .5f, .94f - returnHeight * .5f,
+		.5f + returnWidth * .5f, .94f + returnHeight * .5f };
+	AddUi(std::make_unique<CUI>(card, white, L"../Resources/UI/Tutorial.png"));
+	AddUi(std::make_unique<CTutorialReturnButton>(hint, white, L"../Resources/UI/TutorialReturn.png"));
 }
 //-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CGameScene::SetHudPlane(size_t index, float x, float y, float width, float height, const XMFLOAT4& color)
-{
-	CUI& ui = *m_vHud[index];
-	ui.SetPosition(x, y, .01f);
-	ui.SetScale(width, height, 1.0f);
-	ui.SetColor(color);
-	ui.SetVisible(true);
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-bool CGameScene::IsPlayerAlive() const { return PlayerObject().IsAlive(); }
-//-----------------------------------
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-XMFLOAT3 CGameScene::PlayerPosition() const { return PlayerObject().GetPosition(); }
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CGameScene::KeyPressed(WPARAM key, CGameFramework& framework)
+void CPortingTutorialScene::KeyPressed(WPARAM key, CGameFramework& framework)
 {
 	if (key == VK_ESCAPE) framework.OpenStageSelect();
-	else StageKeyPressed(key);
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CGameScene::CheckStageTransition(CGameFramework& framework)
-{
-	if (!StageFinished()) return;
-	if (m_stage == EGameStage::HelicopterTargets) framework.EnterStage(EGameStage::TankBattle);
-	else framework.OpenStageSelect();
-}
-//-----------------------------------
-
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
-void CGameScene::SpawnProjectile(const XMFLOAT3& position, const ProjectileData& data)
-{
-	m_vProjectiles.push_back(std::make_unique<CProjectileObject>(*m_spStageResources->upBox, position, data));
 }
 //-----------------------------------

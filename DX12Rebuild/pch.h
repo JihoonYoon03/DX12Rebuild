@@ -356,12 +356,15 @@ namespace Vector3
 		return { std::sin(yaw) * horizontal, std::sin(elevation), std::cos(yaw) * horizontal };
 	}
 
+//-----------------------------------
 	inline XMFLOAT3 TransformNormal(const XMFLOAT3& normal, const XMFLOAT4X4& matrix)
 	{
 		XMFLOAT3 result;
 		XMStoreFloat3(&result, XMVector3TransformNormal(XMLoadFloat3(&normal), XMLoadFloat4x4(&matrix)));
 		return result;
 	}
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 
 	inline XMFLOAT3 RotateTowards(const XMFLOAT3& direction, const XMFLOAT3& desired, float maxAngle)
 	{

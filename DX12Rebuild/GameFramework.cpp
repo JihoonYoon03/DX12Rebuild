@@ -7,7 +7,6 @@
 #include "GameObject.h"
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-#include "UiScene.h"
 #include <windowsx.h>
 //-----------------------------------
 
@@ -27,9 +26,9 @@ CGameFramework::CGameFramework()
 
 	m_upDescHeapAllocator = std::make_unique<CDescHeapAllocator>();
 
+	m_spTankScene = std::make_shared<CTankGameScene>();
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	m_spTankScene = std::make_shared<CTankGameScene>();
 	m_spHelicopterScene = std::make_shared<CHelicopterGameScene>();
 	//-----------------------------------
 
@@ -74,7 +73,7 @@ void CGameFramework::OnDestroy()
 
 #ifdef _DEBUG
 	ComPtr<IDXGIDebug1> pdxgiDebug;
-	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pdxgiDebug.GetAddressOf())))) 
+	if (SUCCEEDED(DXGIGetDebugInterface1(0, IID_PPV_ARGS(pdxgiDebug.GetAddressOf()))))
 	{
 		HRESULT hr = pdxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_DETAIL);
 		if (FAILED(hr)) { OutputDebugString(L"ReportLiveObjectsFailed\n"); }
@@ -250,7 +249,7 @@ HRESULT CGameFramework::CreateRTV()
 {
 	D3D12_CPU_DESCRIPTOR_HANDLE RTVDescHandle = m_cpRTVDescHeap->GetCPUDescriptorHandleForHeapStart();
 	HRESULT hr;
-	for (UINT i = 0; i < m_nSwapChainBuffers; ++i) 
+	for (UINT i = 0; i < m_nSwapChainBuffers; ++i)
 	{
 		hr = m_cpdxgiSwapChain->GetBuffer(i, IID_PPV_ARGS(m_cpSwapChainBackBuffers[i].ReleaseAndGetAddressOf()));
 		if (FAILED(hr))	{ OutputDebugString(L"SwapChainGetBufferFailed\n");	return hr; }
@@ -309,12 +308,10 @@ HRESULT CGameFramework::BuildObjects()
 
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	m_spStageResources = std::make_shared<CStageResources>();
-	hr = m_spStageResources->Build(m_cpDevice, m_cpCommandList, *m_upDescHeapAllocator);
-	if (FAILED(hr)) return hr;
 	for (const auto& scene : { m_spTankScene, m_spHelicopterScene })
 	{
-		scene->SetStageResources(m_spStageResources);
+		hr = scene->InitScene(m_cpDevice, m_cpCommandList, *m_upDescHeapAllocator);
+		if (FAILED(hr)) return hr;
 		hr = scene->BuildObjects(m_cpDevice, m_cpCommandList, m_upDescHeapAllocator.get());
 		if (FAILED(hr)) return hr;
 	}
@@ -362,7 +359,6 @@ void CGameFramework::ReleaseUploadBuffers()
 	m_spTankScene->ReleaseUploadBuffers();
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	m_spStageResources->ReleaseUploadBuffers();
 	m_spHelicopterScene->ReleaseUploadBuffers();
 	for (const auto& scene : { m_spMainMenuScene, m_spStageSelectScene, m_spTutorialScene })
 		scene->ReleaseUploadBuffers();
@@ -371,31 +367,27 @@ void CGameFramework::ReleaseUploadBuffers()
 
 void CGameFramework::ReleaseObjects()
 {
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
 	if (m_cpMtxBuffer && m_mappedMtxBuffer) m_cpMtxBuffer->Unmap(0, nullptr);
-	//-----------------------------------
 	m_upCurrentScene.reset();
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
 	m_spTankScene.reset();
 	m_spHelicopterScene.reset();
-	m_spStageResources.reset();
 	m_spMainMenuScene.reset();
 	m_spStageSelectScene.reset();
 	m_spTutorialScene.reset();
 	//-----------------------------------
 }
 
-//-----------------------------------
-//[아래 코드는 AI로 구현됨]
 void CGameFramework::ProcessInput()
 {
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
 	UCHAR keys[256]{};
 	if (!::GetKeyboardState(keys)) ZeroMemory(keys, sizeof(keys));
+	//-----------------------------------
 	if (const auto scene = m_upCurrentScene.lock()) scene->ProcessInput(keys, m_timer.GetTimeElapsed());
 }
-//-----------------------------------
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
@@ -418,7 +410,7 @@ void CGameFramework::FrameAdvance()
 	ProcessInput();
 
 	AnimateObjects();
-	
+
 	HRESULT hr = m_cpCommandAllocator->Reset();
 	if (FAILED(hr)) { OutputDebugString(L"CommandAllocatorResetFailed\n"); return; }
 	hr = m_cpCommandList->Reset(m_cpCommandAllocator.Get(), nullptr);

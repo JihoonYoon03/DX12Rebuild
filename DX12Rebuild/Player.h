@@ -2,93 +2,106 @@
 
 #include "GameObject.h"
 
-class CCamera;
-
-class CPlayer : public CDamageableObject
-//-----------------------------------
-//[직접 작성한 코드]
-{
-public:
-	CPlayer();
-	virtual ~CPlayer();
-
-	void SetCamera(std::shared_ptr<CCamera> spCamera);
-	void Update();
-
-	virtual void ProcessInput(DWORD dwInput, float deltaTime);
-
-protected:
-	std::shared_ptr<CCamera>	m_spCamera;
-
-};
-//-----------------------------------
-
-class CTankPlayer : public CPlayer
+// -------------------------------------------
+//
+// TankPlayer
+//
+// -------------------------------------------
+class CTankPlayer final : public CTankObject
 {
 public:
 	CTankPlayer();
 	~CTankPlayer();
 
-	void SetModel(std::shared_ptr<CModel>& model) override;
+	void ProcessInput(DWORD input, float dt, const CTerrainObject* terrain = nullptr);
+	//-----------------------------------
+	//[아래 코드는 AI로 구현됨]
+	void ProcessControls(const UCHAR* keys, float dt, const CTerrainObject& terrain) override;
 
-	void ProcessInput(DWORD dwInput, float deltaTime, const CTerrainObject* terrain = nullptr);
-	void Move(XMFLOAT3 shift);
+	void UpdateCamera(const CTerrainObject& terrain) override;
 
-	HRESULT CreateCannonTestMesh(const ComPtr<ID3D12Device>& cpDevice,
-		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	bool IsAutoAttacking() const override { return m_bAutoAttack; }
+
+	bool IsProtected() const override { return m_bShield; }
+	bool ShowsShield() const override { return true; }
+	//-----------------------------------
+
+	//-----------------------------------
+	//[직접 작성한 코드]
+	HRESULT CreateCannonTestMesh(const ComPtr<ID3D12Device>& device,
+		const ComPtr<ID3D12GraphicsCommandList>& commandList);
 	void ReleaseCannonTestUploadBuffer();
 
 	//-----------------------------------
+	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	static void PrepareModel(std::shared_ptr<CModel>& model);
-	void UsePreparedTankModel(const std::shared_ptr<CModel>& spModel);
-	XMFLOAT3 GetAimPoint() const override;
-	XMFLOAT3 GetHitPoint() const override;
-	float GetHitFraction(const XMFLOAT3& start, const XMFLOAT3& end, bool homing) const override;
-	XMFLOAT3 ApplyControls(DWORD dwInput, float deltaTime, const CTerrainObject* terrain);
-	void ResetStagePose(const XMFLOAT3& position, float yaw);
-	void FollowStageSlope(const CTerrainObject& terrain);
-	XMFLOAT3 GetTurretHeading();
-	void GetStageCannonRay(XMFLOAT3& origin, XMFLOAT3& direction);
-	bool AimStageCannon(const XMFLOAT3& target, float dt);
+	void ReleaseUploadBuffer() override;
 	//-----------------------------------
-	
-	//-----------------------------------
-	//[직접 작성한 코드]
-	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
 
 private:
-	void CannonTestDraw(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
-	std::unique_ptr<CMesh> m_upCannonTestMesh;
-
-	float	m_fVelocity = config::stage::TankDriveSpeed;
-	//초당 회전량
-	float	m_fTurnSpeed = XMConvertToRadians(config::stage::TankTurnSpeedDegrees);
-
-	//포탑 회전 관련
-	float	m_fTurretYaw = 0.0f;
-	float	m_fTurretTurnSpeed = XMConvertToRadians(config::stage::TurretManualSpeedDegrees);
-	float	m_fCannonPitch = 0.0f;
-	float	m_fCannonLiftSpeed = XMConvertToRadians(config::stage::CannonManualSpeedDegrees);
-	//-----------------------------------
-
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	std::optional<BoundingBox> m_hitBounds;
+	void ResetControls() override;
+	void OnKeyPressed(WPARAM key) override;
+
+	bool AimAutomatically(float dt) override;
+
+	bool m_bAutoAttack = config::stage::TankAutoAttackAtStart;
+
+	bool m_bShield = false;
+	bool m_bManualAim = false;
+	//-----------------------------------
+
+	//-----------------------------------
+	//[직접 작성한 코드]
+	void CannonTestDraw(const ComPtr<ID3D12GraphicsCommandList>& commandList);
+
+	std::unique_ptr<CMesh> m_upCannonTestMesh;
 	//-----------------------------------
 };
 
+// -------------------------------------------
+//
+// HelicopterPlayer
+//
+// -------------------------------------------
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-class CEnemyTank final : public CTankPlayer
+class CHelicopterPlayer final : public CVehicleObject
 {
 public:
-	CEnemyTank();
-	void Reload() override { m_fReload = config::stage::EnemyTankReload; }
-	bool TryFire(const XMFLOAT3& target, float dt,
-		XMFLOAT3& origin, XMFLOAT3& direction) override;
+	CHelicopterPlayer();
+
+	void SetModel(std::shared_ptr<CModel>& model) override;
+
+	void ResetStagePose(const XMFLOAT3& position, bool targetStage);
+
+	void ProcessControls(const UCHAR* keys, float dt, const CTerrainObject& terrain) override;
+
+	void UpdateCamera(const CTerrainObject& terrain) override;
+
+	void GetAimRay(XMFLOAT3& origin, XMFLOAT3& direction) const override;
 
 private:
-	float m_fReload = 0.0f;
+	void ResetControls() override;
+	void OnKeyPressed(WPARAM key) override;
+
+	XMFLOAT3 Forward() const;
+
+	void UpdatePose();
+
+	float m_fFlightPitch = 0.0f;
+
+	float m_fRotorTime = 0.0f;
+
+	bool m_bFirstPerson = false;
+	bool m_bAllowFirstPerson = false;
+
+	XMFLOAT3 m_mainRotorAxis{ 0, 1, 0 };
+	XMFLOAT3 m_mainRotorOffset{};
+	XMFLOAT3 m_mainHubOffset{};
+
+	XMFLOAT3 m_tailRotorAxis{ 1, 0, 0 };
+	XMFLOAT3 m_tailRotorOffset{};
 };
 //-----------------------------------
