@@ -1,27 +1,10 @@
 #include "pch.h"
 #include "Material.h"
 
-CMaterial::CMaterial(const std::shared_ptr<CShader>& spShader)
-	: m_spShader(spShader)
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+bool CMaterial::BindMaterialData(CFrameConstants& constants) const
 {
-	::ZeroMemory(&m_matData, sizeof(MaterialData));
+	return constants.Bind(1, m_matData);
 }
-
-CMaterial::~CMaterial()
-{
-}
-
-void CMaterial::SetDefaultMaterialData(const MaterialData& mData)
-{
-	m_matData = mData;
-}
-
-void CMaterial::SetMaterialData(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const MaterialData& mData)
-{
-	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &mData.albedoColor, 0);
-}
-
-void CMaterial::BindMaterial(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
-{
-	m_spShader->SetPipelineState(cpCommandList, m_eRenderState);
-}
+//-----------------------------------

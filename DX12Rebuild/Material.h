@@ -1,33 +1,38 @@
 #pragma once
 
-#include "Shader.h"
+#include "pch.h"
 
-struct MaterialData
+struct CB_Material
 {
-	XMFLOAT4	albedoColor;
-	XMFLOAT4	emissiveColor;
-	float		glossiness;
-	float		metallic;
-	float		SpecularHighlight;
-	float		GlossyReflection;
+	//순수한 기본 색상
+	XMFLOAT4	xmf4AlbedoColor		{ 1.0f, 1.0f, 1.0f, 1.0f };
+	//자체 발광 색상
+	XMFLOAT4	xmf4EmissiveColor	{ 0.0f, 0.0f, 0.0f, 0.0f };
+
+	//Roughness의 반대
+	float		fGlossiness			{ 0.0f };
+	float		fMetallic			{ 0.0f };
+	float		fSpecularHighlight	{ 0.0f };
+	//광택 반사 정도
+	float		fGlossyReflection	{ 0.0f };
+
+	//텍스쳐 타일링 빈도(1.0f 기본)
+	XMFLOAT2	xmf2Tiling				{ 1.0f, 1.0f };
 };
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
 class CMaterial
 {
 public:
-	CMaterial(const std::shared_ptr<CShader>& spShader = nullptr);
-	~CMaterial();
+	CMaterial() = default;
+	explicit CMaterial(const CB_Material& data) : m_matData(data) {}
 
-	void SetShader(const std::shared_ptr<CShader>& spShader) { m_spShader = spShader; }
-
-	void SetDefaultMaterialData(const MaterialData& mData);
-	void SetMaterialData(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const MaterialData& mData);
-
-	void BindMaterial(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	void SetMaterialData(const CB_Material& data) { m_matData = data; }
+	bool BindMaterialData(CFrameConstants& constants) const;
 
 private:
-	ERenderState				m_eRenderState = ERenderState::Default;
-	MaterialData				m_matData;
-	std::shared_ptr<CShader>	m_spShader;
+	CB_Material m_matData;
 };
+//-----------------------------------
 

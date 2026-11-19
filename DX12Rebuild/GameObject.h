@@ -8,7 +8,6 @@ class CTexture;
 class CCamera;
 class CScene;
 class CGameFramework;
-class CDescHeapAllocator;
 enum class ERenderState;
 
 // -------------------------------------------
@@ -35,7 +34,7 @@ public:
 	XMFLOAT3 GetPosition() const { return m_Transform.position; }
 	const Transform& GetTransform() const { return m_Transform; }
 
-	virtual void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) = 0;
+	virtual void DrawObject(CFrameConstants& constants) = 0;
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
 	virtual ERenderState GetRenderState() const;
@@ -46,6 +45,8 @@ public:
 
 protected:
 	Transform	m_Transform;
+
+	bool BindWorld(CFrameConstants& constants) const;
 };
 
 // -------------------------------------------
@@ -56,6 +57,7 @@ protected:
 class CModelObject : public CObjectBase
 {
 public:
+	//모델 오브젝트는 CModel에서 CBV를 관리함
 	CModelObject();
 	virtual ~CModelObject();
 
@@ -64,7 +66,7 @@ public:
 	void SetFrameTransform(const std::string& name, const Transform& transform);
 	void SetFrameTransform(const std::string& name, const XMFLOAT4X4& transform);
 
-	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+	void DrawObject(CFrameConstants& constants) override;
 
 	void ReleaseModelUploadBuffer();
 	//-----------------------------------
@@ -92,17 +94,12 @@ public:
 
 	void SetHeightMap(std::shared_ptr<CHeightMapImage>& pHeightMapImage);
 
-	HRESULT GenerateTerrain(
-		ComPtr<ID3D12Device>& cpDevice,
-		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CDescHeapAllocator* DescHeapAllocator = nullptr,
-		bool normalMapping = false
-	);
+	HRESULT GenerateTerrain(const GraphicsResources& graphics, bool normalMapping = false);
 
 	float GetHeightAt(float x, float z) const;
 	float GetHeightAt(const XMFLOAT3& pos) const;
 
-	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+	void DrawObject(CFrameConstants& constants) override;
 
 	void ReleaseUploadBuffer() override;
 
@@ -137,12 +134,9 @@ public:
 	CSkyboxObject();
 	~CSkyboxObject() override;
 
-	HRESULT GenerateSkyBox(
-		const ComPtr<ID3D12Device>& cpDevice,
-		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CDescHeapAllocator& allocator);
+	HRESULT GenerateSkyBox(const GraphicsResources& graphics);
 
-	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+	void DrawObject(CFrameConstants& constants) override;
 
 	void ReleaseUploadBuffer() override;
 
@@ -173,7 +167,7 @@ public:
 	void SetVisible(bool visible) { m_bVisible = visible; }
 
 	ERenderState GetRenderState() const override;
-	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+	void DrawObject(CFrameConstants& constants) override;
 
 protected:
 	CMesh* m_pMesh; // 공용 메시를 참조하며 소유하지 않는다.
@@ -205,7 +199,7 @@ public:
 	void SetVisible(bool visible) { m_bVisible = visible; }
 	bool IsVisible() const { return m_bVisible && IsAlive(); }
 
-	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+	void DrawObject(CFrameConstants& constants) override;
 
 	virtual XMFLOAT3 GetAimPoint() const;
 	virtual XMFLOAT3 GetHitPoint() const;
@@ -243,7 +237,7 @@ public:
 	explicit CTargetObject(CMesh& mesh);
 
 	ERenderState GetRenderState() const override;
-	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+	void DrawObject(CFrameConstants& constants) override;
 
 private:
 	CMeshObject m_visual;
@@ -399,7 +393,6 @@ public:
 	explicit CTankObject(const WeaponSettings& weapon);
 	//-----------------------------------
 
-	static void PrepareModel(std::shared_ptr<CModel>& model);
 	void SetModel(std::shared_ptr<CModel>& model) override;
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
@@ -422,7 +415,7 @@ public:
 	bool AimStageCannon(const XMFLOAT3& target, float dt);
 	//-----------------------------------
 
-	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+	void DrawObject(CFrameConstants& constants) override;
 
 protected:
 	//-----------------------------------
@@ -473,14 +466,15 @@ class CUI : public CObjectBase
 public:
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	CUI(const XMFLOAT4& bounds, const XMFLOAT4& color, const wchar_t* textureFile = nullptr);
+	CUI(
+		const XMFLOAT4& bounds, 
+		const XMFLOAT4& color, 
+		const wchar_t* textureFile = nullptr);
 
-	virtual HRESULT BuildMesh(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CDescHeapAllocator* allocator = nullptr);
+	virtual HRESULT BuildMesh(const GraphicsResources& graphics);
 	//-----------------------------------
-
+	//[직접 작성한 코드]
 	HRESULT BindTexture(std::shared_ptr<CTexture>& texture);
-
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
 	void ReleaseUploadBuffer() override;
@@ -492,7 +486,7 @@ public:
 
 	ERenderState GetRenderState() const override;
 	bool IsScreenSpace() const override { return true; }
-	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+	void DrawObject(CFrameConstants& constants) override;
 
 	virtual bool HitTest(float x, float y) const;
 	virtual bool OnClick(CGameFramework&) { return false; }
@@ -502,13 +496,11 @@ private:
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
 	CMesh m_mesh;
-	//-----------------------------------
 	//---------------------------
 	//[직접 작성한 코드]
 	std::shared_ptr<CTexture>	m_spUITexture;
 
 	//---------------------------
-	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
 	XMFLOAT4 m_color;
 	bool m_bVisible = true;
@@ -534,11 +526,10 @@ public:
 	CMaskedUI(const XMFLOAT4& bounds, const XMFLOAT4& color,
 		const wchar_t* textureFile, const wchar_t* maskTextureFile);
 
-	HRESULT BuildMesh(const ComPtr<ID3D12Device>& cpDevice,
-		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator* allocator = nullptr) override;
+	HRESULT BuildMesh(const GraphicsResources& graphics) override;
 
 	ERenderState GetRenderState() const override;
-	void DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+	void DrawObject(CFrameConstants& constants) override;
 
 	void ReleaseUploadBuffer() override;
 	//-----------------------------------
@@ -565,8 +556,7 @@ private:
 class CGameHud
 {
 public:
-	HRESULT Build(CScene& scene, int maxHealth, const ComPtr<ID3D12Device>& device,
-		const ComPtr<ID3D12GraphicsCommandList>& list, CDescHeapAllocator& allocator);
+	HRESULT Build(CScene& scene, int maxHealth, const GraphicsResources& graphics);
 
 	void Update(const CVehicleObject& player, bool victory, bool defeat, float aspectScale);
 

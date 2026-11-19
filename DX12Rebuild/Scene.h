@@ -18,7 +18,6 @@ class CModel;
 class CShader;
 class CCamera;
 class CGameFramework;
-class CDescHeapAllocator;
 struct ProjectileData;
 
 //-----------------------------------
@@ -44,23 +43,18 @@ public:
 	CScene();
 	virtual ~CScene();
 
-	virtual HRESULT InitScene(ComPtr<ID3D12Device>& cpDevice,
-		ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator& descHeapAllocator);
+	HRESULT InitScene(const ComPtr<ID3D12Device>& cpDevice);
 
-	virtual HRESULT BuildObjects(
-		ComPtr<ID3D12Device>& cpDevice,
-		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CDescHeapAllocator* DescHeapAllocator = nullptr
-	);
+	virtual HRESULT BuildObjects(const GraphicsResources& graphics);
 
-	CObjectBase* AddObject(std::unique_ptr<CObjectBase> object);
+	CObjectBase* AddObject(std::shared_ptr<CObjectBase> object);
 
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
 	void RemoveObject(const CObjectBase* object);
 	//-----------------------------------
-	void AddObjects(std::unique_ptr<CModelObject>* upObjects, size_t size);
-	void AddObjects(std::vector<std::unique_ptr<CModelObject>>& upObjects);
+	void AddObjects(std::shared_ptr<CModelObject>* upObjects, size_t size);
+	void AddObjects(std::vector<std::shared_ptr<CModelObject>>& upObjects);
 
 	std::shared_ptr<CCamera> GetCamera() { return m_spCamera; }
 	void WindowResized(int width, int height);
@@ -78,17 +72,18 @@ public:
 	virtual void ReleaseUploadBuffers();
 	virtual void ReleaseObjects();
 
-	virtual void DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	virtual void DrawScene(CFrameConstants& constants);
 
 protected:
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	void DrawObjects(const ComPtr<ID3D12GraphicsCommandList>& commandList, bool screenSpace);
+	void DrawObjects(CFrameConstants& constants, bool screenSpace);
 	//-----------------------------------
 	std::shared_ptr<CCamera>					m_spCamera;
 	std::shared_ptr<CShader>					m_spShader;
 
-	std::vector<std::unique_ptr<CObjectBase>>	m_vObjects;
+	std::vector<std::shared_ptr<CObjectBase>>	m_vObjects;
+
 };
 //-----------------------------------
 
@@ -103,12 +98,11 @@ public:
 	CGameScene();
 	~CGameScene() override;
 
-	HRESULT BuildObjects(ComPtr<ID3D12Device>& device, ComPtr<ID3D12GraphicsCommandList>& list,
-		CDescHeapAllocator* allocator = nullptr) override;
+	HRESULT BuildObjects(const GraphicsResources& graphics) override;
 	void ReleaseUploadBuffers() override;
 	void ReleaseObjects() override;
 
-	void DrawScene(ComPtr<ID3D12GraphicsCommandList>& list) override;
+	void DrawScene(CFrameConstants& constants) override;
 
 	void ProcessInput(UCHAR* keys, float dt) override;
 	//-----------------------------------
@@ -137,19 +131,17 @@ protected:
 	const CTerrainObject& Terrain() const { return *m_pTerrain; }
 	XMFLOAT3 OnTerrain(float x, float z, float offset) const;
 
-	HRESULT BuildHud(const ComPtr<ID3D12Device>& device, const ComPtr<ID3D12GraphicsCommandList>& list,
-		CDescHeapAllocator& allocator);
+	std::shared_ptr<CModel> LoadModel(const GraphicsResources& graphics, const char* path, const XMFLOAT3& offset = {});
 
-	std::shared_ptr<CModel> LoadModel(const ComPtr<ID3D12Device>& device,
-		const ComPtr<ID3D12GraphicsCommandList>& list, const char* path, const XMFLOAT3& offset = {});
-	std::shared_ptr<CModel> LoadTankModel(const ComPtr<ID3D12Device>& device,
-		const ComPtr<ID3D12GraphicsCommandList>& list);
 	std::shared_ptr<CModel> FindModel(const char* path) const;
 
-	CObjectBase* AddStageObject(std::unique_ptr<CObjectBase> object);
-	void AddTarget(const XMFLOAT3& position);
+	CObjectBase* AddStageObject(std::shared_ptr<CObjectBase> object);
 	void AddEnemyTank(float x, float z, float playerStartZ);
-	CMeshObject* AddStageBox(const XMFLOAT3& position, const XMFLOAT3& size, const XMFLOAT4& color);
+
+	std::shared_ptr<CMesh> m_upBoxMesh;
+	std::unique_ptr<CGameHud> m_upHud;
+
+	std::vector<CDamageableObject*> m_vEnemies;
 
 private:
 	enum class EStageState { Playing, Victory, Defeat, Finished };
@@ -175,7 +167,6 @@ private:
 	//[아래 코드는 AI로 구현됨]
 	CMeshObject* m_pLockMarker = nullptr;
 
-	std::vector<CDamageableObject*> m_vEnemies;
 	std::vector<CEnemyTank*> m_vAttackers;
 
 	std::vector<CProjectileObject*> m_vProjectiles;
@@ -184,10 +175,6 @@ private:
 
 	// 파일 경로별로 실제 사용한 모델만 보관한다. 오브젝트 인스턴스는 저장하지 않는다.
 	std::unordered_map<std::string, std::shared_ptr<CModel>> m_models;
-
-	std::unique_ptr<CMesh> m_upBoxMesh;
-
-	std::unique_ptr<CGameHud> m_upHud;
 
 	UCHAR m_keys[256]{};
 
@@ -209,8 +196,7 @@ class CTankGameScene final : public CGameScene
 public:
 	~CTankGameScene() override;
 
-	HRESULT BuildObjects(ComPtr<ID3D12Device>& device, ComPtr<ID3D12GraphicsCommandList>& list,
-		CDescHeapAllocator* allocator = nullptr) override;
+	HRESULT BuildObjects(const GraphicsResources& graphics) override;
 	void ReleaseObjects() override;
 
 private:
@@ -236,8 +222,7 @@ class CHelicopterGameScene final : public CGameScene
 public:
 	~CHelicopterGameScene() override;
 
-	HRESULT BuildObjects(ComPtr<ID3D12Device>& device, ComPtr<ID3D12GraphicsCommandList>& list,
-		CDescHeapAllocator* allocator = nullptr) override;
+	HRESULT BuildObjects(const GraphicsResources& graphics) override;
 	void ReleaseObjects() override;
 
 private:
@@ -266,23 +251,18 @@ class CUiScene : public CScene
 public:
 	explicit CUiScene(const std::shared_ptr<CShader>& spShader);
 
-	HRESULT BuildObjects(
-		ComPtr<ID3D12Device>& cpDevice,
-		ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CDescHeapAllocator* DescHeapAllocator = nullptr) override;
+	HRESULT BuildObjects(const GraphicsResources& graphics) override;
 
 	void ReleaseObjects() override;
 
-	void DrawScene(ComPtr<ID3D12GraphicsCommandList>& cpCommandList) override;
+	void DrawScene(CFrameConstants& constants) override;
 
 	void ResizeUi(int width, int height);
 
 	void Click(int x, int y, CGameFramework& framework) override;
 
 protected:
-	virtual void BuildUi() = 0;
-
-	void AddUi(std::unique_ptr<CUI> upUi);
+	void AddUi(std::shared_ptr<CUI> upUi);
 
 private:
 	std::vector<CUI*> m_vUiObjects; // m_vObjects가 소유하며 클릭 처리에서만 참조한다.
@@ -308,8 +288,7 @@ class CMainMenuScene : public CUiScene
 public:
 	using CUiScene::CUiScene;
 
-private:
-	void BuildUi() override;
+	HRESULT BuildObjects(const GraphicsResources& graphics) override;
 };
 //-----------------------------------
 
@@ -325,8 +304,7 @@ class CStageSelectScene : public CUiScene
 public:
 	using CUiScene::CUiScene;
 
-private:
-	void BuildUi() override;
+	HRESULT BuildObjects(const GraphicsResources& graphics) override;
 };
 //-----------------------------------
 
@@ -342,9 +320,9 @@ class CPortingTutorialScene : public CUiScene
 public:
 	using CUiScene::CUiScene;
 
-private:
-	void BuildUi() override;
+	HRESULT BuildObjects(const GraphicsResources& graphics) override;
 
+private:
 	void KeyPressed(WPARAM key, CGameFramework& framework) override;
 };
 //-----------------------------------

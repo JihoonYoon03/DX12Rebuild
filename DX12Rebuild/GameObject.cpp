@@ -3,6 +3,7 @@
 #include "Texture.h"
 #include "Shader.h"
 #include "Scene.h"
+#include "Material.h"
 
 using namespace config::stage;
 
@@ -17,6 +18,17 @@ CObjectBase::CObjectBase()
 
 CObjectBase::~CObjectBase()
 {}
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+bool CObjectBase::BindWorld(CFrameConstants& constants) const
+{
+	CB_GameObjInfo objInfo;
+	objInfo.xmf4x4World = Matrix4x4::Transpose(m_Transform.getMatrix());
+	objInfo.xmf4x4WorldInv = Matrix4x4::Inverse(objInfo.xmf4x4World);
+	return constants.Bind(0, objInfo);
+}
+//-----------------------------------
 
 void CObjectBase::SetScale(const float x, const float y, const float z)
 {
@@ -92,9 +104,9 @@ void CModelObject::SetFrameTransform(const std::string& name, const XMFLOAT4X4& 
 	m_umFrameTransform[index] = transform;
 }
 
-void CModelObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+void CModelObject::DrawObject(CFrameConstants& constants)
 {
-	if (m_spModel) m_spModel->DrawModel(cpCommandList, m_umFrameTransform, m_Transform.getMatrix());
+	if (m_spModel) m_spModel->DrawModel(constants, m_umFrameTransform, m_Transform.getMatrix());
 }
 
 void CModelObject::ReleaseModelUploadBuffer()
@@ -109,7 +121,6 @@ void CModelObject::ReleaseModelUploadBuffer()
 // -------------------------------------------
 
 CTerrainObject::CTerrainObject()
-	: CObjectBase()
 {
 }
 
@@ -125,34 +136,28 @@ void CTerrainObject::SetHeightMap(std::shared_ptr<CHeightMapImage>& pHeightMapIm
 	m_fTiling = m_nColSlice / 10;
 }
 
-HRESULT CTerrainObject::GenerateTerrain(
-	ComPtr<ID3D12Device>& cpDevice,
-	ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	CDescHeapAllocator* DescHeapAllocator,
-	bool normalMapping)
+HRESULT CTerrainObject::GenerateTerrain(const GraphicsResources& graphics, bool normalMapping)
 {
 	if (m_spHeightMapImage->GetHeightMapPixels().empty()) return E_FAIL;
 
-	HRESULT hr;
-	if (DescHeapAllocator)
+	m_upTerrainTex = std::make_unique<CTexture>();
+	HRESULT hr = m_upTerrainTex->CreateTexture(
+		graphics.descriptors, graphics.device, graphics.commandList, L"../Resources/grass.dds");
+	if (FAILED(hr))
 	{
-		m_upTerrainTex = std::make_unique<CTexture>();
-		hr = m_upTerrainTex->CreateTexture(*DescHeapAllocator, cpDevice, cpCommandList, L"../Resources/grass.dds");
+		m_upTerrainTex.reset();
+		return hr;
+	}
+
+	if (normalMapping)
+	{
+		m_upNormalMap = std::make_unique<CTexture>();
+		hr = m_upNormalMap->CreateTexture(
+			graphics.descriptors, graphics.device, graphics.commandList, L"../Resources/TerrainNormal.dds");
 		if (FAILED(hr))
 		{
-			m_upTerrainTex.reset();
+			m_upNormalMap.reset();
 			return hr;
-		}
-
-		if (normalMapping)
-		{
-			m_upNormalMap = std::make_unique<CTexture>();
-			HRESULT hr = m_upNormalMap->CreateTexture(*DescHeapAllocator, cpDevice, cpCommandList, L"../Resources/TerrainNormal.dds");
-			if (FAILED(hr))
-			{
-				m_upNormalMap.reset();
-				return hr;
-			}
 		}
 	}
 
@@ -227,7 +232,7 @@ HRESULT CTerrainObject::GenerateTerrain(
 
 	m_upTerrain = std::make_unique<CMesh>();
 	m_upTerrain->SetTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-	hr = m_upTerrain->CreateBuffer<VertexTexNormal>(cpDevice, cpCommandList, terrain);
+	hr = m_upTerrain->CreateBuffer<VertexTexNormal>(graphics.device, graphics.commandList, terrain);
 	if (FAILED(hr))
 	{
 		OutputDebugString(L"CTerrainObject::GenerateTerrain() Failed to create Buffer\n");
@@ -266,24 +271,18 @@ float CTerrainObject::GetHeightAt(const XMFLOAT3& pos) const
 	return GetHeightAt(pos.x, pos.z);
 }
 
-void CTerrainObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+void CTerrainObject::DrawObject(CFrameConstants& constants)
 {
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
-	const XMFLOAT4 color{ 1, 1, 1, 1 };
-	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &color, 0);
-	//-----------------------------------
-	cpCommandList->SetGraphicsRoot32BitConstants(1, 1, &m_fTiling, 4);
-	XMFLOAT4X4 world = Matrix4x4::Transpose(m_Transform.getMatrix());
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
-	XMFLOAT4X4 worldInv = Matrix4x4::Inverse(world);
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
+	if (!BindWorld(constants)) return;
 
-	//텍스쳐 설정
+	CB_Material data;
+	data.xmf2Tiling = { m_fTiling, m_fTiling };
+	if (!CMaterial(data).BindMaterialData(constants)) return;
+
+	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList = constants.GetCommandList();
 	if (m_upTerrainTex)
 		cpCommandList->SetGraphicsRootDescriptorTable(3, m_upTerrainTex->getGPUDescHandle());
 
-	//노멀맵 설정
 	if (m_upNormalMap)
 		cpCommandList->SetGraphicsRootDescriptorTable(4, m_upNormalMap->getGPUDescHandle());
 
@@ -325,10 +324,7 @@ CSkyboxObject::CSkyboxObject() = default;
 
 CSkyboxObject::~CSkyboxObject() = default;
 
-HRESULT CSkyboxObject::GenerateSkyBox(
-	const ComPtr<ID3D12Device>& cpDevice,
-	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	CDescHeapAllocator& allocator)
+HRESULT CSkyboxObject::GenerateSkyBox(const GraphicsResources& graphics)
 {
 	const wchar_t* filenames[] =
 	{
@@ -348,7 +344,7 @@ HRESULT CSkyboxObject::GenerateSkyBox(
 	for (size_t i = 0; i < std::size(filenames); ++i)
 	{
 		m_vSkyTextures[i] = std::make_unique<CTexture>();
-		HRESULT hr = m_vSkyTextures[i]->CreateTexture(allocator, cpDevice, cpCommandList, filenames[i]);
+		HRESULT hr = m_vSkyTextures[i]->CreateTexture(graphics.descriptors, graphics.device, graphics.commandList, filenames[i]);
 		if (FAILED(hr))
 		{
 			OutputDebugStringW(L"Skybox texture load failed: ");
@@ -360,9 +356,9 @@ HRESULT CSkyboxObject::GenerateSkyBox(
 		//-----------------------------------
 		//[아래 코드는 AI로 구현됨]
 		//평면 데이터 생성
-		MeshData<VertexTexcoord> plane;
+		MeshData<VertexTexNormal> plane;
 		const float sign = i % 2 == 0 ? 1.0f : -1.0f;
-		for (const auto& texcoord : uv)
+		for (const XMFLOAT2& texcoord : uv)
 		{
 			const float u = texcoord.x == 0.0f ? -extent : extent;
 			const float v = texcoord.y == 0.0f ? extent : -extent;
@@ -378,22 +374,19 @@ HRESULT CSkyboxObject::GenerateSkyBox(
 		//-----------------------------------
 
 		m_vPlane[i] = std::make_unique<CMesh>();
-		hr = m_vPlane[i]->CreateBuffer(cpDevice, cpCommandList, plane);
+		hr = m_vPlane[i]->CreateBuffer(graphics.device, graphics.commandList, plane);
 		if (FAILED(hr)) return hr;
 	}
 
 	return S_OK;
 }
 
-void CSkyboxObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+void CSkyboxObject::DrawObject(CFrameConstants& constants)
 {
-	const XMFLOAT4X4 world = Matrix4x4::Transpose(m_Transform.getMatrix());
-	const float tiling = 1.0f;
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
-	const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(world);
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
-	cpCommandList->SetGraphicsRoot32BitConstants(1, 1, &tiling, 4);
+	if (!BindWorld(constants)) return;
+	if (!CMaterial().BindMaterialData(constants)) return;
 
+	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList = constants.GetCommandList();
 	for (size_t i = 0; i < m_vPlane.size(); ++i)
 	{
 		cpCommandList->SetGraphicsRootDescriptorTable(3, m_vSkyTextures[i]->getGPUDescHandle());
@@ -403,11 +396,11 @@ void CSkyboxObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpComman
 
 void CSkyboxObject::ReleaseUploadBuffer()
 {
-	for (auto& plane : m_vPlane)
+	for (const std::unique_ptr<CMesh>& plane : m_vPlane)
 	{
 		plane->ReleaseUploadBuffer();
 	}
-	for (auto& texture : m_vSkyTextures)
+	for (const std::unique_ptr<CTexture>& texture : m_vSkyTextures)
 	{
 		texture->ReleaseUploadBuffer();
 	}
@@ -434,15 +427,15 @@ CMeshObject::CMeshObject(CMesh& mesh, const XMFLOAT4& color)
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CMeshObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+void CMeshObject::DrawObject(CFrameConstants& constants)
 {
-	if (!m_bVisible) return;
-	const XMFLOAT4X4 world = Matrix4x4::Transpose(m_Transform.getMatrix());
-	const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(world);
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
-	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &m_color, 0);
-	m_pMesh->DrawMesh(cpCommandList);
+	if (!m_bVisible || !BindWorld(constants)) return;
+
+	CB_Material data;
+	data.xmf4AlbedoColor = m_color;
+	if (!CMaterial(data).BindMaterialData(constants)) return;
+
+	m_pMesh->DrawMesh(constants.GetCommandList());
 }
 //-----------------------------------
 
@@ -482,9 +475,9 @@ XMFLOAT3 CDamageableObject::GetAimPoint() const
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CDamageableObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+void CDamageableObject::DrawObject(CFrameConstants& constants)
 {
-	if (IsVisible()) CModelObject::DrawObject(cpCommandList);
+	if (IsVisible()) CModelObject::DrawObject(constants);
 }
 //-----------------------------------
 
@@ -525,11 +518,11 @@ CTargetObject::CTargetObject(CMesh& mesh)
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CTargetObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+void CTargetObject::DrawObject(CFrameConstants& constants)
 {
 	if (!IsVisible()) return;
 	m_visual.SetPosition(GetPosition());
-	m_visual.DrawObject(cpCommandList);
+	m_visual.DrawObject(constants);
 }
 //-----------------------------------
 
@@ -547,7 +540,8 @@ ERenderState CTargetObject::GetRenderState() const { return ERenderState::Unlit;
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
 CProjectileObject::CProjectileObject(CMesh& mesh, const XMFLOAT3& position, const ProjectileData& data)
-	: CMeshObject(mesh, data.enemyOwned ? XMFLOAT4{ 1, .35f, .10f, 1 } : XMFLOAT4{ 1, .9f, .36f, 1 }), m_flight(data)
+	: CMeshObject(mesh, data.enemyOwned ? XMFLOAT4{ 1, .35f, .10f, 1 } : XMFLOAT4{ 1, .9f, .36f, 1 }),
+	  m_flight(data)
 {
 	SetPosition(position);
 	SetScale(.38f);
@@ -602,7 +596,10 @@ BoundingOrientedBox CObstacleObject::GetFootprint() const
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-CVehicleObject::CVehicleObject(const WeaponSettings& weapon) : m_weapon(weapon) {}
+CVehicleObject::CVehicleObject(const WeaponSettings& weapon)
+	:	m_weapon(weapon) 
+{
+}
 //-----------------------------------
 
 //-----------------------------------
@@ -672,31 +669,41 @@ bool CVehicleObject::FireWeapon(XMFLOAT3& origin, ProjectileData& projectile)
 void CVehicleObject::UpdateTargeting(const std::vector<CDamageableObject*>& targets, const CTerrainObject& terrain)
 {
 	if (m_bLockPinned && m_pLockedTarget && m_pLockedTarget->IsAlive()) return;
+	
 	XMFLOAT3 origin, direction;
 	GetAimRay(origin, direction);
 	origin = Vector3::Add(origin, direction, m_weapon.GetMuzzleOffset());
+	
 	m_bLockPinned = false;
 	m_pLockedTarget = nullptr;
+	
 	CDamageableObject* directlyHit = nullptr;
 	float bestScore = -1.0f;
-	const float maxDistance = m_weapon.GetRange();
-	const XMFLOAT3 rayEnd = Vector3::Add(origin, direction, maxDistance);
+	
+	float maxDistance = m_weapon.GetRange();
+	XMFLOAT3 rayEnd = Vector3::Add(origin, direction, maxDistance);
 	float nearest = (std::min)(1.0f, terrain.GetHitFraction(origin, rayEnd, LockTerrainClearance));
+	
 	for (size_t i = 0; i < targets.size(); ++i)
 	{
-		const auto& enemy = *targets[i];
+		CDamageableObject& enemy = *targets[i];
+		
 		if (!enemy.IsAlive()) continue;
-		const XMFLOAT3 aim = enemy.GetAimPoint();
-		const float hit = Collision::SegmentSphereFraction(origin, rayEnd, aim, m_fLockRadius);
+		
+		XMFLOAT3 aim = enemy.GetAimPoint();
+		float hit = Collision::SegmentSphereFraction(origin, rayEnd, aim, m_fLockRadius);
+		
 		if (hit < nearest)
 		{
 			directlyHit = targets[i];
 			nearest = hit;
 		}
-		const XMFLOAT3 delta = Vector3::Subtract(aim, origin);
-		const float distance = Vector3::Length(delta);
-		const float dot = Vector3::DotProduct(direction, Vector3::Normalize(delta));
-		const float score = dot - distance * LockDistancePenalty;
+		
+		XMFLOAT3 delta = Vector3::Subtract(aim, origin);
+		float distance = Vector3::Length(delta);
+		float dot = Vector3::DotProduct(direction, Vector3::Normalize(delta));
+		float score = dot - distance * LockDistancePenalty;
+		
 		if (distance > maxDistance || dot < m_fLockMinDot || score <= bestScore ||
 			terrain.GetHitFraction(origin, aim, LockTerrainClearance) < 1.0f) continue;
 		m_pLockedTarget = targets[i];
@@ -740,89 +747,7 @@ BoundingOrientedBox CTankObject::GetFootprint(const Transform& pose) const
 
 void CTankObject::SetModel(std::shared_ptr<CModel>& model)
 {
-	PrepareModel(model);
 	UsePreparedTankModel(model);
-}
-
-void CTankObject::PrepareModel(std::shared_ptr<CModel>& model)
-{
-	//-----------------------------------
-	//[직접 작성한 코드]
-	//하드코딩 된 부분은 나중에 string vector 넘겨받는 형태로 처리하게 변경 예정
-
-
-	XMFLOAT4X4 mtxTurret = model->GetFrameMatrix("Turret");
-
-	//포신의 기존 로컬 행렬 저장
-	XMFLOAT4X4 localOrigin = model->GetFrameMatrix("maingun");
-
-	//터렛에 파츠 연결 => 파츠의 부모 변환 포함한 기본 모델 행렬 적용하면서,
-	//변환은 새 parent를 따르도록
-	model->SetFrameParent("maingun", "Turret");
-	//터렛 기본 설정으로 회전이 적용되어 있음. 그걸 빼줘야 함
-	//파츠들의 초기 변환 유지. 터렛의 변환 행렬이 부모행렬로 곱해져 상쇄됨.
-	model->SetFrameLocal("maingun", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("m2");
-	model->SetFrameParent("m2", "Turret");
-	model->SetFrameLocal("m2", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("comhatch");
-	model->SetFrameParent("comhatch", "Turret");
-	model->SetFrameLocal("comhatch", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("ChamferCyl");
-	model->SetFrameParent("ChamferCyl", "Turret");
-	model->SetFrameLocal("ChamferCyl", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Tube01");
-	model->SetFrameParent("Tube01", "Turret");
-	model->SetFrameLocal("Tube01", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Cylinder01");
-	model->SetFrameParent("Cylinder01", "Turret");
-	model->SetFrameLocal("Cylinder01", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Cylinder00");
-	model->SetFrameParent("Cylinder00", "Turret");
-	model->SetFrameLocal("Cylinder00", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Rectangle6");
-	model->SetFrameParent("Rectangle6", "Turret");
-	model->SetFrameLocal("Rectangle6", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("ldoor");
-	model->SetFrameParent("ldoor", "Turret");
-	model->SetFrameLocal("ldoor", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("rdoor");
-	model->SetFrameParent("rdoor", "Turret");
-	model->SetFrameLocal("rdoor", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Rectangle2");
-	model->SetFrameParent("Rectangle2", "Turret");
-	model->SetFrameLocal("Rectangle2", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Rectangle3");
-	model->SetFrameParent("Rectangle3", "Turret");
-	model->SetFrameLocal("Rectangle3", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Rectangle4");
-	model->SetFrameParent("Rectangle4", "Turret");
-	model->SetFrameLocal("Rectangle4", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("Rectangle5");
-	model->SetFrameParent("Rectangle5", "Turret");
-	model->SetFrameLocal("Rectangle5", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("grille");
-	model->SetFrameParent("grille", "Turret");
-	model->SetFrameLocal("grille", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-
-	localOrigin = model->GetFrameMatrix("tray");
-	model->SetFrameParent("tray", "Turret");
-	model->SetFrameLocal("tray", Matrix4x4::Multiply(localOrigin, Matrix4x4::Inverse(mtxTurret)));
-	//-----------------------------------
 }
 
 //-----------------------------------
@@ -888,11 +813,9 @@ void CTankObject::Move(XMFLOAT3 shift)
 
 //-----------------------------------
 //[직접 작성한 코드]
-void CTankObject::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+void CTankObject::DrawObject(CFrameConstants& constants)
 {
-	if (!m_spModel || !IsVisible()) return;
-
-	m_spModel->DrawModel(cpCommandList, m_umFrameTransform, m_Transform.getMatrix());
+	if (IsVisible()) CModelObject::DrawObject(constants);
 }
 //-----------------------------------
 
@@ -948,23 +871,32 @@ void CTankObject::ResetStagePose(const XMFLOAT3& position, float yaw)
 //[아래 코드는 AI로 구현됨]
 void CTankObject::FollowStageSlope(const CTerrainObject& terrain)
 {
-	constexpr float halfWidth = config::stage::TankFootprintHalfWidth;
-	constexpr float halfLength = config::stage::TankFootprintHalfLength;
-	const auto& position = m_Transform.position;
-	const float yaw = m_Transform.rotation.y;
-	const float sine = std::sin(yaw);
-	const float cosine = std::cos(yaw);
-	const auto corner = [&](float right, float forward)
-	{
-		return terrain.GetHeightAt(position.x + cosine * right + sine * forward,
-			position.z - sine * right + cosine * forward);
+	float halfWidth = config::stage::TankFootprintHalfWidth;
+	float halfLength = config::stage::TankFootprintHalfLength;
+	
+	XMFLOAT3& position = m_Transform.position;
+	
+	float yaw = m_Transform.rotation.y;
+	float sine = std::sin(yaw);
+	float cosine = std::cos(yaw);
+	
+	XMFLOAT2 corners[] = {
+		{ -halfWidth, halfLength }, { halfWidth, halfLength },
+		{ -halfWidth, -halfLength }, { halfWidth, -halfLength }
 	};
-	const float frontLeft = corner(-halfWidth, halfLength);
-	const float frontRight = corner(halfWidth, halfLength);
-	const float backLeft = corner(-halfWidth, -halfLength);
-	const float backRight = corner(halfWidth, -halfLength);
-	const float frontMinusBack = (frontLeft + frontRight - backLeft - backRight) * 0.5f;
-	const float rightMinusLeft = (frontRight + backRight - frontLeft - backLeft) * 0.5f;
+	
+	float heights[4]{};
+	
+	for (size_t i = 0; i < std::size(corners); ++i)
+	{
+		float right = corners[i].x;
+		float forward = corners[i].y;
+		heights[i] = terrain.GetHeightAt(position.x + cosine * right + sine * forward,
+			position.z - sine * right + cosine * forward);
+	}
+
+	float frontMinusBack = (heights[0] + heights[1] - heights[2] - heights[3]) * 0.5f;
+	float rightMinusLeft = (heights[1] + heights[3] - heights[0] - heights[2]) * 0.5f;
 	m_Transform.rotation.x = -std::atan2(frontMinusBack, 2.0f * halfLength);
 	m_Transform.rotation.z = std::atan2(rightMinusLeft, 2.0f * halfWidth);
 }
@@ -974,7 +906,7 @@ void CTankObject::FollowStageSlope(const CTerrainObject& terrain)
 //[아래 코드는 AI로 구현됨]
 XMFLOAT3 CTankObject::GetTurretHeading() const
 {
-	const XMFLOAT4X4 turretWorld = Matrix4x4::Multiply(
+	XMFLOAT4X4 turretWorld = Matrix4x4::Multiply(
 		m_spModel->GetFrameMatrix("Turret", m_umFrameTransform), m_Transform.getMatrix());
 	XMFLOAT3 forward = Vector3::TransformNormal({ 0.0f, -1.0f, 0.0f }, turretWorld);
 	forward.y = 0.0f;
@@ -984,7 +916,7 @@ XMFLOAT3 CTankObject::GetTurretHeading() const
 
 void CTankObject::GetStageCannonRay(XMFLOAT3& origin, XMFLOAT3& direction) const
 {
-	const XMFLOAT4X4 cannonWorld = Matrix4x4::Multiply(
+	XMFLOAT4X4 cannonWorld = Matrix4x4::Multiply(
 		m_spModel->GetFrameMatrix("maingun", m_umFrameTransform), m_Transform.getMatrix());
 	//-----------------------------------
 	//[직접 작성한 코드]
@@ -999,26 +931,30 @@ bool CTankObject::AimStageCannon(const XMFLOAT3& target, float dt)
 {
 	XMFLOAT3 origin, direction;
 	GetStageCannonRay(origin, direction);
-	const XMFLOAT3 desired = Vector3::Normalize(Vector3::Subtract(target, origin));
-	const float yawDelta = XMScalarModAngle(std::atan2(desired.x, desired.z) - std::atan2(direction.x, direction.z));
-	const float yawStep = config::stage::TurretAimSpeed * dt;
+	
+	XMFLOAT3 desired = Vector3::Normalize(Vector3::Subtract(target, origin));
+	float yawDelta = XMScalarModAngle(std::atan2(desired.x, desired.z) - std::atan2(direction.x, direction.z));
+	float yawStep = config::stage::TurretAimSpeed * dt;
 	m_fTurretYaw = XMScalarModAngle(m_fTurretYaw + std::clamp(yawDelta, -yawStep, yawStep));
+	
 	Transform turret;
 	turret.rotation.y = m_fTurretYaw;
 	SetFrameTransform("Turret", turret);
 
 	GetStageCannonRay(origin, direction);
-	const float pitchDelta = std::asin(std::clamp(desired.y, -1.0f, 1.0f)) -
+	float pitchDelta = std::asin(std::clamp(desired.y, -1.0f, 1.0f)) -
 		std::asin(std::clamp(direction.y, -1.0f, 1.0f));
-	const float pitchStep = config::stage::CannonAimSpeed * dt;
+	float pitchStep = config::stage::CannonAimSpeed * dt;
+
 	m_fCannonPitch = std::clamp(m_fCannonPitch - std::clamp(pitchDelta, -pitchStep, pitchStep),
 		-config::ABRAMS_CANNON_ELEVATION_RADIAN, -config::ABRAMS_CANNON_DEPRESSION_RADIAN);
+	
 	Transform cannon;
 	cannon.rotation.x = m_fCannonPitch;
 	SetFrameTransform("maingun", cannon);
 
 	GetStageCannonRay(origin, direction);
-	const XMFLOAT3 finalTarget = Vector3::Normalize(Vector3::Subtract(target, origin));
+	XMFLOAT3 finalTarget = Vector3::Normalize(Vector3::Subtract(target, origin));
 	return Vector3::DotProduct(finalTarget, direction) >= config::stage::CannonFireMinDot;
 }
 //-----------------------------------
@@ -1070,10 +1006,9 @@ CUI::CUI(const XMFLOAT4& bounds, const XMFLOAT4& color, const wchar_t* textureFi
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-HRESULT CUI::BuildMesh(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	CDescHeapAllocator* allocator)
+HRESULT CUI::BuildMesh(const GraphicsResources& graphics)
 {
-	MeshData<VertexTexcoord> meshData;
+	MeshData<VertexTexNormal> meshData;
 	meshData.vertices =
 	{
 		{ { -0.5f,  0.5f, 0.0f }, { 1, 1, 1, 1 }, { 0.0f, 0.0f } },
@@ -1082,19 +1017,21 @@ HRESULT CUI::BuildMesh(const ComPtr<ID3D12Device>& cpDevice, const ComPtr<ID3D12
 		{ { -0.5f, -0.5f, 0.0f }, { 1, 1, 1, 1 }, { 0.0f, 1.0f } }
 	};
 	meshData.indices = { 0, 1, 2, 0, 2, 3 };
-	HRESULT hr = m_mesh.CreateBuffer(cpDevice, cpCommandList, meshData);
+	
+	HRESULT hr = m_mesh.CreateBuffer(graphics.device, graphics.commandList, meshData);
 	if (FAILED(hr)) return hr;
+	
 	if (m_textureFile.empty()) return S_OK;
-	if (!allocator) return E_INVALIDARG;
 
-	auto texture = std::make_shared<CTexture>();
-	hr = texture->CreateTexture(*allocator, cpDevice, cpCommandList, m_textureFile.c_str(), true);
+	std::shared_ptr<CTexture> texture = std::make_shared<CTexture>();
+	hr = texture->CreateTexture(graphics.descriptors, graphics.device, graphics.commandList, m_textureFile.c_str(), true);
 	if (FAILED(hr))
 	{
 		OutputDebugStringW(m_textureFile.c_str());
 		OutputDebugStringW(L": UI texture load failed\n");
 		return hr;
 	}
+	
 	return BindTexture(texture);
 }
 //-----------------------------------
@@ -1117,19 +1054,17 @@ void CUI::ReleaseUploadBuffer()
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CUI::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+void CUI::DrawObject(CFrameConstants& constants)
 {
-	if (!m_bVisible) return;
-	cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &m_color, 0);
-	const XMFLOAT4X4 world = Matrix4x4::Transpose(m_Transform.getMatrix());
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &world, 0);
-	const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(world);
-	cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
+	if (!m_bVisible || !BindWorld(constants)) return;
 
+	CB_Material data;
+	data.xmf4AlbedoColor = m_color;
+	if (!CMaterial(data).BindMaterialData(constants)) return;
+
+	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList = constants.GetCommandList();
 	if (m_spUITexture)
-	{
 		cpCommandList->SetGraphicsRootDescriptorTable(3, m_spUITexture->getGPUDescHandle());
-	}
 
 	m_mesh.DrawMesh(cpCommandList);
 }
@@ -1139,8 +1074,8 @@ void CUI::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
 //[아래 코드는 AI로 구현됨]
 bool CUI::HitTest(float x, float y) const
 {
-	const XMFLOAT4X4 inverse = Matrix4x4::Inverse(m_Transform.getMatrix());
-	const XMFLOAT3 local = Vector3::TransformCoord({ x, y, m_Transform.position.z }, inverse);
+	XMFLOAT4X4 inverse = Matrix4x4::Inverse(m_Transform.getMatrix());
+	XMFLOAT3 local = Vector3::TransformCoord({ x, y, m_Transform.position.z }, inverse);
 	return m_bVisible && std::abs(local.x) <= 0.5f && std::abs(local.y) <= 0.5f;
 }
 //-----------------------------------
@@ -1170,16 +1105,15 @@ CMaskedUI::CMaskedUI(const XMFLOAT4& bounds, const XMFLOAT4& color,
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-HRESULT CMaskedUI::BuildMesh(const ComPtr<ID3D12Device>& cpDevice,
-	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, CDescHeapAllocator* allocator)
+HRESULT CMaskedUI::BuildMesh(const GraphicsResources& graphics)
 {
-	HRESULT hr = CUI::BuildMesh(cpDevice, cpCommandList, allocator);
+	HRESULT hr = CUI::BuildMesh(graphics);
 	if (FAILED(hr)) return hr;
 	if (m_spMaskTexture) return S_OK;
-	if (!allocator || m_maskTextureFile.empty()) return E_INVALIDARG;
+	if (m_maskTextureFile.empty()) return E_INVALIDARG;
 
-	auto mask = std::make_shared<CTexture>();
-	hr = mask->CreateTexture(*allocator, cpDevice, cpCommandList, m_maskTextureFile.c_str(), true);
+	std::shared_ptr<CTexture> mask = std::make_shared<CTexture>();
+	hr = mask->CreateTexture(graphics.descriptors, graphics.device, graphics.commandList, m_maskTextureFile.c_str(), true);
 	if (FAILED(hr))
 	{
 		OutputDebugStringW(m_maskTextureFile.c_str());
@@ -1201,11 +1135,12 @@ ERenderState CMaskedUI::GetRenderState() const
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-void CMaskedUI::DrawObject(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+void CMaskedUI::DrawObject(CFrameConstants& constants)
 {
+	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList = constants.GetCommandList();
 	if (!HasTexture() || !m_spMaskTexture) return;
 	cpCommandList->SetGraphicsRootDescriptorTable(5, m_spMaskTexture->getGPUDescHandle());
-	CUI::DrawObject(cpCommandList);
+	CUI::DrawObject(constants);
 }
 //-----------------------------------
 
@@ -1226,21 +1161,32 @@ void CMaskedUI::ReleaseUploadBuffer()
 
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
-HRESULT CGameHud::Build(CScene& scene, int maxHealth, const ComPtr<ID3D12Device>& device,
-	const ComPtr<ID3D12GraphicsCommandList>& list, CDescHeapAllocator& allocator)
+HRESULT CGameHud::Build(CScene& scene, int maxHealth, const GraphicsResources& graphics)
 {
 	std::vector<const wchar_t*> textures
 	{
-		L"../Resources/UI/Aim.png", L"../Resources/UI/AutoShoot.png", L"../Resources/UI/Shield.png"
+		L"../Resources/UI/Aim.png",
+		L"../Resources/UI/AutoShoot.png",
+		L"../Resources/UI/Shield.png"
 	};
-	for (int i = 0; i < maxHealth; ++i) textures.push_back(L"../Resources/UI/HealthBar.png");
+
+	for (int i = 0; i < maxHealth; ++i)
+	{
+		textures.push_back(L"../Resources/UI/HealthBar.png");
+	}
+
 	textures.push_back(L"../Resources/UI/Victory!.png");
 	textures.push_back(L"../Resources/UI/Defeat.png");
+
+	// 조준선, 체력, 결과 등 HUD 오브젝트 생성 및 등록
 	for (const wchar_t* file : textures)
 	{
-		auto ui = std::make_unique<CUI>(XMFLOAT4{ 0, 0, 1, 1 }, XMFLOAT4{ 1, 1, 1, 1 }, file);
-		const HRESULT hr = ui->BuildMesh(device, list, &allocator);
+		std::shared_ptr<CUI> ui = std::make_shared<CUI>(
+			XMFLOAT4{ 0, 0, 1, 1 }, XMFLOAT4{ 1, 1, 1, 1 }, file);
+
+		HRESULT hr = ui->BuildMesh(graphics);
 		if (FAILED(hr)) return hr;
+		
 		ui->SetVisible(false);
 		m_ui.push_back(ui.get());
 		scene.AddObject(std::move(ui));
@@ -1253,7 +1199,7 @@ HRESULT CGameHud::Build(CScene& scene, int maxHealth, const ComPtr<ID3D12Device>
 //[아래 코드는 AI로 구현됨]
 void CGameHud::SetPlane(size_t slot, float x, float y, float width, float height, const XMFLOAT4& color)
 {
-	auto* ui = m_ui[slot];
+	CUI* ui = m_ui[slot];
 	ui->SetPosition(x, y, .01f);
 	ui->SetScale(width, height, 1.0f);
 	ui->SetColor(color);
@@ -1265,28 +1211,52 @@ void CGameHud::SetPlane(size_t slot, float x, float y, float width, float height
 //[아래 코드는 AI로 구현됨]
 void CGameHud::Update(const CVehicleObject& player, bool victory, bool defeat, float aspectScale)
 {
-	const XMFLOAT4 white{ 1, 1, 1, 1 };
-	const auto* locked = player.GetLockedTarget();
-	const bool hasTarget = locked && locked->IsAlive();
-	const XMFLOAT4 lockColor = player.IsLockPinned() ? XMFLOAT4{ .18f, .96f, 1, 1 } : XMFLOAT4{ 1, .86f, .08f, 1 };
-	const XMFLOAT4 reticleColor = hasTarget ? lockColor : white;
-	for (auto* ui : m_ui) ui->SetVisible(false);
+	XMFLOAT4 white{ 1, 1, 1, 1 };
+	CDamageableObject* locked = player.GetLockedTarget();
+	bool hasTarget = locked && locked->IsAlive();
+	
+	XMFLOAT4 lockColor = player.IsLockPinned() ? XMFLOAT4{ .18f, .96f, 1, 1 } : XMFLOAT4{ 1, .86f, .08f, 1 };
+	XMFLOAT4 reticleColor = hasTarget ? lockColor : white;
+	
+	for (CUI* ui : m_ui)
+	{
+		ui->SetVisible(false);
+	}
+
 	SetPlane(Aim, 0, 0, ReticleSize * aspectScale, ReticleSize, reticleColor);
+	
 	for (int i = 0; i < player.GetMaxHealth(); ++i)
 	{
-		const XMFLOAT4 color = i < player.GetHealth() ? white : XMFLOAT4{ .25f, .25f, .25f, 1 };
-		SetPlane(HealthBegin + i, -.87f + i * .065f * aspectScale, .86f,
-			.055f * (259.0f / 260.0f) * aspectScale, .055f, color);
+		const XMFLOAT4 color =
+			i < player.GetHealth() ? white : XMFLOAT4{ 0.25f, 0.25f, 0.25f, 1 };
+
+		SetPlane(
+			HealthBegin + i,
+			-0.87f + i * 0.065f * aspectScale, 0.86f,
+			0.055f * (259.0f / 260.0f) * aspectScale,
+			0.055f,
+			color);
 	}
-	if (player.IsAutoAttacking()) SetPlane(AutoAttack, 0, 0, ReticleSize * aspectScale, ReticleSize, reticleColor);
+
+	if (player.IsAutoAttacking())
+	{
+		SetPlane(AutoAttack, 0, 0, ReticleSize * aspectScale, ReticleSize, reticleColor);
+	}
+
 	if (player.ShowsShield())
-		SetPlane(Shield, -.87f, .77f, .07f * (266.0f / 268.0f) * aspectScale, .07f,
-			player.IsProtected() ? white : XMFLOAT4{ .25f, .25f, .25f, 1 });
+	{
+		SetPlane(
+			Shield,
+			-0.87f, 0.77f, 0.07f * (266.0f / 268.0f) * aspectScale,
+			0.07f,
+			player.IsProtected() ? white : XMFLOAT4{ 0.25f, 0.25f, 0.25f, 1 });
+	}
+
 	if (victory || defeat)
 	{
 		const size_t slot = HealthBegin + player.GetMaxHealth() + (defeat ? 1 : 0);
 		const float imageWidth = defeat ? 1027.0f : 1151.0f;
-		SetPlane(slot, 0, .45f, .65f * aspectScale, .65f * 463.0f / imageWidth, white);
+		SetPlane(slot, 0, 0.45f, 0.65f * aspectScale, 0.65f * 463.0f / imageWidth, white);
 	}
 }
 //-----------------------------------

@@ -72,7 +72,9 @@ using namespace DirectX;
 using namespace DirectX::PackedVector;
 using Microsoft::WRL::ComPtr;
 
-extern UINT gnCbvSrvDescriptorIncrementSize;
+//256 배수로 크기 리턴
+template<class T>
+inline constexpr UINT GetTypeSize256() { return (sizeof(T) + 255) & ~255; }
 
 HRESULT CreateBufferResource(
 	const ComPtr<ID3D12Device>& cpDevice,
@@ -97,7 +99,7 @@ class CDescHeapAllocator
 {
 public:
 	CDescHeapAllocator();
-	HRESULT CreateSRVDescHeap(const ComPtr<ID3D12Device>& cpDevice);
+	HRESULT CreateDescHeap(const ComPtr<ID3D12Device>& cpDevice);
 
 	HRESULT AllocateHeapSlot(DescHeapInfo& srvDescHeapInfo);
 
@@ -110,6 +112,50 @@ private:
 	UINT							m_nDescHeapIncrementSize;
 
 };
+
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+struct GraphicsResources
+{
+	const ComPtr<ID3D12Device>& device;
+	const ComPtr<ID3D12GraphicsCommandList>& commandList;
+	CDescHeapAllocator& descriptors;
+};
+
+class CFrameConstants
+{
+public:
+	HRESULT Create(const GraphicsResources& graphics);
+	void Release();
+	void BeginFrame() { m_nextSlot = 0; }
+	const ComPtr<ID3D12GraphicsCommandList>& GetCommandList() const { return m_cpCommandList; }
+
+	template<class T>
+	bool Bind(UINT rootParameter, const T& data)
+	{
+		static_assert(sizeof(T) <= D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+		if (m_nextSlot >= m_slots.size())
+		{
+			if (m_nextSlot == m_slots.size()) OutputDebugStringW(L"Frame constant storage is full.\n");
+			m_nextSlot = m_slots.size() + 1;
+			return false;
+		}
+
+		::memcpy(m_mapped + m_nextSlot * D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT, &data, sizeof(T));
+		m_cpCommandList->SetGraphicsRootDescriptorTable(rootParameter, m_slots[m_nextSlot].gpuHandle);
+		++m_nextSlot;
+		return true;
+	}
+
+private:
+	ComPtr<ID3D12Resource> m_cpUploadBuffer;
+	ComPtr<ID3D12GraphicsCommandList> m_cpCommandList;
+	std::vector<DescHeapInfo> m_slots;
+
+	UINT8* m_mapped = nullptr;
+	size_t m_nextSlot = 0;
+};
+//-----------------------------------
 
 struct Transform
 {

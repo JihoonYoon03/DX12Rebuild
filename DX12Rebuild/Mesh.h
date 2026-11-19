@@ -23,6 +23,12 @@ struct VertexTexNormal
 	XMFLOAT3 normal;
 };
 
+struct CB_GameObjInfo
+{
+	XMFLOAT4X4	xmf4x4World;
+	XMFLOAT4X4	xmf4x4WorldInv;
+};
+
 template <class VERTEXDATA>
 struct MeshData
 {
@@ -36,7 +42,6 @@ struct SubMeshData
 {
 	//해당 서브매쉬에 적용할 머터리얼
 
-	MaterialData	materialData;
 	uint32_t		materialIndex;
 	//해당 서브매쉬가 인덱스 배열 몇 번부터 시작하는가
 	uint32_t		startIndex;
@@ -46,19 +51,17 @@ struct SubMeshData
 
 struct FrameData
 {
-	int										index;
 	std::string								name;
 
 	//optional로 빈 상태 지정. 매쉬가 없는 경우 등
 	std::optional<unsigned int>				parent = std::nullopt;
 
-	//이 프레임의 매쉬가 정점 배열의 몇 번 정점부터 시작되는가
-	uint32_t								baseVertex;
-
 	std::vector<SubMeshData>				subMeshes;
-	std::vector<MaterialData>				materialDatas;
+	std::vector<CB_Material>				materialDatas;
 
-	XMFLOAT4X4								mtxModel;
+	XMFLOAT4X4 local = Matrix4x4::Identity();
+	uint32_t materialIndex = 0;
+
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
 	std::optional<BoundingBox> localBounds;
@@ -154,73 +157,59 @@ private:
 
 };
 
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+struct ModelFrameTag
+{
+	const char* name;
+	const char* parent = nullptr; // Parent must be an earlier animated tag.
+	bool animated = true;
+};
+
 class CModel
 {
+public:
+	bool LoadModelData(
+		const GraphicsResources& graphics,
+		const char* filePath,
+		const XMFLOAT3& offset,
+		const std::vector<ModelFrameTag>& frameTags,
+		std::string* debug = nullptr);
+
+	void ReleaseUploadBuffer();
+	std::optional<BoundingBox> GetModelBounds() const { return m_bounds; }
+
+	int GetFrameIndex(const std::string& frameName) const;
+	XMFLOAT4X4 GetFrameMatrix(const std::string& frameName) const;
+	XMFLOAT4X4 GetFrameMatrix(const std::string& frameName,
+		const std::unordered_map<int, XMFLOAT4X4>& frameTransforms) const;
+
+	void DrawModel(CFrameConstants& constants, const std::unordered_map<int, XMFLOAT4X4>& frameTransforms,
+		const XMFLOAT4X4& objWorld);
+
 private:
 	struct ModelData
 	{
-		std::vector<FrameData>					frames;
-		std::vector<MeshData<VertexTexNormal>>	meshData;
+		std::vector<FrameData> frames;
+		std::vector<MeshData<VertexTexNormal>> meshData;
 	};
 
-public:
-	CModel();
-	~CModel();
+	struct ModelPart
+	{
+		std::string name;
+		XMFLOAT4X4 local;
+		size_t parent;
+		std::vector<SubMeshData> subMeshes;
+	};
 
-	bool LoadModelData(
-		const ComPtr<ID3D12Device>& cpDevice,
-		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, 
-		std::string filePath,
-		std::shared_ptr<CMaterial>& material,
-		std::string* debug = nullptr
-	);
+	bool ReadFrameData(ModelData& modelData, std::ifstream& file, std::istringstream& iss,
+		std::string& buffer, std::optional<unsigned int> parent = std::nullopt);
 
-	//프레임 별 데이터를 읽어들이는 함수. 재귀적 호출
-	bool ReadFrameData(
-		ModelData& modelData,
-		std::ifstream& file, std::istringstream& iss, std::string& buffer,
-		const std::optional<unsigned int> parent = std::nullopt);
+	XMFLOAT4X4 GetPartMatrix(size_t index, const std::unordered_map<int, XMFLOAT4X4>& frameTransforms) const;
 
-
-	void ReleaseUploadBuffer();
-
-	void SetFrameParent(const std::string& targetFrame, const std::string& parentFrame);
-	void SetFrameLocal(const std::string& targetFrame, const Transform& transform);
-	void SetFrameLocal(const std::string& targetFrame, const XMFLOAT4X4& mtx);
-
-	//FrameData* GetFrame(const std::string& frameName);
-	int GetFrameIndex(const std::string& frameName);
-	XMFLOAT4X4 GetFrameMatrix(const std::string& frameName);
-	XMFLOAT4X4 GetFrameMatrix(unsigned int index);
-	//프레임 별 변환이 적용된 것 까지 포함하여 Get
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
-	XMFLOAT4X4 GetFrameMatrix(const std::string& frameName, const std::unordered_map<int, XMFLOAT4X4>& umFrameTransform);
-	XMFLOAT4X4 GetFrameMatrix(unsigned int index, const std::unordered_map<int, XMFLOAT4X4>& umFrameTransform);
-	//-----------------------------------
-
-	const std::vector<FrameData>& getData() { return m_vFrameData; }
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
-	std::optional<BoundingBox> GetModelBounds();
-	//-----------------------------------
-
-	virtual void DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		const XMFLOAT4X4 objWorld = Matrix4x4::Identity());
-	//프레임 별 변환 적용
-	//-----------------------------------
-	//[아래 코드는 AI로 구현됨]
-	virtual void DrawModel(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		const std::unordered_map<int, XMFLOAT4X4>& umFrameTransform,
-		const XMFLOAT4X4 objWorld = Matrix4x4::Identity());
-	//-----------------------------------
-
-private:
-	std::vector<FrameData>					m_vFrameData;
-	std::unique_ptr<CMesh>					m_upMesh;
-	std::shared_ptr<CMaterial>				m_spMaterial;
-
-	//아직 미사용
-	//ComPtr<ID3D12Resource>				m_cpFrameMatrixBuffer;
-	//UINT8*								m_MappedFrameMatrixBuffer;
+	std::unique_ptr<CMesh> m_upMesh;
+	std::vector<ModelPart> m_parts;
+	std::vector<CMaterial> m_materials;
+	std::optional<BoundingBox> m_bounds;
 };
+//-----------------------------------

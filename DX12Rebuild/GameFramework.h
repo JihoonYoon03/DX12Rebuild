@@ -116,15 +116,15 @@ private:
 	//Title Text
 	std::wstring m_wsTitle;
 
+	//Descriptor Heap Manager
+	std::unique_ptr<CDescHeapAllocator>	m_upDescHeapAllocator;
+
 	//Scene
-	ComPtr<ID3D12RootSignature>			m_cpRootSignature;
 	std::weak_ptr<CScene>				m_upCurrentScene;
 	std::shared_ptr<CGameScene>			m_spTankScene;
-//-----------------------------------
 
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	HRESULT BuildUi();
 	void ResizeUi();
 	void ProcessSceneMessage(HWND hWnd, UINT nMessageID, WPARAM wParam, LPARAM lParam);
 
@@ -135,20 +135,9 @@ private:
 	std::shared_ptr<CUiScene> m_spTutorialScene;
 	//-----------------------------------
 
-//-----------------------------------
-//[직접 작성한 코드]
-	//Texture
-	std::unique_ptr<CDescHeapAllocator>	m_upDescHeapAllocator;
-
-	//Debug
-
-	//Test
-	
-	XMFLOAT4X4	mtx44World;
-	ComPtr<ID3D12Resource>				m_cpMtxBuffer;
 	//-----------------------------------
 	//[아래 코드는 AI로 구현됨]
-	UINT8*								m_mappedMtxBuffer = nullptr;
+	CFrameConstants						m_frameConstants;
 	//-----------------------------------
 };
 //-----------------------------------

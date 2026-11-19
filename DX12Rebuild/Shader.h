@@ -34,37 +34,23 @@ public:
 	CShader();
 	virtual ~CShader();
 
-	HRESULT CreateCBV(
-		const ComPtr<ID3D12Device>& cpDevice,
-		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CDescHeapAllocator& descHeapAllocator
-	);
 	HRESULT CreateRootSignature(const ComPtr<ID3D12Device>& cpDevice);
-	HRESULT CreateShader(
-		const ComPtr<ID3D12Device>& cpDevice,
-		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-		CDescHeapAllocator& descHeapAllocator
-	);
+	HRESULT CreateShader(const ComPtr<ID3D12Device>& cpDevice);
 	
 	HRESULT AddPipelineState(
 		const ComPtr<ID3D12Device>& cpDevice,
 		const ERenderState& state,
-		const D3D12_GRAPHICS_PIPELINE_STATE_DESC& pipelineState
-	);
+		const D3D12_GRAPHICS_PIPELINE_STATE_DESC& pipelineState);
 
-	void SetGraphicsRootSignature(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
-	void SetPipelineState(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const ERenderState& state);
-	//View/Proj/ViewSky
-	void SetSceneData(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const CB_SceneInfo& data, bool bHud = false);
+	void SetGraphicsRootSignature(
+		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList);
+	void SetPipelineState(
+		const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
+		const ERenderState& state);
 
 protected:
 	ComPtr<ID3D12RootSignature>		m_cpRootSignature;
 	//PSO
 	std::unordered_map<ERenderState, ComPtr<ID3D12PipelineState>> m_cpPipelineState;
 
-	//CBV: View/Proj/ViewSky Matrix Buffer
-	DescHeapInfo					m_descHeapInfo;
-	DescHeapInfo					m_hudDescHeapInfo;
-	ComPtr<ID3D12Resource>			m_cpSceneInfoBuffer;
-	UINT8*							m_mappedSceneInfoBuffer = nullptr;
 };

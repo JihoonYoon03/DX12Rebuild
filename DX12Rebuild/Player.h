@@ -54,7 +54,7 @@ private:
 
 	//-----------------------------------
 	//[流立 累己茄 内靛]
-	void CannonTestDraw(const ComPtr<ID3D12GraphicsCommandList>& commandList);
+	void CannonTestDraw(CFrameConstants& constants);
 
 	std::unique_ptr<CMesh> m_upCannonTestMesh;
 	//-----------------------------------

@@ -80,7 +80,7 @@ void CTankPlayer::OnKeyPressed(WPARAM key)
 //[아래 코드는 AI로 구현됨]
 bool CTankPlayer::AimAutomatically(float dt)
 {
-	const auto* target = GetLockedTarget();
+	const CDamageableObject* target = GetLockedTarget();
 	return m_bAutoAttack && !m_bManualAim && target && target->IsAlive() && AimStageCannon(target->GetAimPoint(), dt);
 }
 //-----------------------------------
@@ -119,9 +119,12 @@ HRESULT CTankPlayer::CreateCannonTestMesh(const ComPtr<ID3D12Device>& cpDevice,
 		{ 0.5f, 0.5f, 0.5f }, { 0.5f, -0.5f, 0.5f }
 	};
 
-	MeshData<VertexTexcoord> cube;
-	for (const auto& corner : corners)
+	MeshData<VertexTexNormal> cube;
+	for (const XMFLOAT3& corner : corners)
+	{
 		cube.vertices.push_back({ corner, { 1, 1, 1, 1 }, { 0, 0 } });
+	}
+
 	cube.indices = {
 		0, 1, 2, 0, 2, 3,
 		4, 7, 6, 4, 6, 5,
@@ -146,7 +149,7 @@ void CTankPlayer::ReleaseCannonTestUploadBuffer()
 
 //-----------------------------------
 //[직접 작성한 코드]
-void CTankPlayer::CannonTestDraw(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
+void CTankPlayer::CannonTestDraw(CFrameConstants& constants)
 {
 	if (!m_upCannonTestMesh || m_spModel->GetFrameIndex("maingun") == -1) return;
 
@@ -160,12 +163,17 @@ void CTankPlayer::CannonTestDraw(const ComPtr<ID3D12GraphicsCommandList>& cpComm
 		Transform marker;
 		marker.scale = { 0.08f, 0.08f, 0.08f };
 		marker.position = positions[i];
-		const XMFLOAT4X4 markerWorld = Matrix4x4::Transpose(marker.getMatrix());
-		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &markerWorld, 0);
-		const XMFLOAT4X4 worldInv = Matrix4x4::Inverse(markerWorld);
-		cpCommandList->SetGraphicsRoot32BitConstants(0, 16, &worldInv, 16);
-		cpCommandList->SetGraphicsRoot32BitConstants(1, 4, &colors[i], 0);
-		m_upCannonTestMesh->DrawMesh(cpCommandList);
+
+		CB_GameObjInfo objInfo;
+		objInfo.xmf4x4World = Matrix4x4::Transpose(marker.getMatrix());
+		objInfo.xmf4x4WorldInv = Matrix4x4::Inverse(objInfo.xmf4x4World);
+		if (!constants.Bind(0, objInfo)) return;
+
+		CB_Material data;
+		data.xmf4AlbedoColor = colors[i];
+		if (!CMaterial(data).BindMaterialData(constants)) return;
+
+		m_upCannonTestMesh->DrawMesh(constants.GetCommandList());
 	}
 }
 //-----------------------------------
@@ -179,10 +187,12 @@ void CTankPlayer::CannonTestDraw(const ComPtr<ID3D12GraphicsCommandList>& cpComm
 //-----------------------------------
 //[아래 코드는 AI로 구현됨]
 CHelicopterPlayer::CHelicopterPlayer()
-	: CVehicleObject(WeaponSettings{ .reload = HelicopterReload, .speed = HelicopterMissileSpeed,
-		.lifetime = HelicopterMissileLifetime, .clearance = HelicopterMissileClearance,
-		.muzzleOffset = HelicopterMissileOffset, .homingDelay = HelicopterHomingDelay,
-		.homingTurnSpeed = HelicopterHomingTurnSpeed, .homing = true })
+	: CVehicleObject(
+		WeaponSettings{ 
+			.reload = HelicopterReload, .speed = HelicopterMissileSpeed,
+			.lifetime = HelicopterMissileLifetime, .clearance = HelicopterMissileClearance,
+			.muzzleOffset = HelicopterMissileOffset, .homingDelay = HelicopterHomingDelay,
+			.homingTurnSpeed = HelicopterHomingTurnSpeed, .homing = true })
 {
 	SetCombatInfo(HelicopterHealth, 0.0f, HelicopterHitRadius, HelicopterHitRadius, 0.0f);
 	SetScale(ApacheScale);
@@ -194,15 +204,16 @@ CHelicopterPlayer::CHelicopterPlayer()
 void CHelicopterPlayer::SetModel(std::shared_ptr<CModel>& model)
 {
 	CModelObject::SetModel(model);
-	const XMFLOAT4X4 mainRotor = m_spModel->GetFrameMatrix("rotor");
-	const XMFLOAT4X4 mainHub = m_spModel->GetFrameMatrix("black_m_6");
+	XMFLOAT4X4 mainRotor = m_spModel->GetFrameMatrix("rotor");
+	XMFLOAT4X4 mainHub = m_spModel->GetFrameMatrix("black_m_6");
 	m_mainRotorAxis = Vector3::TransformNormal({ 0.0f, 1.0f, 0.0f }, mainRotor);
 	// 날개 프레임 좌표로 환산한 허브 회전축의 중심.
 	m_mainRotorOffset = Vector3::TransformNormal({ 0.115010f, 0.0f, -0.696087f }, mainRotor);
-	const XMFLOAT3 hubToBladeOrigin{ mainRotor._41 - mainHub._41, mainRotor._42 - mainHub._42, mainRotor._43 - mainHub._43 };
+
+	XMFLOAT3 hubToBladeOrigin{ mainRotor._41 - mainHub._41, mainRotor._42 - mainHub._42, mainRotor._43 - mainHub._43 };
 	m_mainHubOffset = Vector3::Add(hubToBladeOrigin, m_mainRotorOffset);
 
-	const XMFLOAT4X4 tailRotor = m_spModel->GetFrameMatrix("black_m_7");
+	XMFLOAT4X4 tailRotor = m_spModel->GetFrameMatrix("black_m_7");
 	m_tailRotorAxis = Vector3::TransformNormal({ 0.0f, -1.0f, 0.0f }, tailRotor);
 	// black_m_7 허브 단면의 중심. 로컬 Y 방향이 회전축이다.
 	m_tailRotorOffset = Vector3::TransformNormal({ -0.758458f, 0.0f, -0.058565f }, tailRotor);
@@ -265,20 +276,23 @@ void CHelicopterPlayer::GetAimRay(XMFLOAT3& origin, XMFLOAT3& direction) const
 void CHelicopterPlayer::ProcessControls(const UCHAR* keys, float dt, const CTerrainObject& terrain)
 {
 	m_fRotorTime += dt;
-	const int turn = Down(keys, 'D') - Down(keys, 'A');
-	const int lift = Down(keys, VK_UP) - Down(keys, VK_DOWN);
-	const int drive = Down(keys, 'W') - Down(keys, 'S');
-	const float yaw = XMScalarModAngle(m_Transform.rotation.y + turn * HelicopterYawSpeed * dt);
-	const float wantedPitch = -drive * HelicopterPitchLimit;
-	const float pitchStep = HelicopterPitchSpeed * dt;
+	
+	int turn = Down(keys, 'D') - Down(keys, 'A');
+	int lift = Down(keys, VK_UP) - Down(keys, VK_DOWN);
+	int drive = Down(keys, 'W') - Down(keys, 'S');
+	float yaw = XMScalarModAngle(m_Transform.rotation.y + turn * HelicopterYawSpeed * dt);
+	float wantedPitch = -drive * HelicopterPitchLimit;
+	float pitchStep = HelicopterPitchSpeed * dt;
 	m_fFlightPitch += std::clamp(wantedPitch - m_fFlightPitch, -pitchStep, pitchStep);
+
 	XMFLOAT3 position = Vector3::Add(m_Transform.position, Vector3::Forward(yaw), drive * HelicopterDriveSpeed * dt);
 	position.x = std::clamp(position.x, -MovementLimit, MovementLimit);
 	position.z = std::clamp(position.z, -MovementLimit, MovementLimit);
-	const float minimum = terrain.GetHeightAt(position) + HelicopterMinClearance;
+	float minimum = terrain.GetHeightAt(position) + HelicopterMinClearance;
 	position.y = std::clamp(position.y + lift * HelicopterLiftSpeed * dt, minimum, minimum + HelicopterAltitudeRange);
 	m_Transform.position = position;
 	m_Transform.rotation.y = yaw;
+	
 	UpdatePose();
 }
 //-----------------------------------
@@ -290,14 +304,13 @@ void CHelicopterPlayer::UpdatePose()
 	SetVisible(!m_bFirstPerson);
 	SetRotation(m_fFlightPitch * HelicopterBodyPitchFactor, m_Transform.rotation.y, 0.0f);
 
-	const float rotorAngle = m_fRotorTime * HelicopterRotorSpeed;
-	const float mainAngle = XMScalarModAngle(rotorAngle * MainRotorSpeedFactor);
+	float rotorAngle = m_fRotorTime * HelicopterRotorSpeed;
+	float mainAngle = XMScalarModAngle(rotorAngle * MainRotorSpeedFactor);
 	SetFrameTransform("rotor", Matrix4x4::RotationAroundAxis(m_mainRotorAxis, mainAngle, m_mainRotorOffset));
 	SetFrameTransform("black_m_6", Matrix4x4::RotationAroundAxis(m_mainRotorAxis, mainAngle, m_mainHubOffset));
 
-	const float tailAngle = XMScalarModAngle(rotorAngle * TailRotorSpeedFactor);
+	float tailAngle = XMScalarModAngle(rotorAngle * TailRotorSpeedFactor);
 	SetFrameTransform("black_m_7", Matrix4x4::RotationAroundAxis(m_tailRotorAxis, tailAngle, m_tailRotorOffset));
-
 }
 //-----------------------------------
 
@@ -305,18 +318,18 @@ void CHelicopterPlayer::UpdatePose()
 //[아래 코드는 AI로 구현됨]
 void CHelicopterPlayer::UpdateCamera(const CTerrainObject& terrain)
 {
-	const XMFLOAT3 position = m_Transform.position;
+	XMFLOAT3 position = m_Transform.position;
 	XMFLOAT3 eye;
 	XMFLOAT3 target;
 	if (m_bFirstPerson)
 	{
-		const XMFLOAT3 apacheCockpit{ 0.0f, 1.7f, 34.0f };
+		XMFLOAT3 apacheCockpit{ 0.0f, 1.7f, 34.0f };
 		eye = Vector3::TransformCoord(apacheCockpit, GetTransform().getMatrix());
 		target = Vector3::Add(eye, Forward());
 	}
 	else
 	{
-		const XMFLOAT3 flatForward = Vector3::Forward(GetTransform().rotation.y);
+		XMFLOAT3 flatForward = Vector3::Forward(GetTransform().rotation.y);
 		eye = Vector3::Add(position, flatForward, -HelicopterCameraDistance);
 		eye.y += HelicopterCameraHeight;
 		target = Vector3::Add(position, Forward(), HelicopterCameraLookAhead);

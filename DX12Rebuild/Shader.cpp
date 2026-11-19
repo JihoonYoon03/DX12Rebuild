@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Shader.h"
+#include "GameObject.h"
 
 
 D3D12_GRAPHICS_PIPELINE_STATE_DESC CreateDefaultPipelineState(const D3D12_INPUT_ELEMENT_DESC* inputElemDesc)
@@ -114,72 +115,49 @@ CShader::CShader()
 
 CShader::~CShader()
 {
-	if (m_cpSceneInfoBuffer && m_mappedSceneInfoBuffer)
-		m_cpSceneInfoBuffer->Unmap(0, NULL);
-}
-
-HRESULT CShader::CreateCBV(
-	const ComPtr<ID3D12Device>& cpDevice,
-	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	CDescHeapAllocator& descHeapAllocator)
-{
-	const UINT bufferSize = (sizeof(CB_SceneInfo) + 255) & ~255;
-
-	HRESULT hr = descHeapAllocator.AllocateHeapSlot(m_descHeapInfo);
-	if (FAILED(hr)) return hr;
-	hr = descHeapAllocator.AllocateHeapSlot(m_hudDescHeapInfo);
-	if (FAILED(hr)) return hr;
-
-	hr = CreateBufferResource(cpDevice, cpCommandList, m_cpSceneInfoBuffer, NULL, bufferSize * 2);
-	if (FAILED(hr))
-	{
-		OutputDebugString(L"CShader::CreateCBV() CreateBufferResource\n");
-		return hr;
-	}
-	D3D12_RANGE range = { 0, 0 };
-	hr = m_cpSceneInfoBuffer->Map(0, &range, (void**)&m_mappedSceneInfoBuffer);
-	if (FAILED(hr)) return hr;
-
-	D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc;
-	cbvDesc.SizeInBytes = bufferSize;
-	cbvDesc.BufferLocation = m_cpSceneInfoBuffer->GetGPUVirtualAddress();
-	cpDevice->CreateConstantBufferView(&cbvDesc, m_descHeapInfo.cpuHandle);
-
-	cbvDesc.BufferLocation += bufferSize;
-	cpDevice->CreateConstantBufferView(&cbvDesc, m_hudDescHeapInfo.cpuHandle);
-
-	return S_OK;
 }
 
 HRESULT CShader::CreateRootSignature(const ComPtr<ID3D12Device>& cpDevice)
 {
 	D3D12_ROOT_PARAMETER rootParams[6];
 
-	//World, WorldInv
-	rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-	rootParams[0].Constants.Num32BitValues = 32;
-	rootParams[0].Constants.ShaderRegister = 0;
-	rootParams[0].Constants.RegisterSpace = 0;
-	rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+	//b0: World, WorldInv
+	D3D12_DESCRIPTOR_RANGE ObjectDescRange;
+	ObjectDescRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+	ObjectDescRange.NumDescriptors = 1;
+	ObjectDescRange.BaseShaderRegister = 0;
+	ObjectDescRange.RegisterSpace = 0;
+	ObjectDescRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
-	//BaseColor, Tiling
-	rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-	rootParams[1].Constants.ShaderRegister = 1;
-	rootParams[1].Constants.RegisterSpace = 0;
-	rootParams[1].Constants.Num32BitValues = 5;
-	rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+	rootParams[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParams[0].DescriptorTable.NumDescriptorRanges = 1;
+	rootParams[0].DescriptorTable.pDescriptorRanges = &ObjectDescRange;
+	rootParams[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
-	//View, Proj, ViewSky
-	D3D12_DESCRIPTOR_RANGE mtxDescRange;
-	mtxDescRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-	mtxDescRange.NumDescriptors = 1;
-	mtxDescRange.BaseShaderRegister = 2;
-	mtxDescRange.RegisterSpace = 0;
-	mtxDescRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+	//b1: Material
+	D3D12_DESCRIPTOR_RANGE MaterialDescRange;
+	MaterialDescRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+	MaterialDescRange.NumDescriptors = 1;
+	MaterialDescRange.BaseShaderRegister = 1;
+	MaterialDescRange.RegisterSpace = 0;
+	MaterialDescRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+	rootParams[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+	rootParams[1].DescriptorTable.NumDescriptorRanges = 1;
+	rootParams[1].DescriptorTable.pDescriptorRanges = &MaterialDescRange;
+	rootParams[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+	//b2: View, Proj, ViewSky
+	D3D12_DESCRIPTOR_RANGE SceneDescRange;
+	SceneDescRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+	SceneDescRange.NumDescriptors = 1;
+	SceneDescRange.BaseShaderRegister = 2;
+	SceneDescRange.RegisterSpace = 0;
+	SceneDescRange.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
 
 	rootParams[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 	rootParams[2].DescriptorTable.NumDescriptorRanges = 1;
-	rootParams[2].DescriptorTable.pDescriptorRanges = &mtxDescRange;
+	rootParams[2].DescriptorTable.pDescriptorRanges = &SceneDescRange;
 	rootParams[2].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
 
 	//텍스쳐용. 단순화 필요
@@ -270,15 +248,9 @@ HRESULT CShader::CreateRootSignature(const ComPtr<ID3D12Device>& cpDevice)
 	return S_OK;
 }
 
-HRESULT CShader::CreateShader(
-	const ComPtr<ID3D12Device>& cpDevice,
-	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
-	CDescHeapAllocator& descHeapAllocator
-)
+HRESULT CShader::CreateShader(const ComPtr<ID3D12Device>& cpDevice)
 {
 	HRESULT hr = CreateRootSignature(cpDevice);
-	if (FAILED(hr)) return hr;
-	hr = CreateCBV(cpDevice, cpCommandList, descHeapAllocator);
 	if (FAILED(hr)) return hr;
 
 	//Input Layout
@@ -376,7 +348,7 @@ HRESULT CShader::CreateShader(
 	psoDesc.VS.pShaderBytecode = cpVS->GetBufferPointer();
 	psoDesc.DepthStencilState.DepthEnable = FALSE;
 	psoDesc.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	auto& uiBlend = psoDesc.BlendState.RenderTarget[0];
+	D3D12_RENDER_TARGET_BLEND_DESC& uiBlend = psoDesc.BlendState.RenderTarget[0];
 	uiBlend.BlendEnable = TRUE;
 	uiBlend.SrcBlend = D3D12_BLEND_SRC_ALPHA;
 	uiBlend.DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
@@ -407,15 +379,21 @@ HRESULT CShader::CreateShader(
 
 HRESULT CShader::AddPipelineState(const ComPtr<ID3D12Device>& cpDevice, const ERenderState& state, const D3D12_GRAPHICS_PIPELINE_STATE_DESC& pipelineState)
 {
-	if (!m_cpPipelineState.at(state)) {
-		//Unlit용 PSO
+	if (m_cpPipelineState.at(state)) {
+		ComPtr<ID3D12PipelineState> backup = m_cpPipelineState[state];
 		m_cpPipelineState[state] = ComPtr<ID3D12PipelineState>{};
 		HRESULT hr = cpDevice->CreateGraphicsPipelineState(
 			&pipelineState,
-			IID_PPV_ARGS(m_cpPipelineState[ERenderState::Unlit].ReleaseAndGetAddressOf())
+			IID_PPV_ARGS(m_cpPipelineState[state].ReleaseAndGetAddressOf())
 		);
-		if (FAILED(hr)) { OutputDebugString(L"Add PSO Failed\n"); return hr; }
+		if (FAILED(hr)) {
+			OutputDebugString(L"Add PSO Failed\n");
+			m_cpPipelineState[state] = backup;
+			return hr;
+		}
 	}
+
+	return S_OK;
 }
 
 void CShader::SetGraphicsRootSignature(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList)
@@ -435,12 +413,4 @@ void CShader::SetPipelineState(const ComPtr<ID3D12GraphicsCommandList>& cpComman
 		//해당 상태 PSO 존재하지 않음
 		return;
 	}
-}
-
-void CShader::SetSceneData(const ComPtr<ID3D12GraphicsCommandList>& cpCommandList, const CB_SceneInfo& data, bool bHud)
-{
-	const UINT bufferSize = (sizeof(CB_SceneInfo) + 255) & ~255;
-	::memcpy(m_mappedSceneInfoBuffer + (bHud ? bufferSize : 0), &data, sizeof(CB_SceneInfo));
-
-	cpCommandList->SetGraphicsRootDescriptorTable(2, bHud ? m_hudDescHeapInfo.gpuHandle : m_descHeapInfo.gpuHandle);
 }

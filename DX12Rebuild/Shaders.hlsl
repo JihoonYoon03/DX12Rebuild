@@ -6,8 +6,18 @@ cbuffer cbGameObjInfo : register(b0)
 
 cbuffer cbMaterial : register(b1)
 {
-    float4 matBaseColor;
-    float tiling;
+	//순수한 기본 색상
+    float4 f4AlbedoColor;
+	//자체 발광 색상
+    float4 f4EmissiveColor;
+
+	//= Roughness의 반대
+    float fGlossiness;
+    float fMetallic;
+    float fSpecularHighlight;
+	//광택 반사 정도
+    float fGlossyReflection;
+    float2 f2Tiling;
 };
 
 //드로우 콜 한 번동안은 유지되는 데이터
@@ -81,7 +91,7 @@ float4 PSMain(VS_OUTPUT input) : SV_Target
     float3 planeNormal = normalize(cross(ddx(input.wpos), ddy(input.wpos)));
     //----------------------------
     
-    return (input.color * matBaseColor) * (0.2f + 0.8f * saturate(dot(normalize(input.normal), light)));
+    return (input.color * f4AlbedoColor) * (0.2f + 0.8f * saturate(dot(normalize(input.normal), light)));
 }
 
 float4 PSTex(VS_OUTPUT input) : SV_Target
@@ -92,19 +102,19 @@ float4 PSTex(VS_OUTPUT input) : SV_Target
     light.y = 100.0f;
     light.z = -1000.0f;
     light = normalize(light - input.wpos.xyz);
-    return baseTex.Sample(sample, input.uv * tiling) * matBaseColor
+    return baseTex.Sample(sample, input.uv * f2Tiling) * f4AlbedoColor
     * (0.2f + 0.8 * saturate(dot(normalize(input.normal), light)));
 }
 
 //Unlit
 float4 PSSky(VS_OUTPUT input) : SV_Target
 {
-    return baseTex.Sample(sample, input.uv * tiling);
+    return baseTex.Sample(sample, input.uv * f2Tiling);
 }
 
 float4 PSUnlit(VS_OUTPUT input) : SV_Target
 {
-    return input.color * matBaseColor;
+    return input.color * f4AlbedoColor;
 }
 
 //머터리얼이 텍스쳐 관리하도록 해서 수정 필요
@@ -129,13 +139,13 @@ float4 PSNormalMap(VS_OUTPUT input) : SV_Target
     
     //노멀맵은 일단 타일링 끄기 << 현재 지형 전체 형상을 노멀맵으로 딴 상태
     //기본 텍스쳐 색상 * 머터리얼 베이스 색상 * 노멀에 따른 빛 받는 양
-    return baseTex.Sample(sample, input.uv * tiling) * matBaseColor
+    return baseTex.Sample(sample, input.uv * f2Tiling) * f4AlbedoColor
         * (0.2f + 0.8f * saturate(dot(light, normalize(normal))));
 }
 
 float4 PSUI(VS_OUTPUT input) : SV_Target
 {
-    return baseTex.Sample(sample, input.uv) * matBaseColor;
+    return baseTex.Sample(sample, input.uv) * f4AlbedoColor;
 }
 
 float4 PSMaskedUI(VS_OUTPUT input) : SV_Target

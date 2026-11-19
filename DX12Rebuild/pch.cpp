@@ -1,7 +1,5 @@
 #include "pch.h"
 
-UINT gnCbvSrvDescriptorIncrementSize = 0;
-
 HRESULT CreateBufferResource(
 	const ComPtr<ID3D12Device>& cpDevice,
 	const ComPtr<ID3D12GraphicsCommandList>& cpCommandList,
@@ -127,12 +125,12 @@ HRESULT CreateBufferResource(
 //-----------------------------------------------
 CDescHeapAllocator::CDescHeapAllocator()
 {
-    m_nSlots = config::MAX_TEXTURE_SLOTS;
+    m_nSlots = config::MAX_CBVSRVUAV_SLOTS + config::FRAME_CONSTANT_SLOTS;
     m_nNextIndex = 0;
     m_nDescHeapIncrementSize = 0;
 }
 
-HRESULT CDescHeapAllocator::CreateSRVDescHeap(const ComPtr<ID3D12Device>& cpDevice)
+HRESULT CDescHeapAllocator::CreateDescHeap(const ComPtr<ID3D12Device>& cpDevice)
 {
     D3D12_DESCRIPTOR_HEAP_DESC heapDesc;
     heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -156,7 +154,11 @@ HRESULT CDescHeapAllocator::AllocateHeapSlot(DescHeapInfo& descHeapInfo)
     info.cpuHandle = m_cpHeap->GetCPUDescriptorHandleForHeapStart();
     info.gpuHandle = m_cpHeap->GetGPUDescriptorHandleForHeapStart();
 
-    if (m_nNextIndex == m_nSlots) return E_FAIL;
+    if (m_nNextIndex == m_nSlots)
+    {
+        OutputDebugString(L"CDescHeapAllocator::AllocateHeapSlot() out of range\n");
+        return E_FAIL;
+    }
 
     info.cpuHandle.ptr += m_nDescHeapIncrementSize * m_nNextIndex;
     info.gpuHandle.ptr += m_nDescHeapIncrementSize * m_nNextIndex;
@@ -166,3 +168,52 @@ HRESULT CDescHeapAllocator::AllocateHeapSlot(DescHeapInfo& descHeapInfo)
 
     return S_OK;
 }
+
+// -------------------------------------------
+//
+// FrameConstants
+//
+// -------------------------------------------
+//-----------------------------------
+//[아래 코드는 AI로 구현됨]
+HRESULT CFrameConstants::Create(const GraphicsResources& graphics)
+{
+	const UINT stride = D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT;
+	HRESULT hr = CreateBufferResource(graphics.device, graphics.commandList, m_cpUploadBuffer,
+		nullptr, static_cast<size_t>(stride) * config::FRAME_CONSTANT_SLOTS);
+	if (FAILED(hr)) return hr;
+
+	const D3D12_RANGE readRange{ 0, 0 };
+	hr = m_cpUploadBuffer->Map(0, &readRange, reinterpret_cast<void**>(&m_mapped));
+	if (FAILED(hr)) return hr;
+
+	m_slots.resize(config::FRAME_CONSTANT_SLOTS);
+	D3D12_CONSTANT_BUFFER_VIEW_DESC view{};
+	view.SizeInBytes = stride;
+	view.BufferLocation = m_cpUploadBuffer->GetGPUVirtualAddress();
+
+	for (DescHeapInfo& slot : m_slots)
+	{
+		hr = graphics.descriptors.AllocateHeapSlot(slot);
+		if (FAILED(hr)) return hr;
+
+		graphics.device->CreateConstantBufferView(&view, slot.cpuHandle);
+		view.BufferLocation += stride;
+	}
+
+	m_cpCommandList = graphics.commandList;
+	return S_OK;
+}
+
+void CFrameConstants::Release()
+{
+	if (m_mapped) m_cpUploadBuffer->Unmap(0, nullptr);
+
+	m_mapped = nullptr;
+	m_cpUploadBuffer.Reset();
+	m_cpCommandList.Reset();
+
+	m_slots.clear();
+	m_nextSlot = 0;
+}
+//-----------------------------------
